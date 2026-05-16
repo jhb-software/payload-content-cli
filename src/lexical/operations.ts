@@ -1,0 +1,380 @@
+import type { LexicalNode } from "./types.js";
+import { parseAddress, resolveNode, resolveParentAndIndex } from "./address.js";
+
+export interface ListEntry {
+  address: string;
+  type: string;
+  preview: string;
+}
+
+function textPreview(node: LexicalNode): string {
+  if (typeof node.text === "string") {
+    const preview =
+      node.text.length > 60 ? node.text.slice(0, 57) + "..." : node.text;
+    return `"${preview}"`;
+  }
+  if (
+    node.type === "block" &&
+    node.fields &&
+    typeof (node.fields as Record<string, unknown>).blockType === "string"
+  ) {
+    return `(${(node.fields as Record<string, unknown>).blockType})`;
+  }
+  if (Array.isArray(node.children)) {
+    const texts: string[] = [];
+    for (const child of node.children as LexicalNode[]) {
+      if (typeof child.text === "string") {
+        texts.push(child.text);
+      }
+    }
+    if (texts.length > 0) {
+      const joined = texts.join("");
+      const preview = joined.length > 60 ? joined.slice(0, 57) + "..." : joined;
+      return `"${preview}"`;
+    }
+  }
+  return "";
+}
+
+function collectNodes(
+  children: LexicalNode[],
+  prefix: string,
+  entries: ListEntry[],
+): void {
+  for (let i = 0; i < children.length; i++) {
+    const addr = prefix ? `${prefix}.${i}` : `${i}`;
+    const node = children[i];
+    entries.push({
+      address: addr,
+      type: node.type ?? "unknown",
+      preview: textPreview(node),
+    });
+    if (Array.isArray(node.children)) {
+      collectNodes(node.children as LexicalNode[], addr, entries);
+    }
+  }
+}
+
+export function listNodes(children: LexicalNode[]): ListEntry[] {
+  const entries: ListEntry[] = [];
+  collectNodes(children, "", entries);
+  return entries;
+}
+
+export function getNode(
+  children: LexicalNode[],
+  addressStr: string,
+): LexicalNode {
+  const addr = parseAddress(addressStr);
+  return resolveNode(children, addr);
+}
+
+export function addNode(
+  children: LexicalNode[],
+  addressStr: string,
+  position: "before" | "after" | "start" | "end",
+  node: LexicalNode,
+): LexicalNode[] {
+  const result = structuredClone(children);
+  const addr = parseAddress(addressStr);
+
+  if (position === "start") {
+    const target = resolveNode(result, addr);
+    if (!Array.isArray((target as Record<string, unknown>).children)) {
+      throw new Error(
+        `Node at "${addressStr}" has no children — cannot insert at start`,
+      );
+    }
+    (target as Record<string, unknown[]>).children.unshift(node);
+    return result;
+  }
+
+  if (position === "end") {
+    const target = resolveNode(result, addr);
+    if (!Array.isArray((target as Record<string, unknown>).children)) {
+      throw new Error(
+        `Node at "${addressStr}" has no children — cannot insert at end`,
+      );
+    }
+    (target as Record<string, unknown[]>).children.push(node);
+    return result;
+  }
+
+  const { parent, index } = resolveParentAndIndex(result, addr);
+  if (index < 0 || index >= parent.length) {
+    throw new Error(
+      `Address "${addressStr}" is out of bounds (length ${parent.length})`,
+    );
+  }
+
+  if (position === "before") {
+    parent.splice(index, 0, node);
+  } else {
+    parent.splice(index + 1, 0, node);
+  }
+
+  return result;
+}
+
+export function replaceNode(
+  children: LexicalNode[],
+  addressStr: string,
+  node: LexicalNode,
+): LexicalNode[] {
+  const result = structuredClone(children);
+  const addr = parseAddress(addressStr);
+  const { parent, index } = resolveParentAndIndex(result, addr);
+
+  if (index < 0 || index >= parent.length) {
+    throw new Error(
+      `Address "${addressStr}" is out of bounds (length ${parent.length})`,
+    );
+  }
+
+  parent[index] = node;
+  return result;
+}
+
+export function removeNode(
+  children: LexicalNode[],
+  addressStr: string,
+): LexicalNode[] {
+  const result = structuredClone(children);
+  const addr = parseAddress(addressStr);
+  const { parent, index } = resolveParentAndIndex(result, addr);
+
+  if (index < 0 || index >= parent.length) {
+    throw new Error(
+      `Address "${addressStr}" is out of bounds (length ${parent.length})`,
+    );
+  }
+
+  parent.splice(index, 1);
+  return result;
+}
+
+/**
+ * Find a text substring within a text node and wrap it in a link node.
+ * Splits the text node into [before?, link, after?] siblings within the parent.
+ *
+ * @param addressStr - Address of the text node (or parent to search recursively)
+ * @param search - Text to find and wrap
+ * @param linkNode - The link node to wrap the text with (must have children with text)
+ */
+export function linkText(
+  children: LexicalNode[],
+  search: string,
+  linkNode: LexicalNode,
+): LexicalNode[] {
+  const result = structuredClone(children);
+
+  function findAndLink(nodes: LexicalNode[]): boolean {
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+
+      // Skip existing link nodes
+      if (node.type === "link") continue;
+
+      // Check text nodes for the search string
+      if (node.type === "text" && typeof node.text === "string") {
+        const idx = (node.text as string).indexOf(search);
+        if (idx === -1) continue;
+
+        const before = (node.text as string).slice(0, idx);
+        const after = (node.text as string).slice(idx + search.length);
+
+        const newNodes: LexicalNode[] = [];
+        if (before) {
+          newNodes.push({ ...node, text: before });
+        }
+        newNodes.push(structuredClone(linkNode));
+        if (after) {
+          newNodes.push({ ...node, text: after });
+        }
+
+        nodes.splice(i, 1, ...newNodes);
+        return true;
+      }
+
+      // Recurse into element nodes
+      if (Array.isArray(node.children)) {
+        if (findAndLink(node.children as LexicalNode[])) return true;
+      }
+    }
+    return false;
+  }
+
+  if (!findAndLink(result)) {
+    throw new Error(`Text "${search}" not found in the document`);
+  }
+
+  return result;
+}
+
+export interface SearchMatch {
+  address: string;
+  context: string;
+}
+
+export function searchText(
+  children: LexicalNode[],
+  search: string,
+): SearchMatch[] {
+  const matches: SearchMatch[] = [];
+
+  function walk(nodes: LexicalNode[], prefix: string): void {
+    for (let i = 0; i < nodes.length; i++) {
+      const addr = prefix ? `${prefix}.${i}` : `${i}`;
+      const node = nodes[i];
+
+      // Skip existing link nodes
+      if (node.type === "link") continue;
+
+      if (node.type === "text" && typeof node.text === "string") {
+        if (node.text.includes(search)) {
+          const text = node.text as string;
+          const idx = text.indexOf(search);
+          const start = Math.max(0, idx - 30);
+          const end = Math.min(text.length, idx + search.length + 30);
+          const snippet =
+            (start > 0 ? "..." : "") +
+            text.slice(start, end) +
+            (end < text.length ? "..." : "");
+          matches.push({ address: addr, context: snippet });
+        }
+      }
+
+      if (Array.isArray(node.children)) {
+        walk(node.children as LexicalNode[], addr);
+      }
+    }
+  }
+
+  walk(children, "");
+  return matches;
+}
+
+export function setNodeProp(
+  children: LexicalNode[],
+  addressStr: string,
+  key: string,
+  value: unknown,
+  options: { create?: boolean } = {},
+): LexicalNode[] {
+  const result = structuredClone(children);
+  const addr = parseAddress(addressStr);
+  const node = resolveNode(result, addr);
+
+  // Support dot-notation and bracket paths: "fields.buttons[0].relationship"
+  const segments = key.replace(/\[(\d+)\]/g, ".$1").split(".");
+  let target: Record<string, unknown> = node as Record<string, unknown>;
+  for (let i = 0; i < segments.length - 1; i++) {
+    const seg = segments[i];
+    if (
+      target[seg] === undefined ||
+      target[seg] === null ||
+      typeof target[seg] !== "object"
+    ) {
+      throw new Error(
+        `Property path "${key}" — segment "${seg}" is not an object`,
+      );
+    }
+    target = target[seg] as Record<string, unknown>;
+  }
+  const leaf = segments[segments.length - 1];
+  if (!(leaf in target) && !options.create) {
+    const available = Object.keys(target).join(", ") || "(none)";
+    throw new Error(
+      `Property "${key}" does not exist on node at "${addressStr}" (type: ${(node as { type?: string }).type ?? "unknown"}). Existing props: ${available}. Use --create to add a new property.`,
+    );
+  }
+  target[leaf] = value;
+
+  return result;
+}
+
+export interface ExtractedLink {
+  address: string;
+  text: string;
+  relationTo: string;
+  value: string;
+}
+
+/** Extract all internal link nodes from a Lexical tree. */
+export function extractLinks(children: LexicalNode[]): ExtractedLink[] {
+  const links: ExtractedLink[] = [];
+
+  function walk(nodes: LexicalNode[], prefix: string): void {
+    for (let i = 0; i < nodes.length; i++) {
+      const addr = prefix ? `${prefix}.${i}` : `${i}`;
+      const node = nodes[i];
+
+      if (node.type === "link") {
+        const fields = node.fields as Record<string, unknown> | undefined;
+        if (fields?.linkType === "internal" && fields.doc) {
+          const doc = fields.doc as Record<string, unknown>;
+          const text = textContent(node);
+          links.push({
+            address: addr,
+            text,
+            relationTo: doc.relationTo as string,
+            value: doc.value as string,
+          });
+        }
+      }
+
+      if (Array.isArray(node.children)) {
+        walk(node.children as LexicalNode[], addr);
+      }
+    }
+  }
+
+  walk(children, "");
+  return links;
+}
+
+/** Extract text content from a node and its children. */
+function textContent(node: LexicalNode): string {
+  if (typeof node.text === "string") return node.text;
+  if (Array.isArray(node.children)) {
+    return (node.children as LexicalNode[]).map(textContent).join("");
+  }
+  return "";
+}
+
+export interface ExtractedBlock {
+  address: string;
+  blockType: string;
+  context: string;
+}
+
+/** Extract all block nodes from a Lexical tree with surrounding context. */
+export function extractBlocks(children: LexicalNode[]): ExtractedBlock[] {
+  const blocks: ExtractedBlock[] = [];
+
+  for (let i = 0; i < children.length; i++) {
+    const node = children[i];
+    if (node.type !== "block") continue;
+
+    const fields = node.fields as Record<string, unknown> | undefined;
+    const blockType = (fields?.blockType as string) ?? "unknown";
+
+    // Find surrounding heading or paragraph for context
+    let context = "";
+    for (let j = i - 1; j >= 0 && j >= i - 3; j--) {
+      const prev = children[j];
+      if (prev.type === "heading" || prev.type === "paragraph") {
+        const text = textContent(prev);
+        if (text) {
+          const label = prev.type === "heading" ? "after heading" : "after";
+          context = `${label} "${text.length > 50 ? text.slice(0, 47) + "..." : text}"`;
+          break;
+        }
+      }
+    }
+
+    blocks.push({ address: `${i}`, blockType, context });
+  }
+
+  return blocks;
+}

@@ -1,0 +1,20 @@
+node_modules/
+dist/
+.pnpm-store/
+.env
+content/
+content-test/
+content-integration-test/
+tmp-manifest-test/
+
+# Example project
+example/data/
+example/.next/
+example/node_modules/
+example/src/payload-types.ts
+example/src/app/(payload)/admin/importMap.js
+*.db
+content-tm/
+
+# Demo video generation output (regenerable via .claude/skills/demo-video)
+.claude/skills/demo-video/output/

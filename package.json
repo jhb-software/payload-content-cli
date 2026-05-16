@@ -1,0 +1,97 @@
+{
+  "name": "payload-content-cli",
+  "version": "0.1.0-beta.0",
+  "description": "A CLI for managing Payload CMS content, built for AI agents.",
+  "type": "module",
+  "exports": {
+    ".": "./dist/cli.js",
+    "./plugin": "./dist/plugin/index.js"
+  },
+  "bin": {
+    "payload-content": "./bin/payload-content.js"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "README.md",
+    "USAGE.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "tsx src/cli.ts",
+    "build": "rm -rf dist && tsc && cp src/agent-skill.md dist/",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint src/",
+    "lint:fix": "oxlint --fix src/",
+    "format": "prettier --write \"src/**/*.ts\" \"*.md\" \"*.json\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"*.md\" \"*.json\"",
+    "prepare": "husky",
+    "prepublishOnly": "pnpm build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "example:dev": "pnpm --filter payload-content-cli-example dev",
+    "example:seed": "pnpm --filter payload-content-cli-example seed"
+  },
+  "keywords": [
+    "payload",
+    "payload-cms",
+    "cms",
+    "headless-cms",
+    "content-sync",
+    "filesystem",
+    "sync",
+    "cli",
+    "agent",
+    "ai",
+    "claude",
+    "lexical",
+    "richtext"
+  ],
+  "author": "Jens Becker <info@jhb.software>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jhb-software/payload-content-cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jhb-software/payload-content-cli/issues"
+  },
+  "homepage": "https://github.com/jhb-software/payload-content-cli#readme",
+  "packageManager": "pnpm@10.29.3",
+  "dependencies": {
+    "commander": "^14.0.3",
+    "dotenv": "^17.3.1",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@tsconfig/node22": "^22.0.5",
+    "@types/node": "^25.5.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
+    "oxlint": "^1.55.0",
+    "prettier": "^3.8.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "4.0.18"
+  },
+  "lint-staged": {
+    "src/**/*.ts": [
+      "oxlint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md}": [
+      "prettier --write"
+    ]
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp",
+      "@swc/core",
+      "unrs-resolver"
+    ]
+  }
+}

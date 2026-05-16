@@ -2,10 +2,30 @@
   "name": "payload-content-cli",
   "version": "0.1.0-beta.0",
   "description": "A CLI for managing Payload CMS content, built for AI agents.",
-  "type": "module",
-  "exports": {
-    ".": "./dist/cli.js",
-    "./plugin": "./dist/plugin/index.js"
+  "keywords": [
+    "agent",
+    "ai",
+    "claude",
+    "cli",
+    "cms",
+    "content-sync",
+    "filesystem",
+    "headless-cms",
+    "lexical",
+    "payload",
+    "payload-cms",
+    "richtext",
+    "sync"
+  ],
+  "homepage": "https://github.com/jhb-software/payload-content-cli#readme",
+  "bugs": {
+    "url": "https://github.com/jhb-software/payload-content-cli/issues"
+  },
+  "license": "MIT",
+  "author": "Jens Becker <info@jhb.software>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jhb-software/payload-content-cli.git"
   },
   "bin": {
     "payload-content": "./bin/payload-content.js"
@@ -17,8 +37,10 @@
     "USAGE.md",
     "LICENSE"
   ],
-  "engines": {
-    "node": ">=22.12.0"
+  "type": "module",
+  "exports": {
+    ".": "./dist/cli.js",
+    "./plugin": "./dist/plugin/index.js"
   },
   "scripts": {
     "dev": "tsx src/cli.ts",
@@ -26,8 +48,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "oxlint src/",
     "lint:fix": "oxlint --fix src/",
-    "format": "oxfmt src/",
-    "format:check": "oxfmt --check src/",
+    "format": "oxfmt . '!example/**'",
+    "format:check": "oxfmt --check . '!example/**'",
     "prepare": "husky",
     "prepublishOnly": "pnpm build",
     "test": "vitest run",
@@ -35,32 +57,6 @@
     "example:dev": "pnpm --filter payload-content-cli-example dev",
     "example:seed": "pnpm --filter payload-content-cli-example seed"
   },
-  "keywords": [
-    "payload",
-    "payload-cms",
-    "cms",
-    "headless-cms",
-    "content-sync",
-    "filesystem",
-    "sync",
-    "cli",
-    "agent",
-    "ai",
-    "claude",
-    "lexical",
-    "richtext"
-  ],
-  "author": "Jens Becker <info@jhb.software>",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/jhb-software/payload-content-cli.git"
-  },
-  "bugs": {
-    "url": "https://github.com/jhb-software/payload-content-cli/issues"
-  },
-  "homepage": "https://github.com/jhb-software/payload-content-cli#readme",
-  "packageManager": "pnpm@11.1.2",
   "dependencies": {
     "commander": "^14.0.3",
     "dotenv": "^17.4.2",
@@ -83,6 +79,16 @@
     "src/**/*.ts": [
       "oxlint --fix",
       "oxfmt"
+    ],
+    "*.{md,json,jsonc,yml,yaml,js,cjs,mjs}": [
+      "oxfmt"
+    ],
+    "{plans,.github}/**/*.{md,yml,yaml}": [
+      "oxfmt"
     ]
-  }
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "packageManager": "pnpm@11.1.2"
 }

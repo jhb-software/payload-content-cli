@@ -27,18 +27,11 @@ interface ContentEntry {
   filePath: string;
 }
 
-export function parseContentPath(
-  filePath: string,
-  outputDir: string,
-): ContentEntry | null {
+export function parseContentPath(filePath: string, outputDir: string): ContentEntry | null {
   const rel = path.relative(outputDir, filePath);
   const parts = rel.split(path.sep);
 
-  if (
-    parts[0] === "collections" &&
-    parts.length === 3 &&
-    !parts[2].startsWith("_")
-  ) {
+  if (parts[0] === "collections" && parts.length === 3 && !parts[2].startsWith("_")) {
     const collection = parts[1];
     const { base: id, locale } = parseLocaleFilename(parts[2]);
     return { type: "collection", collection, id, locale, filePath };
@@ -54,11 +47,7 @@ export function parseContentPath(
   }
 
   // globals/<slug>.json (legacy flat structure)
-  if (
-    parts[0] === "globals" &&
-    parts.length === 2 &&
-    !parts[1].startsWith("_")
-  ) {
+  if (parts[0] === "globals" && parts.length === 2 && !parts[1].startsWith("_")) {
     const { base: collection, locale } = parseLocaleFilename(parts[1]);
     return { type: "global", collection, locale, filePath };
   }
@@ -102,10 +91,7 @@ async function checkConflict(
   return null;
 }
 
-export async function push(
-  config: Config,
-  options: PushOptions = {},
-): Promise<void> {
+export async function push(config: Config, options: PushOptions = {}): Promise<void> {
   requireRemoteConfig(config);
   const client = new PayloadClient(config);
   const outputDir = path.resolve(config.outputDir);
@@ -168,12 +154,7 @@ export async function push(
     if (entry.type === "global") {
       // Conflict check
       if (!options.force && !options.dryRun) {
-        const conflict = await checkConflict(
-          client,
-          entry,
-          manifest,
-          outputDir,
-        );
+        const conflict = await checkConflict(client, entry, manifest, outputDir);
         if (conflict) {
           const relPath = path.relative(process.cwd(), entry.filePath);
           console.warn(`  CONFLICT globals/${entry.collection}: ${conflict}`);
@@ -206,9 +187,7 @@ export async function push(
           };
         }
       } catch (err) {
-        console.error(
-          `  Failed to update global ${entry.collection}: ${(err as Error).message}`,
-        );
+        console.error(`  Failed to update global ${entry.collection}: ${(err as Error).message}`);
         errors++;
       }
     } else {
@@ -216,12 +195,7 @@ export async function push(
 
       // Conflict check (only for existing docs)
       if (!options.force && !options.dryRun && doc.id) {
-        const conflict = await checkConflict(
-          client,
-          entry,
-          manifest,
-          outputDir,
-        );
+        const conflict = await checkConflict(client, entry, manifest, outputDir);
         if (conflict) {
           const relPath = path.relative(process.cwd(), entry.filePath);
           console.warn(`  CONFLICT ${entry.collection}/${id}: ${conflict}`);
@@ -236,9 +210,7 @@ export async function push(
 
       if (options.dryRun) {
         const isNew = !doc.id && !doc.createdAt;
-        console.log(
-          `  [dry-run] Would ${isNew ? "create" : "update"} ${entry.collection}/${id}`,
-        );
+        console.log(`  [dry-run] Would ${isNew ? "create" : "update"} ${entry.collection}/${id}`);
         continue;
       }
 
@@ -263,18 +235,14 @@ export async function push(
               locale: entry.locale,
               draft: options.draft,
             });
-            console.log(
-              `  Created ${entry.collection}/${createdDoc.id} (from ${id})`,
-            );
+            console.log(`  Created ${entry.collection}/${createdDoc.id} (from ${id})`);
             created++;
           } else {
             throw err;
           }
         }
       } catch (err) {
-        console.error(
-          `  Failed ${entry.collection}/${id}: ${(err as Error).message}`,
-        );
+        console.error(`  Failed ${entry.collection}/${id}: ${(err as Error).message}`);
         errors++;
       }
     }

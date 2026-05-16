@@ -16,8 +16,7 @@ const MIME_TYPES: Record<string, string> = {
   ".tif": "image/tiff",
   ".pdf": "application/pdf",
   ".doc": "application/msword",
-  ".docx":
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   ".xls": "application/vnd.ms-excel",
   ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   ".mp4": "video/mp4",
@@ -64,10 +63,7 @@ export class PayloadApiError extends Error {
   }
 }
 
-function flattenToQueryParams(
-  prefix: string,
-  obj: unknown,
-): Record<string, string> {
+function flattenToQueryParams(prefix: string, obj: unknown): Record<string, string> {
   const params: Record<string, string> = {};
   if (obj === null || obj === undefined) return params;
   if (typeof obj !== "object") {
@@ -164,9 +160,7 @@ export class PayloadClient {
 
         const msg = (err as Error).message;
         if (msg.includes("ECONNREFUSED") || msg.includes("fetch failed")) {
-          throw new Error(
-            `Cannot connect to Payload at ${this.baseUrl}. Is the server running?`,
-          );
+          throw new Error(`Cannot connect to Payload at ${this.baseUrl}. Is the server running?`);
         }
         throw err;
       }
@@ -192,8 +186,7 @@ export class PayloadClient {
     if (options.draft) params.draft = "true";
     if (options.depth !== undefined) params.depth = String(options.depth);
     if (options.locale !== undefined) params.locale = options.locale;
-    if (options.fallbackLocale !== undefined)
-      params["fallback-locale"] = options.fallbackLocale;
+    if (options.fallbackLocale !== undefined) params["fallback-locale"] = options.fallbackLocale;
     if (options.trash) params.trash = "true";
     if (options.select) {
       Object.assign(params, flattenToQueryParams("select", options.select));
@@ -237,8 +230,7 @@ export class PayloadClient {
   ): void {
     if (!options) return;
     if (options.autosave) params.autosave = "true";
-    if (options.publishSpecificLocale)
-      params.publishSpecificLocale = options.publishSpecificLocale;
+    if (options.publishSpecificLocale) params.publishSpecificLocale = options.publishSpecificLocale;
     if (options.publishAllLocales) params.publishAllLocales = "true";
     if (options.unpublishAllLocales) params.unpublishAllLocales = "true";
   }
@@ -280,8 +272,7 @@ export class PayloadClient {
   ): Promise<Record<string, unknown>> {
     const params: Record<string, string> = {};
     this.addCommonParams(params, options);
-    if (options?.overrideLock !== undefined)
-      params.overrideLock = String(options.overrideLock);
+    if (options?.overrideLock !== undefined) params.overrideLock = String(options.overrideLock);
     return this.request<Record<string, unknown>>(`/${slug}/${id}`, {
       method: "DELETE",
       params,
@@ -301,8 +292,7 @@ export class PayloadClient {
   ): Promise<unknown> {
     const params: Record<string, string> = {};
     this.addCommonParams(params, options);
-    if (options?.overrideLock !== undefined)
-      params.overrideLock = String(options.overrideLock);
+    if (options?.overrideLock !== undefined) params.overrideLock = String(options.overrideLock);
     Object.assign(params, flattenToQueryParams("where", where));
     return this.request<unknown>(`/${slug}`, {
       method: "DELETE",
@@ -360,10 +350,7 @@ export class PayloadClient {
     // Payload lists auth collections (users, api-keys) even when the key
     // can only authenticate — those have fields but no read: true.
     const collections = Object.entries(data.collections ?? {})
-      .filter(
-        ([slug, perms]) =>
-          perms.read === true && !INTERNAL_COLLECTIONS.has(slug),
-      )
+      .filter(([slug, perms]) => perms.read === true && !INTERNAL_COLLECTIONS.has(slug))
       .map(([slug]) => slug);
 
     const globals = Object.entries(data.globals ?? {})
@@ -505,10 +492,11 @@ export class PayloadClient {
     this.addCommonParams(params, options);
     this.addPublishParams(params, options);
     const body = options?.draft ? { ...data, _status: "draft" } : data;
-    const result = await this.request<{ doc: Record<string, unknown> }>(
-      `/${slug}`,
-      { method: "POST", body, params },
-    );
+    const result = await this.request<{ doc: Record<string, unknown> }>(`/${slug}`, {
+      method: "POST",
+      body,
+      params,
+    });
     return result.doc;
   }
 
@@ -546,10 +534,11 @@ export class PayloadClient {
       formData.append("_payload", JSON.stringify(docData));
     }
 
-    const result = await this.request<{ doc: Record<string, unknown> }>(
-      `/${slug}`,
-      { method: "POST", formData, params },
-    );
+    const result = await this.request<{ doc: Record<string, unknown> }>(`/${slug}`, {
+      method: "POST",
+      formData,
+      params,
+    });
     return result.doc;
   }
 
@@ -575,13 +564,13 @@ export class PayloadClient {
     const params: Record<string, string> = {};
     this.addCommonParams(params, options);
     this.addPublishParams(params, options);
-    if (options?.overrideLock !== undefined)
-      params.overrideLock = String(options.overrideLock);
+    if (options?.overrideLock !== undefined) params.overrideLock = String(options.overrideLock);
     const body = options?.draft ? { ...data, _status: "draft" } : data;
-    const result = await this.request<{ doc: Record<string, unknown> }>(
-      `/${slug}/${id}`,
-      { method: "PATCH", body, params },
-    );
+    const result = await this.request<{ doc: Record<string, unknown> }>(`/${slug}/${id}`, {
+      method: "PATCH",
+      body,
+      params,
+    });
     return result.doc;
   }
 
@@ -679,10 +668,7 @@ export class PayloadClient {
   ): Promise<Record<string, unknown>> {
     const params: Record<string, string> = {};
     this.addCommonParams(params, options);
-    return this.request<Record<string, unknown>>(
-      `/globals/${slug}/versions/${id}`,
-      { params },
-    );
+    return this.request<Record<string, unknown>>(`/globals/${slug}/versions/${id}`, { params });
   }
 
   async restoreGlobalVersion(
@@ -700,10 +686,10 @@ export class PayloadClient {
     if (options?.populate) {
       Object.assign(params, flattenToQueryParams("populate", options.populate));
     }
-    return this.request<Record<string, unknown>>(
-      `/globals/${slug}/versions/${id}`,
-      { method: "POST", params },
-    );
+    return this.request<Record<string, unknown>>(`/globals/${slug}/versions/${id}`, {
+      method: "POST",
+      params,
+    });
   }
 
   async duplicateDoc(

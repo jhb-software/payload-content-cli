@@ -67,9 +67,7 @@ describe("extractEndpointMeta", () => {
   });
 
   it("ignores non-object schema sub-fields", () => {
-    expect(extractEndpointMeta({ schema: { query: "bad", body: 42 } })).toEqual(
-      {},
-    );
+    expect(extractEndpointMeta({ schema: { query: "bad", body: 42 } })).toEqual({});
   });
 
   it("ignores extra keys in custom", () => {
@@ -135,9 +133,7 @@ describe("contentCliPlugin endpoint metadata", () => {
     };
 
     const result = plugin(config);
-    const schemaEndpoint = result.endpoints.find(
-      (ep: any) => ep.path === "/content-cli/schema",
-    );
+    const schemaEndpoint = result.endpoints.find((ep: any) => ep.path === "/content-cli/schema");
 
     const mockReq = {
       user: { id: 1 },
@@ -182,9 +178,7 @@ describe("contentCliPlugin endpoint metadata", () => {
   it("returns 401 when the request has no authenticated user", async () => {
     const plugin = contentCliPlugin();
     const result = plugin({ endpoints: [] });
-    const schemaEndpoint = result.endpoints.find(
-      (ep: any) => ep.path === "/content-cli/schema",
-    );
+    const schemaEndpoint = result.endpoints.find((ep: any) => ep.path === "/content-cli/schema");
 
     const response = await schemaEndpoint.handler({ user: null, payload: {} });
     expect(response.status).toBe(401);
@@ -196,9 +190,7 @@ describe("contentCliPlugin endpoint metadata", () => {
       access: (req: any) => req.headers?.get("x-secret") === "open-sesame",
     });
     const result = plugin({ endpoints: [] });
-    const schemaEndpoint = result.endpoints.find(
-      (ep: any) => ep.path === "/content-cli/schema",
-    );
+    const schemaEndpoint = result.endpoints.find((ep: any) => ep.path === "/content-cli/schema");
 
     // denied — wrong secret
     const denied = await schemaEndpoint.handler({
@@ -228,9 +220,7 @@ describe("contentCliPlugin endpoint metadata", () => {
       },
     });
     const result = plugin({ endpoints: [] });
-    const schemaEndpoint = result.endpoints.find(
-      (ep: any) => ep.path === "/content-cli/schema",
-    );
+    const schemaEndpoint = result.endpoints.find((ep: any) => ep.path === "/content-cli/schema");
 
     const mockReq = {
       user: null,
@@ -255,9 +245,7 @@ describe("contentCliPlugin per-entity read access", () => {
   function getSchemaEndpoint(config: any) {
     const plugin = contentCliPlugin();
     const result = plugin(config);
-    return result.endpoints.find(
-      (ep: any) => ep.path === "/content-cli/schema",
-    );
+    return result.endpoints.find((ep: any) => ep.path === "/content-cli/schema");
   }
 
   it("omits collections whose access.read returns false", async () => {

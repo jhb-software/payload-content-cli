@@ -33,9 +33,7 @@ describe("parseSelect", () => {
     });
 
     it("selects multiple sub-fields", () => {
-      expect(
-        parseSelect('{"meta":{"title":true,"description":false}}'),
-      ).toEqual({
+      expect(parseSelect('{"meta":{"title":true,"description":false}}')).toEqual({
         meta: { title: true, description: false },
       });
     });
@@ -57,9 +55,7 @@ describe("parseSelect", () => {
 
       expect(() => parseSelect("{invalid}")).toThrow("process.exit");
       expect(mockExit).toHaveBeenCalledWith(1);
-      expect(mockError).toHaveBeenCalledWith(
-        "Error: --select must be a valid JSON object.",
-      );
+      expect(mockError).toHaveBeenCalledWith("Error: --select must be a valid JSON object.");
 
       mockExit.mockRestore();
       mockError.mockRestore();

@@ -34,24 +34,16 @@ export function parseLocaleFilename(filename: string): {
   return { base: stem };
 }
 
-export async function loadManifest(
-  outputDir: string,
-): Promise<Manifest | null> {
+export async function loadManifest(outputDir: string): Promise<Manifest | null> {
   try {
-    const raw = await fs.readFile(
-      path.join(outputDir, ".manifest.json"),
-      "utf-8",
-    );
+    const raw = await fs.readFile(path.join(outputDir, ".manifest.json"), "utf-8");
     return JSON.parse(raw) as Manifest;
   } catch {
     return null;
   }
 }
 
-export async function saveManifest(
-  outputDir: string,
-  manifest: Manifest,
-): Promise<void> {
+export async function saveManifest(outputDir: string, manifest: Manifest): Promise<void> {
   await fs.writeFile(
     path.join(outputDir, ".manifest.json"),
     JSON.stringify(manifest, null, 2) + "\n",

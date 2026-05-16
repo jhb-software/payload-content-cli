@@ -56,10 +56,7 @@ export async function getProfile(name: string): Promise<Profile | undefined> {
   return profiles[name];
 }
 
-export async function setProfile(
-  name: string,
-  profile: Profile,
-): Promise<void> {
+export async function setProfile(name: string, profile: Profile): Promise<void> {
   const profiles = await loadProfiles();
   profiles[name] = profile;
   await saveProfiles(profiles);

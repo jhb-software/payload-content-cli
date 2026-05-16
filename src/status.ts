@@ -75,8 +75,7 @@ export function printStatus(result: StatusResult | null): void {
     return;
   }
 
-  const total =
-    result.modified.length + result.added.length + result.deleted.length;
+  const total = result.modified.length + result.added.length + result.deleted.length;
 
   if (total === 0) {
     console.log("No local changes.");

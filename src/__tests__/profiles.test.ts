@@ -62,10 +62,7 @@ describe("saveProfiles", () => {
       prod: { payloadUrl: "https://example.com", apiKey: "prod-key" },
     });
 
-    const raw = await fs.readFile(
-      path.join(tmpDir, ".payload-content", "profiles.json"),
-      "utf-8",
-    );
+    const raw = await fs.readFile(path.join(tmpDir, ".payload-content", "profiles.json"), "utf-8");
     const parsed = JSON.parse(raw);
     expect(parsed.prod.payloadUrl).toBe("https://example.com");
   });
@@ -177,16 +174,12 @@ describe("resolveProfile", () => {
   });
 
   it("throws with helpful message when profile not found", async () => {
-    await expect(resolveProfile("nope")).rejects.toThrow(
-      'Profile "nope" not found.',
-    );
+    await expect(resolveProfile("nope")).rejects.toThrow('Profile "nope" not found.');
   });
 
   it("lists available profiles in error message", async () => {
     await setProfile("dev", { payloadUrl: "http://localhost:3000" });
-    await expect(resolveProfile("nope")).rejects.toThrow(
-      "Available profiles: dev",
-    );
+    await expect(resolveProfile("nope")).rejects.toThrow("Available profiles: dev");
   });
 });
 

@@ -23,17 +23,13 @@ describe("validateTree", () => {
   it("warns on missing version", () => {
     const children: LexicalNode[] = [{ type: "paragraph" }];
     const warnings = validateTree(children);
-    expect(warnings).toContainEqual(
-      expect.stringContaining('missing "version"'),
-    );
+    expect(warnings).toContainEqual(expect.stringContaining('missing "version"'));
   });
 
   it("warns on text node without text field", () => {
     const children: LexicalNode[] = [{ type: "text", version: 1 }];
     const warnings = validateTree(children);
-    expect(warnings).toContainEqual(
-      expect.stringContaining('Text node missing "text"'),
-    );
+    expect(warnings).toContainEqual(expect.stringContaining('Text node missing "text"'));
   });
 
   it("validates nested children", () => {

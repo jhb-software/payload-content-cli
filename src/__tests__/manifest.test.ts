@@ -1,12 +1,7 @@
 import { describe, it, expect, afterEach } from "vitest";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import {
-  contentHash,
-  loadManifest,
-  saveManifest,
-  type Manifest,
-} from "../manifest.js";
+import { contentHash, loadManifest, saveManifest, type Manifest } from "../manifest.js";
 
 const TMP_DIR = path.resolve("tmp-manifest-test");
 

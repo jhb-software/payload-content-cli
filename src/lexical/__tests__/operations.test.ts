@@ -66,9 +66,7 @@ describe("addNode", () => {
     });
     expect(result).toHaveLength(3);
     expect(result[1].type).toBe("paragraph");
-    expect(
-      (result[1] as unknown as { children: unknown[] }).children,
-    ).toHaveLength(0);
+    expect((result[1] as unknown as { children: unknown[] }).children).toHaveLength(0);
     // Original unchanged
     expect(original).toHaveLength(2);
   });
@@ -81,9 +79,7 @@ describe("addNode", () => {
     });
     expect(result).toHaveLength(3);
     expect(result[0].type).toBe("heading");
-    expect(
-      (result[1] as unknown as { children: unknown[] }).children,
-    ).toHaveLength(0);
+    expect((result[1] as unknown as { children: unknown[] }).children).toHaveLength(0);
   });
 
   it("inserts at start of element children", () => {
@@ -127,9 +123,7 @@ describe("replaceNode", () => {
       version: 1,
     });
     expect(result[0].type).toBe("paragraph");
-    expect(
-      (result[0] as unknown as { children: unknown[] }).children,
-    ).toHaveLength(0);
+    expect((result[0] as unknown as { children: unknown[] }).children).toHaveLength(0);
   });
 
   it("does not mutate original", () => {
@@ -196,9 +190,7 @@ describe("searchText", () => {
       },
       {
         type: "paragraph",
-        children: [
-          { type: "text", text: "Great Migration elsewhere", version: 1 },
-        ],
+        children: [{ type: "text", text: "Great Migration elsewhere", version: 1 }],
         version: 1,
       },
     ];

@@ -17,24 +17,14 @@ export function assertSafePathSegment(value: string, label: string): void {
   }
 }
 
-export function assertInsideDirectory(
-  baseDir: string,
-  targetPath: string,
-): void {
+export function assertInsideDirectory(baseDir: string, targetPath: string): void {
   const relative = path.relative(baseDir, targetPath);
-  if (
-    relative === "" ||
-    relative.startsWith("..") ||
-    path.isAbsolute(relative)
-  ) {
+  if (relative === "" || relative.startsWith("..") || path.isAbsolute(relative)) {
     throw new Error(`Refusing to write outside ${baseDir}: ${targetPath}`);
   }
 }
 
-export function safeJoinPath(
-  baseDir: string,
-  ...segments: [string, ...string[]]
-): string {
+export function safeJoinPath(baseDir: string, ...segments: [string, ...string[]]): string {
   for (const segment of segments) {
     assertSafePathSegment(segment, "path segment");
   }

@@ -8,9 +8,7 @@ import { push } from "../push.js";
 import { status } from "../status.js";
 import { loadManifest } from "../manifest.js";
 
-const hasRemoteEnv = Boolean(
-  process.env.PAYLOAD_URL && process.env.PAYLOAD_API_KEY,
-);
+const hasRemoteEnv = Boolean(process.env.PAYLOAD_URL && process.env.PAYLOAD_API_KEY);
 
 const CONTENT_DIR = path.resolve("content-integration-test");
 
@@ -59,27 +57,18 @@ describe.skipIf(!hasRemoteEnv)("integration", () => {
     });
 
     it("creates collection directories with documents", async () => {
-      const postFiles = await readJsonDir(
-        path.join(CONTENT_DIR, "collections", "posts"),
-      );
+      const postFiles = await readJsonDir(path.join(CONTENT_DIR, "collections", "posts"));
       expect(postFiles).toHaveLength(5);
     });
 
     it("creates global directories with data files", async () => {
-      const globalFile = path.join(
-        CONTENT_DIR,
-        "globals",
-        "site-settings",
-        "site-settings.json",
-      );
+      const globalFile = path.join(CONTENT_DIR, "globals", "site-settings", "site-settings.json");
       const globalContent = await readJson(globalFile);
       expect(globalContent.siteName).toBe("My Test Site");
     });
 
     it("writes _schema.json with field definitions for collections", async () => {
-      const schema = await readJson(
-        path.join(CONTENT_DIR, "collections", "posts", "_schema.json"),
-      );
+      const schema = await readJson(path.join(CONTENT_DIR, "collections", "posts", "_schema.json"));
       expect(schema.slug).toBe("posts");
 
       const fields = schema.fields as Array<{ name: string; type: string }>;
@@ -89,9 +78,7 @@ describe.skipIf(!hasRemoteEnv)("integration", () => {
     });
 
     it("marks virtual fields in schema", async () => {
-      const schema = await readJson(
-        path.join(CONTENT_DIR, "collections", "pages", "_schema.json"),
-      );
+      const schema = await readJson(path.join(CONTENT_DIR, "collections", "pages", "_schema.json"));
       const fields = schema.fields as Array<{
         name: string;
         virtual?: boolean;
@@ -118,9 +105,7 @@ describe.skipIf(!hasRemoteEnv)("integration", () => {
       const collSchema = await readJson(
         path.join(CONTENT_DIR, "collections", "posts", "_jsonschema.json"),
       );
-      expect(collSchema.$schema).toBe(
-        "http://json-schema.org/draft-07/schema#",
-      );
+      expect(collSchema.$schema).toBe("http://json-schema.org/draft-07/schema#");
       expect(collSchema.title).toBe("posts");
       const collProps = collSchema.properties as Record<string, unknown>;
       expect(collProps.title).toBeDefined();
@@ -133,28 +118,17 @@ describe.skipIf(!hasRemoteEnv)("integration", () => {
     });
 
     it("does not include jsonSchema inside _schema.json", async () => {
-      const schema = await readJson(
-        path.join(CONTENT_DIR, "collections", "posts", "_schema.json"),
-      );
+      const schema = await readJson(path.join(CONTENT_DIR, "collections", "posts", "_schema.json"));
       expect(schema.jsonSchema).toBeUndefined();
     });
 
     it("adds $schema reference to pulled documents", async () => {
-      const postFiles = await readJsonDir(
-        path.join(CONTENT_DIR, "collections", "posts"),
-      );
-      const post = await readJson(
-        path.join(CONTENT_DIR, "collections", "posts", postFiles[0]),
-      );
+      const postFiles = await readJsonDir(path.join(CONTENT_DIR, "collections", "posts"));
+      const post = await readJson(path.join(CONTENT_DIR, "collections", "posts", postFiles[0]));
       expect(post.$schema).toBe("./_jsonschema.json");
 
       const global = await readJson(
-        path.join(
-          CONTENT_DIR,
-          "globals",
-          "site-settings",
-          "site-settings.json",
-        ),
+        path.join(CONTENT_DIR, "globals", "site-settings", "site-settings.json"),
       );
       expect(global.$schema).toBe("./_jsonschema.json");
     });
@@ -166,12 +140,8 @@ describe.skipIf(!hasRemoteEnv)("integration", () => {
     });
 
     it("stores relationships as IDs at depth=0", async () => {
-      const postFiles = await readJsonDir(
-        path.join(CONTENT_DIR, "collections", "posts"),
-      );
-      const post = await readJson(
-        path.join(CONTENT_DIR, "collections", "posts", postFiles[0]),
-      );
+      const postFiles = await readJsonDir(path.join(CONTENT_DIR, "collections", "posts"));
+      const post = await readJson(path.join(CONTENT_DIR, "collections", "posts", postFiles[0]));
 
       // author must be a string ID, not a populated object
       expect(post.author).toBeDefined();
@@ -233,22 +203,12 @@ describe.skipIf(!hasRemoteEnv)("integration", () => {
     });
 
     it("detects an added document", async () => {
-      const newFile = path.join(
-        CONTENT_DIR,
-        "collections",
-        "posts",
-        "test-new-status.json",
-      );
-      await fs.writeFile(
-        newFile,
-        JSON.stringify({ title: "New" }, null, 2) + "\n",
-      );
+      const newFile = path.join(CONTENT_DIR, "collections", "posts", "test-new-status.json");
+      await fs.writeFile(newFile, JSON.stringify({ title: "New" }, null, 2) + "\n");
 
       const result = await status(config);
       expect(result!.added.length).toBeGreaterThanOrEqual(1);
-      expect(result!.added.some((a) => a.includes("test-new-status"))).toBe(
-        true,
-      );
+      expect(result!.added.some((a) => a.includes("test-new-status"))).toBe(true);
 
       await fs.unlink(newFile);
     });
@@ -309,12 +269,7 @@ describe.skipIf(!hasRemoteEnv)("integration", () => {
     });
 
     it("creates a new document from a local file", async () => {
-      const newFile = path.join(
-        CONTENT_DIR,
-        "collections",
-        "categories",
-        "test-push-create.json",
-      );
+      const newFile = path.join(CONTENT_DIR, "collections", "categories", "test-push-create.json");
       await fs.writeFile(
         newFile,
         JSON.stringify(
@@ -355,12 +310,7 @@ describe.skipIf(!hasRemoteEnv)("integration", () => {
     });
 
     it("updates a global", async () => {
-      const globalFile = path.join(
-        CONTENT_DIR,
-        "globals",
-        "site-settings",
-        "site-settings.json",
-      );
+      const globalFile = path.join(CONTENT_DIR, "globals", "site-settings", "site-settings.json");
       const content = await readJson(globalFile);
       const originalName = content.siteName;
       const testName = `Push Global Test ${Date.now()}`;
@@ -444,9 +394,7 @@ describe.skipIf(!hasRemoteEnv)("integration", () => {
       expect(Array.isArray(schema!.endpoints)).toBe(true);
 
       // The example project registers /example-plugin/stats (GET) and /example-plugin/publish-all (POST)
-      const stats = schema!.endpoints!.find(
-        (ep) => ep.path === "/api/example-plugin/stats",
-      );
+      const stats = schema!.endpoints!.find((ep) => ep.path === "/api/example-plugin/stats");
       expect(stats).toBeDefined();
       expect(stats!.method).toBe("get");
 
@@ -463,9 +411,7 @@ describe.skipIf(!hasRemoteEnv)("integration", () => {
         endpoints?: { path: string }[];
       } | null;
 
-      const schemaEndpoint = schema!.endpoints!.find(
-        (ep) => ep.path === "/api/content-cli/schema",
-      );
+      const schemaEndpoint = schema!.endpoints!.find((ep) => ep.path === "/api/content-cli/schema");
       expect(schemaEndpoint).toBeUndefined();
     });
 
@@ -593,16 +539,13 @@ describe.skipIf(!hasRemoteEnv)("integration", () => {
       });
       const originalVersion = (versions.docs as Record<string, unknown>[]).find(
         (v) =>
-          ((v.version as Record<string, unknown>).excerpt as string) ===
-          "version-test-original",
+          ((v.version as Record<string, unknown>).excerpt as string) === "version-test-original",
       );
       expect(originalVersion).toBeDefined();
 
-      const restored = await client.restoreVersion(
-        "posts",
-        originalVersion!.id as string,
-        { depth: 0 },
-      );
+      const restored = await client.restoreVersion("posts", originalVersion!.id as string, {
+        depth: 0,
+      });
       expect(restored.excerpt).toBe("version-test-original");
     });
   });
@@ -617,11 +560,7 @@ describe.skipIf(!hasRemoteEnv)("integration", () => {
       const original = docs.docs[0];
       const originalTitle = original.title as string;
 
-      const duplicate = await client.duplicateDoc(
-        "posts",
-        original.id as string,
-        { depth: 0 },
-      );
+      const duplicate = await client.duplicateDoc("posts", original.id as string, { depth: 0 });
 
       expect(duplicate.id).not.toBe(original.id);
       expect(duplicate.title).toContain(originalTitle);
@@ -711,15 +650,11 @@ describe.skipIf(!hasRemoteEnv)("integration", () => {
       const postsDir = path.join(CONTENT_DIR, "collections", "posts");
       const files = await readJsonDir(postsDir);
       // No locale suffix
-      expect(
-        files.every((f) => !f.includes("_en.json") && !f.includes("_de.json")),
-      ).toBe(true);
+      expect(files.every((f) => !f.includes("_en.json") && !f.includes("_de.json"))).toBe(true);
 
       const manifest = await loadManifest(CONTENT_DIR);
       const keys = Object.keys(manifest!.documents);
-      expect(
-        keys.every((k) => !k.includes("_en.json") && !k.includes("_de.json")),
-      ).toBe(true);
+      expect(keys.every((k) => !k.includes("_en.json") && !k.includes("_de.json"))).toBe(true);
     });
   });
 }); // describe.skipIf

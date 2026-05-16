@@ -17,26 +17,17 @@ export interface FindResult {
 function getByDotPath(obj: unknown, dotPath: string): unknown {
   let current = obj;
   for (const segment of dotPath.split(".")) {
-    if (
-      current === null ||
-      current === undefined ||
-      typeof current !== "object"
-    )
-      return undefined;
+    if (current === null || current === undefined || typeof current !== "object") return undefined;
     current = (current as Record<string, unknown>)[segment];
   }
   return current;
 }
 
-function matchesWhere(
-  doc: Record<string, unknown>,
-  where: Record<string, string>,
-): boolean {
+function matchesWhere(doc: Record<string, unknown>, where: Record<string, string>): boolean {
   for (const [field, value] of Object.entries(where)) {
     const docVal = getByDotPath(doc, field);
     if (docVal === undefined || docVal === null) return false;
-    if (!String(docVal).toLowerCase().includes(value.toLowerCase()))
-      return false;
+    if (!String(docVal).toLowerCase().includes(value.toLowerCase())) return false;
   }
   return true;
 }
@@ -62,12 +53,7 @@ async function scanDir(
   }
 
   for (const entry of entries) {
-    if (
-      !entry.endsWith(".json") ||
-      entry.startsWith("_") ||
-      entry.startsWith(".")
-    )
-      continue;
+    if (!entry.endsWith(".json") || entry.startsWith("_") || entry.startsWith(".")) continue;
 
     const filePath = path.join(dir, entry);
     try {
@@ -106,19 +92,12 @@ async function scanDir(
   return results;
 }
 
-export async function find(
-  config: Config,
-  options: FindOptions = {},
-): Promise<FindResult[]> {
+export async function find(config: Config, options: FindOptions = {}): Promise<FindResult[]> {
   const outputDir = path.resolve(config.outputDir);
   const results: FindResult[] = [];
 
   if (options.collection) {
-    const collectionDir = path.join(
-      outputDir,
-      "collections",
-      options.collection,
-    );
+    const collectionDir = path.join(outputDir, "collections", options.collection);
     const globalDir = path.join(outputDir, "globals", options.collection);
 
     results.push(...(await scanDir(collectionDir, outputDir, options)));

@@ -3,9 +3,7 @@ import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 
-const hasRemoteEnv = Boolean(
-  process.env.PAYLOAD_URL && process.env.PAYLOAD_API_KEY,
-);
+const hasRemoteEnv = Boolean(process.env.PAYLOAD_URL && process.env.PAYLOAD_API_KEY);
 
 const CONTENT_DIR = path.resolve("content-cli-process-test");
 const CLI_ENTRY = path.resolve("src/cli.ts");
@@ -33,9 +31,7 @@ describe.skipIf(!hasRemoteEnv)("cli (remote)", () => {
 
   it("push exits with code 2 on conflict", async () => {
     const dir = path.join(CONTENT_DIR, "collections", "posts");
-    const files = (await fs.readdir(dir)).filter(
-      (f) => f.endsWith(".json") && !f.startsWith("_"),
-    );
+    const files = (await fs.readdir(dir)).filter((f) => f.endsWith(".json") && !f.startsWith("_"));
     expect(files.length).toBeGreaterThan(0);
     const target = path.join(dir, files[0]);
 
@@ -70,19 +66,11 @@ describe.skipIf(!hasRemoteEnv)("cli (remote)", () => {
   it("pull prunes clean orphans but preserves locally-edited ones", async () => {
     // Start clean and pull localized — produces _en/_de files
     await cleanup();
-    const localized = runCLI([
-      "pull",
-      "--collections",
-      "posts",
-      "--locale",
-      "en",
-    ]);
+    const localized = runCLI(["pull", "--collections", "posts", "--locale", "en"]);
     expect(localized.status, localized.stderr).toBe(0);
 
     const dir = path.join(CONTENT_DIR, "collections", "posts");
-    const enFiles = (await fs.readdir(dir)).filter((f) =>
-      f.endsWith("_en.json"),
-    );
+    const enFiles = (await fs.readdir(dir)).filter((f) => f.endsWith("_en.json"));
     expect(enFiles.length).toBeGreaterThan(1);
 
     // Locally edit one file before the next pull
@@ -99,9 +87,7 @@ describe.skipIf(!hasRemoteEnv)("cli (remote)", () => {
     expect(repulled.stdout).toMatch(/Kept 1 orphan file/);
 
     // Clean orphans (non-edited) gone, edited orphan preserved
-    const remaining = (await fs.readdir(dir)).filter((f) =>
-      f.endsWith("_en.json"),
-    );
+    const remaining = (await fs.readdir(dir)).filter((f) => f.endsWith("_en.json"));
     expect(remaining).toEqual([enFiles[0]]);
   });
 
@@ -174,9 +160,7 @@ describe("cli (local-only)", () => {
       "anything",
     ]);
     expect(result.status).toBe(1);
-    expect(result.stderr).toMatch(
-      /Property "text" does not exist on node at "0"/,
-    );
+    expect(result.stderr).toMatch(/Property "text" does not exist on node at "0"/);
   });
 
   it("lexical add → set → list chain produces the expected tree", async () => {
@@ -193,17 +177,7 @@ describe("cli (local-only)", () => {
     ]);
     expect(add.status, add.stderr).toBe(0);
 
-    const set = runCLI([
-      "lexical",
-      "set",
-      docPath,
-      "--at",
-      "0",
-      "--prop",
-      "tag",
-      "--value",
-      "h2",
-    ]);
+    const set = runCLI(["lexical", "set", docPath, "--at", "0", "--prop", "tag", "--value", "h2"]);
     expect(set.status, set.stderr).toBe(0);
 
     const list = runCLI(["lexical", "list", docPath]);

@@ -43,18 +43,14 @@ export function parseCommonOpts(opts: Record<string, unknown>): CommonOpts {
     fallbackLocale: opts.fallbackLocale as string | undefined,
     draft: opts.draft as boolean | undefined,
     select: opts.select ? parseSelect(opts.select as string) : undefined,
-    populate: opts.populate
-      ? parseJson(opts.populate as string, "--populate")
-      : undefined,
+    populate: opts.populate ? parseJson(opts.populate as string, "--populate") : undefined,
     joins: opts.joins ? parseJson(opts.joins as string, "--joins") : undefined,
     trash: opts.trash as boolean | undefined,
   };
 }
 
 /** Parse raw Commander opts into typed PaginationOpts. */
-export function parsePaginationOpts(
-  opts: Record<string, unknown>,
-): PaginationOpts {
+export function parsePaginationOpts(opts: Record<string, unknown>): PaginationOpts {
   return {
     limit: opts.limit !== undefined ? Number(opts.limit) : undefined,
     page: opts.page !== undefined ? Number(opts.page) : undefined,
@@ -84,9 +80,7 @@ export function parseJson(raw: string, label: string): Record<string, unknown> {
   }
 }
 
-export async function readDataFile(
-  filePath: string,
-): Promise<Record<string, unknown>> {
+export async function readDataFile(filePath: string): Promise<Record<string, unknown>> {
   try {
     const raw = await fs.readFile(filePath, "utf-8");
     return JSON.parse(raw);
@@ -100,9 +94,7 @@ export async function readDataFile(
  * Resolve document data from --data or --file flags.
  * Exits with an error if neither is provided.
  */
-export async function resolveData(
-  opts: Record<string, unknown>,
-): Promise<Record<string, unknown>> {
+export async function resolveData(opts: Record<string, unknown>): Promise<Record<string, unknown>> {
   if (opts.file) return readDataFile(opts.file as string);
   if (opts.data) return parseJson(opts.data as string, "--data");
   console.error("Error: provide --data or --file.");

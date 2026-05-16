@@ -46,19 +46,12 @@ describe("agent onboarding DX", () => {
         outputDir: "content",
       });
 
-      vi.spyOn(
-        client as unknown as { request: () => void },
-        "request",
-      ).mockRejectedValue(
+      vi.spyOn(client as unknown as { request: () => void }, "request").mockRejectedValue(
         new PayloadApiError(404, "/wrong-collection/me", "Not Found"),
       );
 
-      await expect(client.getMe("wrong-collection")).rejects.toThrow(
-        /PAYLOAD_AUTH_COLLECTION/,
-      );
-      await expect(client.getMe("wrong-collection")).rejects.toThrow(
-        /wrong-collection/,
-      );
+      await expect(client.getMe("wrong-collection")).rejects.toThrow(/PAYLOAD_AUTH_COLLECTION/);
+      await expect(client.getMe("wrong-collection")).rejects.toThrow(/wrong-collection/);
     });
 
     it("does not swallow non-404 errors", async () => {
@@ -69,10 +62,9 @@ describe("agent onboarding DX", () => {
         outputDir: "content",
       });
 
-      vi.spyOn(
-        client as unknown as { request: () => void },
-        "request",
-      ).mockRejectedValue(new PayloadApiError(403, "/users/me", "Forbidden"));
+      vi.spyOn(client as unknown as { request: () => void }, "request").mockRejectedValue(
+        new PayloadApiError(403, "/users/me", "Forbidden"),
+      );
 
       await expect(client.getMe("users")).rejects.toThrow(PayloadApiError);
     });

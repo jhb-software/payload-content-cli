@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  parseAddress,
-  resolveNode,
-  resolveParentAndIndex,
-} from "../address.js";
+import { parseAddress, resolveNode, resolveParentAndIndex } from "../address.js";
 import type { LexicalNode } from "../types.js";
 
 describe("parseAddress", () => {
@@ -69,15 +65,11 @@ describe("resolveNode", () => {
   });
 
   it("throws when traversing non-element node", () => {
-    expect(() => resolveNode(sampleChildren, [0, 0, 0])).toThrow(
-      "no children array",
-    );
+    expect(() => resolveNode(sampleChildren, [0, 0, 0])).toThrow("no children array");
   });
 
   it("throws on empty address", () => {
-    expect(() => resolveNode(sampleChildren, [])).toThrow(
-      "at least one segment",
-    );
+    expect(() => resolveNode(sampleChildren, [])).toThrow("at least one segment");
   });
 });
 
@@ -98,8 +90,6 @@ describe("resolveParentAndIndex", () => {
   });
 
   it("throws on empty address", () => {
-    expect(() => resolveParentAndIndex(sampleChildren, [])).toThrow(
-      "at least one segment",
-    );
+    expect(() => resolveParentAndIndex(sampleChildren, [])).toThrow("at least one segment");
   });
 });

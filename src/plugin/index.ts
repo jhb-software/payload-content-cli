@@ -116,13 +116,11 @@ export function extractFields(
     }
 
     // Resolve inline blocks + blockReferences (slugs pointing to config.blocks)
-    const inlineBlocks: any[] =
-      field.blocks && Array.isArray(field.blocks) ? field.blocks : [];
+    const inlineBlocks: any[] = field.blocks && Array.isArray(field.blocks) ? field.blocks : [];
     const refBlocks: any[] = Array.isArray(field.blockReferences)
       ? field.blockReferences
           .map((blockRef: any) => {
-            const slug =
-              typeof blockRef === "string" ? blockRef : blockRef.slug;
+            const slug = typeof blockRef === "string" ? blockRef : blockRef.slug;
             return blocksBySlug[slug];
           })
           .filter(Boolean)
@@ -166,9 +164,7 @@ type JsonSchema = {
   title?: string;
 };
 
-function idReferenceSchema(
-  relationTo: string | string[] | undefined,
-): JsonSchema {
+function idReferenceSchema(relationTo: string | string[] | undefined): JsonSchema {
   if (Array.isArray(relationTo)) {
     return {
       type: "object",
@@ -199,16 +195,12 @@ function fieldToJsonSchema(field: FieldSchema): JsonSchema | null {
     case "select": {
       const enumValues = field.options?.map((o) => o.value) ?? [];
       const single: JsonSchema =
-        enumValues.length > 0
-          ? { type: "string", enum: enumValues }
-          : { type: "string" };
+        enumValues.length > 0 ? { type: "string", enum: enumValues } : { type: "string" };
       return field.hasMany ? { type: "array", items: single } : single;
     }
     case "radio": {
       const enumValues = field.options?.map((o) => o.value) ?? [];
-      return enumValues.length > 0
-        ? { type: "string", enum: enumValues }
-        : { type: "string" };
+      return enumValues.length > 0 ? { type: "string", enum: enumValues } : { type: "string" };
     }
     case "relationship":
     case "upload": {
@@ -328,10 +320,7 @@ function fieldsToJsonSchema(fields: FieldSchema[]): {
  * top level, system fields (`id`, timestamps, `_status`, `globalType`)
  * allowed but not required.
  */
-export function entityToJsonSchema(
-  slug: string,
-  fields: FieldSchema[],
-): JsonSchema {
+export function entityToJsonSchema(slug: string, fields: FieldSchema[]): JsonSchema {
   const { properties, required } = fieldsToJsonSchema(fields);
   const schema: JsonSchema = {
     $schema: "http://json-schema.org/draft-07/schema#",
@@ -353,13 +342,10 @@ export function entityToJsonSchema(
 }
 
 /** Extract optional CLI metadata from an endpoint's `custom` property. */
-export function extractEndpointMeta(
-  custom: any,
-): Pick<EndpointSchema, "description" | "schema"> {
+export function extractEndpointMeta(custom: any): Pick<EndpointSchema, "description" | "schema"> {
   if (!custom || typeof custom !== "object") return {};
   const meta: Pick<EndpointSchema, "description" | "schema"> = {};
-  if (typeof custom.description === "string")
-    meta.description = custom.description;
+  if (typeof custom.description === "string") meta.description = custom.description;
   if (custom.schema && typeof custom.schema === "object") {
     const schema: NonNullable<EndpointSchema["schema"]> = {};
     if (custom.schema.query && typeof custom.schema.query === "object")
@@ -443,9 +429,7 @@ export function contentCliPlugin(options?: ContentCliPluginOptions) {
           path: "/content-cli/schema",
           method: "get",
           handler: async (req: any) => {
-            const allowed = options?.access
-              ? await options.access(req)
-              : !!req.user;
+            const allowed = options?.access ? await options.access(req) : !!req.user;
             if (!allowed) {
               return Response.json({ error: "Unauthorized" }, { status: 401 });
             }
@@ -465,10 +449,7 @@ export function contentCliPlugin(options?: ContentCliPluginOptions) {
             for (const collectionConfig of payload.config.collections) {
               if (!(await canRead(collectionConfig, req))) continue;
               readableCollections.add(collectionConfig.slug);
-              const fields = extractFields(
-                collectionConfig.fields,
-                blocksBySlug,
-              );
+              const fields = extractFields(collectionConfig.fields, blocksBySlug);
               collections[collectionConfig.slug] = {
                 slug: collectionConfig.slug,
                 fields,
@@ -504,9 +485,8 @@ export function contentCliPlugin(options?: ContentCliPluginOptions) {
 
             const localization = payload.config.localization
               ? {
-                  locales: (payload.config.localization.locales as any[]).map(
-                    (locale: any) =>
-                      typeof locale === "string" ? locale : locale.code,
+                  locales: (payload.config.localization.locales as any[]).map((locale: any) =>
+                    typeof locale === "string" ? locale : locale.code,
                   ),
                   defaultLocale: payload.config.localization.defaultLocale,
                 }

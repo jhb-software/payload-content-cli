@@ -9,8 +9,7 @@ export interface ListEntry {
 
 function textPreview(node: LexicalNode): string {
   if (typeof node.text === "string") {
-    const preview =
-      node.text.length > 60 ? node.text.slice(0, 57) + "..." : node.text;
+    const preview = node.text.length > 60 ? node.text.slice(0, 57) + "..." : node.text;
     return `"${preview}"`;
   }
   if (
@@ -36,11 +35,7 @@ function textPreview(node: LexicalNode): string {
   return "";
 }
 
-function collectNodes(
-  children: LexicalNode[],
-  prefix: string,
-  entries: ListEntry[],
-): void {
+function collectNodes(children: LexicalNode[], prefix: string, entries: ListEntry[]): void {
   for (let i = 0; i < children.length; i++) {
     const addr = prefix ? `${prefix}.${i}` : `${i}`;
     const node = children[i];
@@ -61,10 +56,7 @@ export function listNodes(children: LexicalNode[]): ListEntry[] {
   return entries;
 }
 
-export function getNode(
-  children: LexicalNode[],
-  addressStr: string,
-): LexicalNode {
+export function getNode(children: LexicalNode[], addressStr: string): LexicalNode {
   const addr = parseAddress(addressStr);
   return resolveNode(children, addr);
 }
@@ -81,9 +73,7 @@ export function addNode(
   if (position === "start") {
     const target = resolveNode(result, addr);
     if (!Array.isArray((target as Record<string, unknown>).children)) {
-      throw new Error(
-        `Node at "${addressStr}" has no children — cannot insert at start`,
-      );
+      throw new Error(`Node at "${addressStr}" has no children — cannot insert at start`);
     }
     (target as Record<string, unknown[]>).children.unshift(node);
     return result;
@@ -92,9 +82,7 @@ export function addNode(
   if (position === "end") {
     const target = resolveNode(result, addr);
     if (!Array.isArray((target as Record<string, unknown>).children)) {
-      throw new Error(
-        `Node at "${addressStr}" has no children — cannot insert at end`,
-      );
+      throw new Error(`Node at "${addressStr}" has no children — cannot insert at end`);
     }
     (target as Record<string, unknown[]>).children.push(node);
     return result;
@@ -102,9 +90,7 @@ export function addNode(
 
   const { parent, index } = resolveParentAndIndex(result, addr);
   if (index < 0 || index >= parent.length) {
-    throw new Error(
-      `Address "${addressStr}" is out of bounds (length ${parent.length})`,
-    );
+    throw new Error(`Address "${addressStr}" is out of bounds (length ${parent.length})`);
   }
 
   if (position === "before") {
@@ -126,27 +112,20 @@ export function replaceNode(
   const { parent, index } = resolveParentAndIndex(result, addr);
 
   if (index < 0 || index >= parent.length) {
-    throw new Error(
-      `Address "${addressStr}" is out of bounds (length ${parent.length})`,
-    );
+    throw new Error(`Address "${addressStr}" is out of bounds (length ${parent.length})`);
   }
 
   parent[index] = node;
   return result;
 }
 
-export function removeNode(
-  children: LexicalNode[],
-  addressStr: string,
-): LexicalNode[] {
+export function removeNode(children: LexicalNode[], addressStr: string): LexicalNode[] {
   const result = structuredClone(children);
   const addr = parseAddress(addressStr);
   const { parent, index } = resolveParentAndIndex(result, addr);
 
   if (index < 0 || index >= parent.length) {
-    throw new Error(
-      `Address "${addressStr}" is out of bounds (length ${parent.length})`,
-    );
+    throw new Error(`Address "${addressStr}" is out of bounds (length ${parent.length})`);
   }
 
   parent.splice(index, 1);
@@ -216,10 +195,7 @@ export interface SearchMatch {
   context: string;
 }
 
-export function searchText(
-  children: LexicalNode[],
-  search: string,
-): SearchMatch[] {
+export function searchText(children: LexicalNode[], search: string): SearchMatch[] {
   const matches: SearchMatch[] = [];
 
   function walk(nodes: LexicalNode[], prefix: string): void {
@@ -237,9 +213,7 @@ export function searchText(
           const start = Math.max(0, idx - 30);
           const end = Math.min(text.length, idx + search.length + 30);
           const snippet =
-            (start > 0 ? "..." : "") +
-            text.slice(start, end) +
-            (end < text.length ? "..." : "");
+            (start > 0 ? "..." : "") + text.slice(start, end) + (end < text.length ? "..." : "");
           matches.push({ address: addr, context: snippet });
         }
       }
@@ -270,14 +244,8 @@ export function setNodeProp(
   let target: Record<string, unknown> = node as Record<string, unknown>;
   for (let i = 0; i < segments.length - 1; i++) {
     const seg = segments[i];
-    if (
-      target[seg] === undefined ||
-      target[seg] === null ||
-      typeof target[seg] !== "object"
-    ) {
-      throw new Error(
-        `Property path "${key}" — segment "${seg}" is not an object`,
-      );
+    if (target[seg] === undefined || target[seg] === null || typeof target[seg] !== "object") {
+      throw new Error(`Property path "${key}" — segment "${seg}" is not an object`);
     }
     target = target[seg] as Record<string, unknown>;
   }

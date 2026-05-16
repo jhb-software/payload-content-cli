@@ -230,9 +230,7 @@ describe("extractFields", () => {
         blockReferences: ["nonexistent"],
       },
     ];
-    expect(extractFields(fields, {})).toEqual([
-      { name: "layout", type: "blocks" },
-    ]);
+    expect(extractFields(fields, {})).toEqual([{ name: "layout", type: "blocks" }]);
   });
 
   it("handles blockReferences as objects with slug", () => {

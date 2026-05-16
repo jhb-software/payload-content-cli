@@ -67,8 +67,7 @@ export async function diff(config: Config): Promise<DiffResult> {
       }
 
       const remoteUpdatedAt = remoteDoc.updatedAt as string | undefined;
-      const remoteChanged =
-        remoteUpdatedAt && remoteUpdatedAt !== entry.updatedAt;
+      const remoteChanged = remoteUpdatedAt && remoteUpdatedAt !== entry.updatedAt;
       const localChanged = localModifiedSet.has(key);
 
       if (remoteChanged && localChanged) {
@@ -107,9 +106,7 @@ export function printDiff(result: DiffResult): void {
     return;
   }
 
-  console.log(
-    "Legend: L> push, <R pull, !! conflict, +L local-only, +R remote-only",
-  );
+  console.log("Legend: L> push, <R pull, !! conflict, +L local-only, +R remote-only");
   console.log("");
 
   for (const key of result.bothModified) {

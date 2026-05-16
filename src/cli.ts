@@ -8,30 +8,16 @@ import { Command, Help } from "commander";
 const pkg = createRequire(import.meta.url)("../package.json") as {
   version: string;
 };
-import {
-  loadConfig,
-  requireRemoteConfig,
-  resolvePayloadProfile,
-} from "./config.js";
+import { loadConfig, requireRemoteConfig, resolvePayloadProfile } from "./config.js";
 import { pull } from "./pull.js";
 import { push } from "./push.js";
 import { status, printStatus } from "./status.js";
 import { diff, printDiff } from "./diff.js";
-import {
-  find as findLocal,
-  printFindResults,
-  type FindOptions,
-} from "./find.js";
+import { find as findLocal, printFindResults, type FindOptions } from "./find.js";
 import { PayloadClient } from "./client.js";
 import { parseSelect } from "./select.js";
 import { registerLexicalCommands } from "./lexical/index.js";
-import {
-  resolveProfile,
-  setProfile,
-  removeProfile,
-  loadProfiles,
-  maskApiKey,
-} from "./profiles.js";
+import { resolveProfile, setProfile, removeProfile, loadProfiles, maskApiKey } from "./profiles.js";
 import type { Profile } from "./profiles.js";
 import {
   parseCommonOpts,
@@ -119,10 +105,7 @@ program.option(
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
-async function pooled<T>(
-  tasks: (() => Promise<T>)[],
-  concurrency: number,
-): Promise<T[]> {
+async function pooled<T>(tasks: (() => Promise<T>)[], concurrency: number): Promise<T[]> {
   const results: T[] = [];
   let index = 0;
 
@@ -133,9 +116,7 @@ async function pooled<T>(
     }
   }
 
-  await Promise.all(
-    Array.from({ length: Math.min(concurrency, tasks.length) }, () => worker()),
-  );
+  await Promise.all(Array.from({ length: Math.min(concurrency, tasks.length) }, () => worker()));
   return results;
 }
 
@@ -164,16 +145,11 @@ function parseData(raw: string): Record<string, unknown> {
 
 program
   .command("find")
-  .description(
-    "Search documents in a collection or global. Use --local to search pulled files.",
-  )
+  .description("Search documents in a collection or global. Use --local to search pulled files.")
   .argument("<slug>", "Collection slug or globals/<slug>")
   .argument("[id]", "Document ID (returns single document)")
   .option("--local", "Search pulled local files instead of the API")
-  .option(
-    "--where <json>",
-    'Payload query filter as JSON (e.g. \'{"slug":{"equals":"hello"}}\')',
-  )
+  .option("--where <json>", 'Payload query filter as JSON (e.g. \'{"slug":{"equals":"hello"}}\')')
   .option("--select <json>", "Fields to include/exclude as JSON")
   .option("--limit <n>", "Max documents to return")
   .option("--sort <field>", "Sort field (prefix - for desc)")
@@ -184,75 +160,61 @@ program
   .option("--trash", "Include soft-deleted documents")
   .option("--joins <json>", "Join field options as JSON")
   .option("--populate <json>", "Populate options as JSON")
-  .option(
-    "--pagination",
-    "Include pagination metadata (use --no-pagination to exclude)",
-  )
+  .option("--pagination", "Include pagination metadata (use --no-pagination to exclude)")
   .action(
-    wrapAction(
-      async (
-        slug: string,
-        id: string | undefined,
-        opts: Record<string, unknown>,
-      ) => {
-        if (opts.local) {
-          // Local mode: search pulled files
-          const config = await getConfig();
-          const { slug: resolvedSlug } = parseSlug(slug);
-          const localWhere: Record<string, string> = {};
-          if (opts.where) {
-            const parsed = parseWhere(opts.where as string);
-            for (const [k, v] of Object.entries(parsed)) {
-              if (typeof v === "object" && v !== null) {
-                const inner = v as Record<string, unknown>;
-                const val =
-                  inner.equals ?? inner.like ?? Object.values(inner)[0];
-                if (val !== undefined) localWhere[k] = String(val);
-              } else {
-                localWhere[k] = String(v);
-              }
+    wrapAction(async (slug: string, id: string | undefined, opts: Record<string, unknown>) => {
+      if (opts.local) {
+        // Local mode: search pulled files
+        const config = await getConfig();
+        const { slug: resolvedSlug } = parseSlug(slug);
+        const localWhere: Record<string, string> = {};
+        if (opts.where) {
+          const parsed = parseWhere(opts.where as string);
+          for (const [k, v] of Object.entries(parsed)) {
+            if (typeof v === "object" && v !== null) {
+              const inner = v as Record<string, unknown>;
+              const val = inner.equals ?? inner.like ?? Object.values(inner)[0];
+              if (val !== undefined) localWhere[k] = String(val);
+            } else {
+              localWhere[k] = String(v);
             }
           }
-          const localOpts: FindOptions = {
-            collection: resolvedSlug,
-            select: opts.select
-              ? parseSelect(opts.select as string)
-              : undefined,
-            where: Object.keys(localWhere).length > 0 ? localWhere : undefined,
-          };
-          const results = await findLocal(config, localOpts);
-          printFindResults(results);
-          if (results.length === 0) process.exit(1);
-          return;
         }
+        const localOpts: FindOptions = {
+          collection: resolvedSlug,
+          select: opts.select ? parseSelect(opts.select as string) : undefined,
+          where: Object.keys(localWhere).length > 0 ? localWhere : undefined,
+        };
+        const results = await findLocal(config, localOpts);
+        printFindResults(results);
+        if (results.length === 0) process.exit(1);
+        return;
+      }
 
-        // Remote mode: query the API
-        const config = await getConfig();
-        requireRemoteConfig(config);
-        const client = new PayloadClient(config);
-        const { isGlobal, slug: resolvedSlug } = parseSlug(slug);
-        const common = parseCommonOpts(opts);
+      // Remote mode: query the API
+      const config = await getConfig();
+      requireRemoteConfig(config);
+      const client = new PayloadClient(config);
+      const { isGlobal, slug: resolvedSlug } = parseSlug(slug);
+      const common = parseCommonOpts(opts);
 
-        let data: unknown;
+      let data: unknown;
 
-        if (isGlobal) {
-          data = await client.getGlobal(resolvedSlug, common);
-        } else if (id) {
-          data = await client.getDoc(resolvedSlug, id, common);
-        } else {
-          const where = opts.where
-            ? parseWhere(opts.where as string)
-            : undefined;
-          data = await client.getCollectionDocs(resolvedSlug, {
-            ...common,
-            ...parsePaginationOpts(opts),
-            where,
-          });
-        }
+      if (isGlobal) {
+        data = await client.getGlobal(resolvedSlug, common);
+      } else if (id) {
+        data = await client.getDoc(resolvedSlug, id, common);
+      } else {
+        const where = opts.where ? parseWhere(opts.where as string) : undefined;
+        data = await client.getCollectionDocs(resolvedSlug, {
+          ...common,
+          ...parsePaginationOpts(opts),
+          where,
+        });
+      }
 
-        console.log(JSON.stringify(data, null, 2));
-      },
-    ),
+      console.log(JSON.stringify(data, null, 2));
+    }),
   );
 
 program
@@ -308,62 +270,52 @@ program
   .option("--publish-all-locales", "Publish all locales")
   .option("--unpublish-all-locales", "Unpublish all locales")
   .action(
-    wrapAction(
-      async (
-        slug: string,
-        id: string | undefined,
-        opts: Record<string, unknown>,
-      ) => {
-        const config = await getConfig();
-        requireRemoteConfig(config);
-        const client = new PayloadClient(config);
-        const { isGlobal, slug: resolvedSlug } = parseSlug(slug);
-        const data = await resolveData(opts);
-        const common = parseCommonOpts(opts);
-        const publish = parsePublishOpts(opts);
+    wrapAction(async (slug: string, id: string | undefined, opts: Record<string, unknown>) => {
+      const config = await getConfig();
+      requireRemoteConfig(config);
+      const client = new PayloadClient(config);
+      const { isGlobal, slug: resolvedSlug } = parseSlug(slug);
+      const data = await resolveData(opts);
+      const common = parseCommonOpts(opts);
+      const publish = parsePublishOpts(opts);
 
-        let result: unknown;
+      let result: unknown;
 
-        if (isGlobal) {
-          result = await client.updateGlobal(resolvedSlug, data, {
-            ...common,
-            ...publish,
-          });
-        } else if (id) {
-          result = await client.updateDoc(resolvedSlug, id, data, {
-            ...common,
-            ...publish,
-            overrideLock: opts.overrideLock as boolean | undefined,
-          });
-        } else if (opts.where) {
-          // Bulk update via PATCH with where params
-          const where = parseWhere(opts.where as string);
-          const whereParams: Record<string, string> = {};
-          for (const [k, v] of Object.entries(where)) {
-            if (typeof v === "object" && v !== null) {
-              for (const [op, val] of Object.entries(
-                v as Record<string, unknown>,
-              )) {
-                whereParams[`where[${k}][${op}]`] = String(val);
-              }
-            } else {
-              whereParams[`where[${k}][equals]`] = String(v);
+      if (isGlobal) {
+        result = await client.updateGlobal(resolvedSlug, data, {
+          ...common,
+          ...publish,
+        });
+      } else if (id) {
+        result = await client.updateDoc(resolvedSlug, id, data, {
+          ...common,
+          ...publish,
+          overrideLock: opts.overrideLock as boolean | undefined,
+        });
+      } else if (opts.where) {
+        // Bulk update via PATCH with where params
+        const where = parseWhere(opts.where as string);
+        const whereParams: Record<string, string> = {};
+        for (const [k, v] of Object.entries(where)) {
+          if (typeof v === "object" && v !== null) {
+            for (const [op, val] of Object.entries(v as Record<string, unknown>)) {
+              whereParams[`where[${k}][${op}]`] = String(val);
             }
+          } else {
+            whereParams[`where[${k}][equals]`] = String(v);
           }
-          result = await client.rawPatch(
-            `${resolvedSlug}?${new URLSearchParams(whereParams).toString()}`,
-            data,
-          );
-        } else {
-          console.error(
-            "Error: provide a document ID or --where for bulk update.",
-          );
-          process.exit(1);
         }
+        result = await client.rawPatch(
+          `${resolvedSlug}?${new URLSearchParams(whereParams).toString()}`,
+          data,
+        );
+      } else {
+        console.error("Error: provide a document ID or --where for bulk update.");
+        process.exit(1);
+      }
 
-        console.log(JSON.stringify(result, null, 2));
-      },
-    ),
+      console.log(JSON.stringify(result, null, 2));
+    }),
   );
 
 program
@@ -381,36 +333,30 @@ program
   .option("--trash", "Include soft-deleted documents")
   .option("--override-lock", "Override document lock")
   .action(
-    wrapAction(
-      async (
-        slug: string,
-        id: string | undefined,
-        opts: Record<string, unknown>,
-      ) => {
-        const config = await getConfig();
-        requireRemoteConfig(config);
-        const client = new PayloadClient(config);
-        const common = parseCommonOpts(opts);
-        const deleteOpts = {
-          ...common,
-          overrideLock: opts.overrideLock as boolean | undefined,
-        };
+    wrapAction(async (slug: string, id: string | undefined, opts: Record<string, unknown>) => {
+      const config = await getConfig();
+      requireRemoteConfig(config);
+      const client = new PayloadClient(config);
+      const common = parseCommonOpts(opts);
+      const deleteOpts = {
+        ...common,
+        overrideLock: opts.overrideLock as boolean | undefined,
+      };
 
-        let result: unknown;
+      let result: unknown;
 
-        if (id) {
-          result = await client.deleteDoc(slug, id, deleteOpts);
-        } else if (opts.where) {
-          const where = parseWhere(opts.where as string);
-          result = await client.deleteDocs(slug, where, deleteOpts);
-        } else {
-          console.error("Error: provide a document ID or --where.");
-          process.exit(1);
-        }
+      if (id) {
+        result = await client.deleteDoc(slug, id, deleteOpts);
+      } else if (opts.where) {
+        const where = parseWhere(opts.where as string);
+        result = await client.deleteDocs(slug, where, deleteOpts);
+      } else {
+        console.error("Error: provide a document ID or --where.");
+        process.exit(1);
+      }
 
-        console.log(JSON.stringify(result, null, 2));
-      },
-    ),
+      console.log(JSON.stringify(result, null, 2));
+    }),
   );
 
 program
@@ -437,9 +383,7 @@ program
 
 program
   .command("versions")
-  .description(
-    "List versions for a collection or global, or get a specific version",
-  )
+  .description("List versions for a collection or global, or get a specific version")
   .argument("<slug>", "Collection slug or globals/<slug>")
   .argument("[id]", "Version ID (returns single version)")
   .option(
@@ -454,56 +398,43 @@ program
   .option("--select <json>", "Fields to include/exclude as JSON")
   .option("--populate <json>", "Populate options as JSON")
   .option("--page <n>", "Page number for pagination")
-  .option(
-    "--pagination",
-    "Include pagination metadata (use --no-pagination to exclude)",
-  )
+  .option("--pagination", "Include pagination metadata (use --no-pagination to exclude)")
   .option("--trash", "Include soft-deleted document versions")
   .action(
-    wrapAction(
-      async (
-        slug: string,
-        id: string | undefined,
-        opts: Record<string, unknown>,
-      ) => {
-        const config = await getConfig();
-        requireRemoteConfig(config);
-        const client = new PayloadClient(config);
-        const { isGlobal, slug: resolvedSlug } = parseSlug(slug);
-        const common = parseCommonOpts(opts);
-        const pagination = parsePaginationOpts(opts);
+    wrapAction(async (slug: string, id: string | undefined, opts: Record<string, unknown>) => {
+      const config = await getConfig();
+      requireRemoteConfig(config);
+      const client = new PayloadClient(config);
+      const { isGlobal, slug: resolvedSlug } = parseSlug(slug);
+      const common = parseCommonOpts(opts);
+      const pagination = parsePaginationOpts(opts);
 
-        let data: unknown;
+      let data: unknown;
 
-        if (isGlobal) {
-          if (id) {
-            data = await client.getGlobalVersion(resolvedSlug, id, common);
-          } else {
-            const where = opts.where
-              ? parseWhere(opts.where as string)
-              : undefined;
-            data = await client.getGlobalVersions(resolvedSlug, {
-              ...common,
-              ...pagination,
-              where,
-            });
-          }
-        } else if (id) {
-          data = await client.getVersion(resolvedSlug, id, common);
+      if (isGlobal) {
+        if (id) {
+          data = await client.getGlobalVersion(resolvedSlug, id, common);
         } else {
-          const where = opts.where
-            ? parseWhere(opts.where as string)
-            : undefined;
-          data = await client.getVersions(resolvedSlug, {
+          const where = opts.where ? parseWhere(opts.where as string) : undefined;
+          data = await client.getGlobalVersions(resolvedSlug, {
             ...common,
             ...pagination,
             where,
           });
         }
+      } else if (id) {
+        data = await client.getVersion(resolvedSlug, id, common);
+      } else {
+        const where = opts.where ? parseWhere(opts.where as string) : undefined;
+        data = await client.getVersions(resolvedSlug, {
+          ...common,
+          ...pagination,
+          where,
+        });
+      }
 
-        console.log(JSON.stringify(data, null, 2));
-      },
-    ),
+      console.log(JSON.stringify(data, null, 2));
+    }),
   );
 
 program
@@ -515,25 +446,23 @@ program
   .option("--draft", "Restore as draft")
   .option("--populate <json>", "Populate options as JSON")
   .action(
-    wrapAction(
-      async (slug: string, id: string, opts: Record<string, unknown>) => {
-        const config = await getConfig();
-        requireRemoteConfig(config);
-        const client = new PayloadClient(config);
-        const { isGlobal, slug: resolvedSlug } = parseSlug(slug);
-        const common = parseCommonOpts(opts);
+    wrapAction(async (slug: string, id: string, opts: Record<string, unknown>) => {
+      const config = await getConfig();
+      requireRemoteConfig(config);
+      const client = new PayloadClient(config);
+      const { isGlobal, slug: resolvedSlug } = parseSlug(slug);
+      const common = parseCommonOpts(opts);
 
-        let data: unknown;
+      let data: unknown;
 
-        if (isGlobal) {
-          data = await client.restoreGlobalVersion(resolvedSlug, id, common);
-        } else {
-          data = await client.restoreVersion(resolvedSlug, id, common);
-        }
+      if (isGlobal) {
+        data = await client.restoreGlobalVersion(resolvedSlug, id, common);
+      } else {
+        data = await client.restoreVersion(resolvedSlug, id, common);
+      }
 
-        console.log(JSON.stringify(data, null, 2));
-      },
-    ),
+      console.log(JSON.stringify(data, null, 2));
+    }),
   );
 
 program
@@ -547,19 +476,13 @@ program
   .option("--draft", "Create duplicate as draft")
   .option("--locale <code>", "Locale for localized fields")
   .action(
-    wrapAction(
-      async (slug: string, id: string, opts: Record<string, unknown>) => {
-        const config = await getConfig();
-        requireRemoteConfig(config);
-        const client = new PayloadClient(config);
-        const result = await client.duplicateDoc(
-          slug,
-          id,
-          parseCommonOpts(opts),
-        );
-        console.log(JSON.stringify(result, null, 2));
-      },
-    ),
+    wrapAction(async (slug: string, id: string, opts: Record<string, unknown>) => {
+      const config = await getConfig();
+      requireRemoteConfig(config);
+      const client = new PayloadClient(config);
+      const result = await client.duplicateDoc(slug, id, parseCommonOpts(opts));
+      console.log(JSON.stringify(result, null, 2));
+    }),
   );
 
 program
@@ -567,10 +490,7 @@ program
   .description("Upload a file to a media collection")
   .argument("<slug>", "Collection slug (must be an upload-enabled collection)")
   .option("--file <path>", "Local file path to upload")
-  .option(
-    "--url <url>",
-    "Upload file from URL (fetched server-side by Payload)",
-  )
+  .option("--url <url>", "Upload file from URL (fetched server-side by Payload)")
   .option("--data <json>", "Document field data as JSON string (e.g. alt text)")
   .option("--filename <name>", "Override the filename sent to Payload")
   .option("--select <json>", "Fields to include/exclude as JSON")
@@ -605,9 +525,7 @@ program
           process.exit(1);
         }
         if (opts.file || opts.url) {
-          console.error(
-            "Error: --dir/--glob cannot be combined with --file or --url.",
-          );
+          console.error("Error: --dir/--glob cannot be combined with --file or --url.");
           process.exit(1);
         }
 
@@ -653,12 +571,7 @@ program
           const filename = path.basename(filePath);
           const fileData = new Uint8Array(await fs.readFile(filePath));
           try {
-            await client.uploadDoc(
-              slug,
-              { data: fileData, filename },
-              docData,
-              uploadOpts,
-            );
+            await client.uploadDoc(slug, { data: fileData, filename }, docData, uploadOpts);
             uploaded++;
             console.log(`  Uploaded ${filename}`);
           } catch (err) {
@@ -669,9 +582,7 @@ program
 
         await pooled(tasks, concurrency);
 
-        console.log(
-          `\nDone. ${uploaded} uploaded, ${errors} error${errors === 1 ? "" : "s"}.`,
-        );
+        console.log(`\nDone. ${uploaded} uploaded, ${errors} error${errors === 1 ? "" : "s"}.`);
         if (errors > 0) process.exit(1);
         return;
       }
@@ -682,22 +593,15 @@ program
       if (opts.url) {
         const urlPath = new URL(opts.url as string).pathname;
         const filename =
-          (opts.filename as string | undefined) ??
-          (path.basename(urlPath) || "download");
-        result = await client.createDoc(
-          slug,
-          { ...docData, url: opts.url, filename },
-          uploadOpts,
-        );
+          (opts.filename as string | undefined) ?? (path.basename(urlPath) || "download");
+        result = await client.createDoc(slug, { ...docData, url: opts.url, filename }, uploadOpts);
       } else {
         let fileData: Uint8Array;
         let filename: string;
 
         if (opts.file) {
           fileData = new Uint8Array(await fs.readFile(opts.file as string));
-          filename =
-            (opts.filename as string | undefined) ??
-            path.basename(opts.file as string);
+          filename = (opts.filename as string | undefined) ?? path.basename(opts.file as string);
         } else if (!process.stdin.isTTY) {
           const chunks: Buffer[] = [];
           for await (const chunk of process.stdin) {
@@ -710,12 +614,7 @@ program
           process.exit(1);
         }
 
-        result = await client.uploadDoc(
-          slug,
-          { data: fileData, filename },
-          docData,
-          uploadOpts,
-        );
+        result = await client.uploadDoc(slug, { data: fileData, filename }, docData, uploadOpts);
       }
 
       console.log(JSON.stringify(result, null, 2));
@@ -730,43 +629,35 @@ program
   .option("--file <path>", "Read request body from a JSON file")
   .option("--data <json>", "Request body as inline JSON string")
   .action(
-    wrapAction(
-      async (
-        method: string,
-        apiPath: string,
-        opts: Record<string, unknown>,
-      ) => {
-        const config = await getConfig();
-        requireRemoteConfig(config);
-        const client = new PayloadClient(config);
+    wrapAction(async (method: string, apiPath: string, opts: Record<string, unknown>) => {
+      const config = await getConfig();
+      requireRemoteConfig(config);
+      const client = new PayloadClient(config);
 
-        const upperMethod = method.toUpperCase();
-        let result: unknown;
+      const upperMethod = method.toUpperCase();
+      let result: unknown;
 
-        if (upperMethod === "GET") {
-          result = await client.rawGet(apiPath);
-        } else if (upperMethod === "POST") {
-          let body: unknown = {};
-          if (opts.file) body = await readDataFile(opts.file as string);
-          else if (opts.data) body = parseData(opts.data as string);
-          result = await client.rawPost(apiPath, body);
-        } else if (upperMethod === "PATCH") {
-          let body: unknown = {};
-          if (opts.file) body = await readDataFile(opts.file as string);
-          else if (opts.data) body = parseData(opts.data as string);
-          result = await client.rawPatch(apiPath, body);
-        } else if (upperMethod === "DELETE") {
-          result = await client.rawDelete(apiPath);
-        } else {
-          console.error(
-            `Error: unsupported method "${method}". Use GET, POST, PATCH, or DELETE.`,
-          );
-          process.exit(1);
-        }
+      if (upperMethod === "GET") {
+        result = await client.rawGet(apiPath);
+      } else if (upperMethod === "POST") {
+        let body: unknown = {};
+        if (opts.file) body = await readDataFile(opts.file as string);
+        else if (opts.data) body = parseData(opts.data as string);
+        result = await client.rawPost(apiPath, body);
+      } else if (upperMethod === "PATCH") {
+        let body: unknown = {};
+        if (opts.file) body = await readDataFile(opts.file as string);
+        else if (opts.data) body = parseData(opts.data as string);
+        result = await client.rawPatch(apiPath, body);
+      } else if (upperMethod === "DELETE") {
+        result = await client.rawDelete(apiPath);
+      } else {
+        console.error(`Error: unsupported method "${method}". Use GET, POST, PATCH, or DELETE.`);
+        process.exit(1);
+      }
 
-        console.log(JSON.stringify(result, null, 2));
-      },
-    ),
+      console.log(JSON.stringify(result, null, 2));
+    }),
   );
 
 // ── Content sync commands ────────────────────────────────────────────
@@ -778,14 +669,8 @@ program
   .option("--draft", "Pull draft versions instead of published")
   .option("--collections <slugs...>", "Only pull specific collections")
   .option("--globals <slugs...>", "Only pull specific globals")
-  .option(
-    "--where <json>",
-    'Payload query filter as JSON (e.g. \'{"tenant":{"equals":"acme"}}\')',
-  )
-  .option(
-    "--allow-url-change",
-    "Repoint the manifest at a different server URL (use with care)",
-  )
+  .option("--where <json>", 'Payload query filter as JSON (e.g. \'{"tenant":{"equals":"acme"}}\')')
+  .option("--allow-url-change", "Repoint the manifest at a different server URL (use with care)")
   .action(
     wrapAction(async (opts: Record<string, unknown>) => {
       if ((opts.locale as string[] | undefined)?.includes("all")) {
@@ -875,9 +760,7 @@ program
         process.exit(1);
       }
 
-      console.log(
-        `Authenticated as: ${config.authCollection}/${user.email ?? user.id}`,
-      );
+      console.log(`Authenticated as: ${config.authCollection}/${user.email ?? user.id}`);
     }),
   );
 
@@ -924,19 +807,13 @@ program
               console.log(`         ${ep.description}`);
             }
             if (ep.schema?.query) {
-              console.log(
-                `         query:    ${JSON.stringify(ep.schema.query)}`,
-              );
+              console.log(`         query:    ${JSON.stringify(ep.schema.query)}`);
             }
             if (ep.schema?.body) {
-              console.log(
-                `         body:     ${JSON.stringify(ep.schema.body)}`,
-              );
+              console.log(`         body:     ${JSON.stringify(ep.schema.body)}`);
             }
             if (ep.schema?.response) {
-              console.log(
-                `         response: ${JSON.stringify(ep.schema.response)}`,
-              );
+              console.log(`         response: ${JSON.stringify(ep.schema.response)}`);
             }
           }
         }
@@ -954,11 +831,7 @@ program
 program
   .command("skill")
   .description("Install the agent skill file for this project")
-  .option(
-    "--output <path>",
-    "Output file path",
-    ".claude/skills/payload-content/SKILL.md",
-  )
+  .option("--output <path>", "Output file path", ".claude/skills/payload-content/SKILL.md")
   .action(
     wrapAction(async (opts: Record<string, unknown>) => {
       const sourcePath = new URL("./agent-skill.md", import.meta.url);
@@ -1038,12 +911,7 @@ profileCmd
   .option("--output-dir <dir>", "Local content directory")
   .action(
     wrapAction(async (name: string, opts: Record<string, unknown>) => {
-      if (
-        !opts.url &&
-        !opts.apiKey &&
-        !opts.authCollection &&
-        !opts.outputDir
-      ) {
+      if (!opts.url && !opts.apiKey && !opts.authCollection && !opts.outputDir) {
         console.error(
           "Error: provide at least one of --url, --api-key, --auth-collection, --output-dir.",
         );
@@ -1052,8 +920,7 @@ profileCmd
       const profile: Profile = {};
       if (opts.url) profile.payloadUrl = opts.url as string;
       if (opts.apiKey) profile.apiKey = opts.apiKey as string;
-      if (opts.authCollection)
-        profile.authCollection = opts.authCollection as string;
+      if (opts.authCollection) profile.authCollection = opts.authCollection as string;
       if (opts.outputDir) profile.outputDir = opts.outputDir as string;
       await setProfile(name, profile);
       console.log(`Profile "${name}" saved.`);
@@ -1084,8 +951,7 @@ profileCmd
     wrapAction(async (name: string) => {
       const profile = await resolveProfile(name);
       const { apiKey, ...rest } = profile;
-      const redacted =
-        apiKey !== undefined ? { ...rest, apiKey: maskApiKey(apiKey) } : rest;
+      const redacted = apiKey !== undefined ? { ...rest, apiKey: maskApiKey(apiKey) } : rest;
       console.log(JSON.stringify(redacted, null, 2));
     }),
   );

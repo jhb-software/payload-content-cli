@@ -73,18 +73,14 @@ describe("requireRemoteConfig", () => {
     const config = loadConfig({ apiKey: "key" });
     config.payloadUrl = undefined;
 
-    expect(() => requireRemoteConfig(config)).toThrow(
-      "Missing required env vars: PAYLOAD_URL",
-    );
+    expect(() => requireRemoteConfig(config)).toThrow("Missing required env vars: PAYLOAD_URL");
   });
 
   it("throws a helpful message when apiKey is missing", () => {
     const config = loadConfig({ payloadUrl: "http://localhost:3939" });
     config.apiKey = undefined;
 
-    expect(() => requireRemoteConfig(config)).toThrow(
-      "Missing required env vars: PAYLOAD_API_KEY",
-    );
+    expect(() => requireRemoteConfig(config)).toThrow("Missing required env vars: PAYLOAD_API_KEY");
   });
 
   it("narrows the type when both are present", () => {

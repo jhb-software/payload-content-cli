@@ -6,10 +6,7 @@ describe("parseContentPath", () => {
 
   describe("collection documents", () => {
     it("parses collections/<slug>/<id>.json", () => {
-      const result = parseContentPath(
-        "/content/collections/posts/abc123.json",
-        outputDir,
-      );
+      const result = parseContentPath("/content/collections/posts/abc123.json", outputDir);
       expect(result).toEqual({
         type: "collection",
         collection: "posts",
@@ -32,25 +29,15 @@ describe("parseContentPath", () => {
     });
 
     it("ignores _schema.json inside collection folders", () => {
-      expect(
-        parseContentPath("/content/collections/posts/_schema.json", outputDir),
-      ).toBeNull();
+      expect(parseContentPath("/content/collections/posts/_schema.json", outputDir)).toBeNull();
     });
 
     it("ignores _jsonschema.json inside collection folders", () => {
-      expect(
-        parseContentPath(
-          "/content/collections/posts/_jsonschema.json",
-          outputDir,
-        ),
-      ).toBeNull();
+      expect(parseContentPath("/content/collections/posts/_jsonschema.json", outputDir)).toBeNull();
     });
 
     it("handles hyphenated collection slugs", () => {
-      const result = parseContentPath(
-        "/content/collections/blog-posts/123.json",
-        outputDir,
-      );
+      const result = parseContentPath("/content/collections/blog-posts/123.json", outputDir);
       expect(result?.collection).toBe("blog-posts");
     });
   });
@@ -69,36 +56,24 @@ describe("parseContentPath", () => {
     });
 
     it("ignores _schema.json inside global folders", () => {
-      const result = parseContentPath(
-        "/content/globals/site-settings/_schema.json",
-        outputDir,
-      );
+      const result = parseContentPath("/content/globals/site-settings/_schema.json", outputDir);
       expect(result).toBeNull();
     });
 
     it("ignores _jsonschema.json inside global folders", () => {
-      const result = parseContentPath(
-        "/content/globals/site-settings/_jsonschema.json",
-        outputDir,
-      );
+      const result = parseContentPath("/content/globals/site-settings/_jsonschema.json", outputDir);
       expect(result).toBeNull();
     });
 
     it("ignores non-matching filenames in global folders", () => {
-      const result = parseContentPath(
-        "/content/globals/site-settings/other-file.json",
-        outputDir,
-      );
+      const result = parseContentPath("/content/globals/site-settings/other-file.json", outputDir);
       expect(result).toBeNull();
     });
   });
 
   describe("globals (legacy flat structure)", () => {
     it("parses globals/<slug>.json", () => {
-      const result = parseContentPath(
-        "/content/globals/site-settings.json",
-        outputDir,
-      );
+      const result = parseContentPath("/content/globals/site-settings.json", outputDir);
       expect(result).toEqual({
         type: "global",
         collection: "site-settings",
@@ -107,10 +82,7 @@ describe("parseContentPath", () => {
     });
 
     it("ignores _-prefixed files in flat globals", () => {
-      const result = parseContentPath(
-        "/content/globals/_localization.json",
-        outputDir,
-      );
+      const result = parseContentPath("/content/globals/_localization.json", outputDir);
       expect(result).toBeNull();
     });
   });
@@ -121,15 +93,11 @@ describe("parseContentPath", () => {
     });
 
     it("returns null for _localization.json at root", () => {
-      expect(
-        parseContentPath("/content/_localization.json", outputDir),
-      ).toBeNull();
+      expect(parseContentPath("/content/_localization.json", outputDir)).toBeNull();
     });
 
     it("returns null for paths outside known directories", () => {
-      expect(
-        parseContentPath("/content/random/file.json", outputDir),
-      ).toBeNull();
+      expect(parseContentPath("/content/random/file.json", outputDir)).toBeNull();
     });
 
     it("returns null for deeply nested unknown paths", () => {

@@ -13,11 +13,7 @@ function getByPath(obj: Record<string, unknown>, path: string): unknown {
   const segments = path.replace(/\[(\d+)\]/g, ".$1").split(".");
   let current: unknown = obj;
   for (const seg of segments) {
-    if (
-      current === null ||
-      current === undefined ||
-      typeof current !== "object"
-    ) {
+    if (current === null || current === undefined || typeof current !== "object") {
       return undefined;
     }
     current = (current as Record<string, unknown>)[seg];
@@ -28,23 +24,16 @@ function getByPath(obj: Record<string, unknown>, path: string): unknown {
 /**
  * Find a block node by blockType within a lexical tree's children.
  */
-function findBlockByType(
-  children: LexicalNode[],
-  blockType: string,
-): LexicalNode | undefined {
+function findBlockByType(children: LexicalNode[], blockType: string): LexicalNode | undefined {
   return children.find(
     (n) =>
       n.type === "block" &&
       (n as Record<string, unknown>).fields &&
-      ((n as Record<string, unknown>).fields as Record<string, unknown>)
-        .blockType === blockType,
+      ((n as Record<string, unknown>).fields as Record<string, unknown>).blockType === blockType,
   );
 }
 
-export function resolveFieldPath(
-  doc: Record<string, unknown>,
-  fieldPath: string,
-): LexicalNode[] {
+export function resolveFieldPath(doc: Record<string, unknown>, fieldPath: string): LexicalNode[] {
   // First try direct path resolution
   const value = getByPath(doc, fieldPath);
   if (value !== undefined && value !== null) {
@@ -65,11 +54,7 @@ export function resolveFieldPath(
   for (let i = 0; i < segments.length; i++) {
     const seg = segments[i];
 
-    if (
-      current === null ||
-      current === undefined ||
-      typeof current !== "object"
-    ) {
+    if (current === null || current === undefined || typeof current !== "object") {
       throw new Error(`Field "${fieldPath}" not found in document`);
     }
 
@@ -87,11 +72,7 @@ export function resolveFieldPath(
       const block = findBlockByType(root.children, seg);
       if (block) {
         // Navigate into the block's fields for remaining segments
-        current =
-          ((block as Record<string, unknown>).fields as Record<
-            string,
-            unknown
-          >) ?? {};
+        current = ((block as Record<string, unknown>).fields as Record<string, unknown>) ?? {};
         continue;
       }
     }
@@ -160,12 +141,7 @@ export function setByPath(
     const segments = fieldPath.replace(/\[(\d+)\]/g, ".$1").split(".");
     let current: unknown = obj;
     for (const seg of segments) {
-      if (
-        current === null ||
-        current === undefined ||
-        typeof current !== "object"
-      )
-        break;
+      if (current === null || current === undefined || typeof current !== "object") break;
       const direct = (current as Record<string, unknown>)[seg];
       if (direct !== undefined) {
         current = direct;
@@ -176,11 +152,7 @@ export function setByPath(
       if (isLexicalRoot(root)) {
         const block = findBlockByType(root.children, seg);
         if (block) {
-          current =
-            ((block as Record<string, unknown>).fields as Record<
-              string,
-              unknown
-            >) ?? {};
+          current = ((block as Record<string, unknown>).fields as Record<string, unknown>) ?? {};
           continue;
         }
       }
@@ -205,7 +177,5 @@ export function setByPath(
     return;
   }
 
-  throw new Error(
-    `Field "${fieldPath}" does not contain a Lexical richtext structure`,
-  );
+  throw new Error(`Field "${fieldPath}" does not contain a Lexical richtext structure`);
 }

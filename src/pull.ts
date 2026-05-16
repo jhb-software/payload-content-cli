@@ -20,10 +20,7 @@ interface FieldSchema {
   blocks?: { slug: string; fields: FieldSchema[] }[];
 }
 
-function stripVirtualFields(
-  doc: Record<string, unknown>,
-  fields: FieldSchema[],
-): void {
+function stripVirtualFields(doc: Record<string, unknown>, fields: FieldSchema[]): void {
   for (const field of fields) {
     if (field.virtual) {
       delete doc[field.name];
@@ -32,14 +29,8 @@ function stripVirtualFields(
         for (const item of doc[field.name] as Record<string, unknown>[]) {
           stripVirtualFields(item, field.fields);
         }
-      } else if (
-        field.type === "group" &&
-        typeof doc[field.name] === "object"
-      ) {
-        stripVirtualFields(
-          doc[field.name] as Record<string, unknown>,
-          field.fields,
-        );
+      } else if (field.type === "group" && typeof doc[field.name] === "object") {
+        stripVirtualFields(doc[field.name] as Record<string, unknown>, field.fields);
       }
     } else if (field.blocks && doc[field.name] != null) {
       if (Array.isArray(doc[field.name])) {
@@ -64,10 +55,7 @@ export interface PullOptions {
   allowUrlChange?: boolean;
 }
 
-async function pooled<T>(
-  tasks: (() => Promise<T>)[],
-  concurrency: number,
-): Promise<T[]> {
+async function pooled<T>(tasks: (() => Promise<T>)[], concurrency: number): Promise<T[]> {
   const results: T[] = [];
   let index = 0;
 
@@ -78,9 +66,7 @@ async function pooled<T>(
     }
   }
 
-  await Promise.all(
-    Array.from({ length: Math.min(concurrency, tasks.length) }, () => worker()),
-  );
+  await Promise.all(Array.from({ length: Math.min(concurrency, tasks.length) }, () => worker()));
   return results;
 }
 
@@ -109,9 +95,7 @@ async function pullCollection(
       draft: options.draft,
       where: options.where,
     });
-    console.log(
-      `  ${slug}: ${docs.length} documents${locale ? ` (${locale})` : ""}`,
-    );
+    console.log(`  ${slug}: ${docs.length} documents${locale ? ` (${locale})` : ""}`);
 
     for (const doc of docs) {
       const id = doc.id as string;
@@ -119,9 +103,7 @@ async function pullCollection(
       if (fields) stripVirtualFields(doc, fields);
       const filename = localeFilename(id, locale);
       const filePath = safeJoinPath(collectionDir, filename);
-      const finalDoc = hasJsonSchema
-        ? { $schema: "./_jsonschema.json", ...doc }
-        : doc;
+      const finalDoc = hasJsonSchema ? { $schema: "./_jsonschema.json", ...doc } : doc;
       const content = JSON.stringify(finalDoc, null, 2) + "\n";
       await fs.writeFile(filePath, content);
 
@@ -162,9 +144,7 @@ async function pullGlobal(
     if (fields) stripVirtualFields(doc, fields);
     const filename = localeFilename(slug, locale);
     const filePath = safeJoinPath(globalDir, filename);
-    const finalDoc = hasJsonSchema
-      ? { $schema: "./_jsonschema.json", ...doc }
-      : doc;
+    const finalDoc = hasJsonSchema ? { $schema: "./_jsonschema.json", ...doc } : doc;
     const content = JSON.stringify(finalDoc, null, 2) + "\n";
     await fs.writeFile(filePath, content);
 
@@ -179,10 +159,7 @@ async function pullGlobal(
   return entries;
 }
 
-export async function pull(
-  config: Config,
-  options: PullOptions = {},
-): Promise<void> {
+export async function pull(config: Config, options: PullOptions = {}): Promise<void> {
   requireRemoteConfig(config);
   const client = new PayloadClient(config);
   const outputDir = path.resolve(config.outputDir);
@@ -246,9 +223,7 @@ export async function pull(
     targetCollections = access.collections;
     targetGlobals = access.globals;
 
-    console.log(
-      `Found ${targetCollections.length} collections, ${targetGlobals.length} globals`,
-    );
+    console.log(`Found ${targetCollections.length} collections, ${targetGlobals.length} globals`);
   }
 
   if (options.draft) {
@@ -333,10 +308,7 @@ export async function pull(
       if (!entry) continue;
       const dir = path.join(collectionsDir, slug);
       const { jsonSchema, ...rest } = entry;
-      await fs.writeFile(
-        path.join(dir, "_schema.json"),
-        JSON.stringify(rest, null, 2) + "\n",
-      );
+      await fs.writeFile(path.join(dir, "_schema.json"), JSON.stringify(rest, null, 2) + "\n");
       if (jsonSchema) {
         await fs.writeFile(
           path.join(dir, "_jsonschema.json"),
@@ -349,10 +321,7 @@ export async function pull(
       if (!entry) continue;
       const dir = path.join(globalsDir, slug);
       const { jsonSchema, ...rest } = entry;
-      await fs.writeFile(
-        path.join(dir, "_schema.json"),
-        JSON.stringify(rest, null, 2) + "\n",
-      );
+      await fs.writeFile(path.join(dir, "_schema.json"), JSON.stringify(rest, null, 2) + "\n");
       if (jsonSchema) {
         await fs.writeFile(
           path.join(dir, "_jsonschema.json"),
@@ -396,9 +365,7 @@ export async function pull(
     console.log(`Removed ${pruned} orphan file(s) from previous pull.`);
   }
   if (preserved > 0) {
-    console.log(
-      `Kept ${preserved} orphan file(s) with local edits — review with \`status\`.`,
-    );
+    console.log(`Kept ${preserved} orphan file(s) with local edits — review with \`status\`.`);
   }
 
   console.log(`Done. Content written to ${outputDir}/`);

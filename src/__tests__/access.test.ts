@@ -11,10 +11,7 @@ function makeClient() {
 }
 
 function mockRequest(client: PayloadClient, data: unknown) {
-  vi.spyOn(
-    client as unknown as { request: () => unknown },
-    "request",
-  ).mockResolvedValue(data);
+  vi.spyOn(client as unknown as { request: () => unknown }, "request").mockResolvedValue(data);
 }
 
 describe("getAccess", () => {
@@ -126,17 +123,7 @@ describe("getAccess", () => {
     });
 
     const access = await client.getAccess();
-    expect(access.collections).toEqual([
-      "pages",
-      "services",
-      "images",
-      "redirects",
-    ]);
-    expect(access.globals).toEqual([
-      "header",
-      "footer",
-      "labels",
-      "opening-hours",
-    ]);
+    expect(access.collections).toEqual(["pages", "services", "images", "redirects"]);
+    expect(access.globals).toEqual(["header", "footer", "labels", "opening-hours"]);
   });
 });

@@ -1,16 +1,10 @@
 import * as fs from "node:fs/promises";
-import type {
-  LexicalNode,
-  LexicalElementNode,
-  LexicalTextNode,
-} from "./types.js";
+import type { LexicalNode, LexicalElementNode, LexicalTextNode } from "./types.js";
 
 async function readStdin(): Promise<string> {
   const chunks: string[] = [];
   for await (const chunk of process.stdin) {
-    chunks.push(
-      typeof chunk === "string" ? chunk : (chunk as Buffer).toString("utf-8"),
-    );
+    chunks.push(typeof chunk === "string" ? chunk : (chunk as Buffer).toString("utf-8"));
   }
   return chunks.join("");
 }
@@ -38,10 +32,7 @@ export function buildParagraph(text: string): LexicalElementNode {
   };
 }
 
-export function buildHeading(
-  text: string,
-  tag: string = "h2",
-): LexicalElementNode {
+export function buildHeading(text: string, tag: string = "h2"): LexicalElementNode {
   return {
     type: "heading",
     tag,
@@ -85,9 +76,7 @@ export interface NodeArgOptions {
   json?: string;
 }
 
-export async function parseNodeArg(
-  options: NodeArgOptions,
-): Promise<LexicalNode> {
+export async function parseNodeArg(options: NodeArgOptions): Promise<LexicalNode> {
   if (options.paragraph !== undefined) {
     return buildParagraph(options.paragraph);
   }
@@ -110,7 +99,5 @@ export async function parseNodeArg(
       throw new Error("Invalid JSON for --json argument");
     }
   }
-  throw new Error(
-    "Node input required: use --paragraph, --heading, --text, or --json",
-  );
+  throw new Error("Node input required: use --paragraph, --heading, --text, or --json");
 }

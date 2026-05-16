@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  resolveFieldPath,
-  autoDetectLexicalField,
-  setByPath,
-} from "../field-path.js";
+import { resolveFieldPath, autoDetectLexicalField, setByPath } from "../field-path.js";
 
 const lexicalField = {
   root: {
@@ -56,16 +52,12 @@ describe("autoDetectLexicalField", () => {
   });
 
   it("throws on no lexical fields", () => {
-    expect(() => autoDetectLexicalField({ title: "Test" })).toThrow(
-      "No Lexical richtext fields",
-    );
+    expect(() => autoDetectLexicalField({ title: "Test" })).toThrow("No Lexical richtext fields");
   });
 
   it("throws on multiple lexical fields", () => {
     const doc = { body: lexicalField, sidebar: lexicalField };
-    expect(() => autoDetectLexicalField(doc)).toThrow(
-      "Multiple Lexical richtext fields",
-    );
+    expect(() => autoDetectLexicalField(doc)).toThrow("Multiple Lexical richtext fields");
   });
 });
 
@@ -74,8 +66,6 @@ describe("setByPath", () => {
     const doc = { content: JSON.parse(JSON.stringify(lexicalField)) };
     const newChildren = [{ type: "paragraph", children: [], version: 1 }];
     setByPath(doc, "content", newChildren);
-    expect(
-      (doc.content as { root: { children: unknown[] } }).root.children,
-    ).toEqual(newChildren);
+    expect((doc.content as { root: { children: unknown[] } }).root.children).toEqual(newChildren);
   });
 });

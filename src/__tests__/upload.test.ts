@@ -82,12 +82,10 @@ describe("uploadDoc", () => {
 
   it("sets locale and depth query params", async () => {
     const fileData = new Uint8Array([0x00]);
-    await client.uploadDoc(
-      "media",
-      { data: fileData, filename: "test.png" },
-      undefined,
-      { locale: "de", depth: 2 },
-    );
+    await client.uploadDoc("media", { data: fileData, filename: "test.png" }, undefined, {
+      locale: "de",
+      depth: 2,
+    });
 
     expect(lastFetchCall!.url).toContain("locale=de");
     expect(lastFetchCall!.url).toContain("depth=2");
@@ -227,18 +225,14 @@ describe("bulk upload CLI", () => {
 
   it("errors when --dir and --glob are both provided", () => {
     try {
-      execFileSync(
-        "node",
-        ["dist/cli.js", "upload", "media", "--dir", tmpDir, "--glob", "*.jpg"],
-        {
-          encoding: "utf-8",
-          env: {
-            ...process.env,
-            PAYLOAD_URL: "http://localhost:3000",
-            PAYLOAD_API_KEY: "test",
-          },
+      execFileSync("node", ["dist/cli.js", "upload", "media", "--dir", tmpDir, "--glob", "*.jpg"], {
+        encoding: "utf-8",
+        env: {
+          ...process.env,
+          PAYLOAD_URL: "http://localhost:3000",
+          PAYLOAD_API_KEY: "test",
         },
-      );
+      });
       expect.fail("should have thrown");
     } catch (err: unknown) {
       const error = err as { status: number; stderr: string };
@@ -251,15 +245,7 @@ describe("bulk upload CLI", () => {
     try {
       execFileSync(
         "node",
-        [
-          "dist/cli.js",
-          "upload",
-          "media",
-          "--dir",
-          tmpDir,
-          "--file",
-          path.join(tmpDir, "a.jpg"),
-        ],
+        ["dist/cli.js", "upload", "media", "--dir", tmpDir, "--file", path.join(tmpDir, "a.jpg")],
         {
           encoding: "utf-8",
           env: {

@@ -1,9 +1,6 @@
 import type { LexicalNode } from "./types.js";
 
-export function validateTree(
-  children: LexicalNode[],
-  prefix: string = "",
-): string[] {
+export function validateTree(children: LexicalNode[], prefix: string = ""): string[] {
   const warnings: string[] = [];
 
   for (let i = 0; i < children.length; i++) {
@@ -30,9 +27,7 @@ export function validateTree(
     }
 
     if (Array.isArray(node.children)) {
-      validateTree(node.children as LexicalNode[], addr).forEach((w) =>
-        warnings.push(w),
-      );
+      validateTree(node.children as LexicalNode[], addr).forEach((w) => warnings.push(w));
     }
   }
 

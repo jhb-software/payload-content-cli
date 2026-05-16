@@ -132,9 +132,7 @@ describe("parseJson", () => {
     const mockError = vi.spyOn(console, "error").mockImplementation(() => {});
 
     expect(() => parseJson("not json", "--where")).toThrow("process.exit");
-    expect(mockError).toHaveBeenCalledWith(
-      "Error: --where must be valid JSON.",
-    );
+    expect(mockError).toHaveBeenCalledWith("Error: --where must be valid JSON.");
     expect(mockExit).toHaveBeenCalledWith(1);
 
     mockExit.mockRestore();

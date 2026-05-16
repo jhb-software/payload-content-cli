@@ -1,11 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { Readable } from "node:stream";
-import {
-  buildText,
-  buildParagraph,
-  buildHeading,
-  parseNodeArg,
-} from "../nodes.js";
+import { buildText, buildParagraph, buildHeading, parseNodeArg } from "../nodes.js";
 
 describe("buildText", () => {
   it("creates a valid text node", () => {
@@ -68,9 +63,7 @@ describe("parseNodeArg", () => {
   });
 
   it("throws on invalid JSON", async () => {
-    await expect(parseNodeArg({ json: "not json" })).rejects.toThrow(
-      "Invalid JSON",
-    );
+    await expect(parseNodeArg({ json: "not json" })).rejects.toThrow("Invalid JSON");
   });
 
   it("reads JSON from stdin when --json is -", async () => {

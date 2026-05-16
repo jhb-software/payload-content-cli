@@ -1,10 +1,6 @@
 import { Command } from "commander";
 import { readDocument, writeDocument } from "./io.js";
-import {
-  resolveFieldPath,
-  autoDetectLexicalField,
-  setByPath,
-} from "./field-path.js";
+import { resolveFieldPath, autoDetectLexicalField, setByPath } from "./field-path.js";
 import {
   listNodes,
   getNode,
@@ -115,10 +111,7 @@ export function registerLexicalCommands(program: Command): void {
     .description("Insert a node relative to an address")
     .argument("<file>", "Path to JSON document")
     .requiredOption("--at <address>", "Node address (e.g. 0, 1, 2.0)")
-    .requiredOption(
-      "--position <pos>",
-      "Insert position: before, after, start, end",
-    )
+    .requiredOption("--position <pos>", "Insert position: before, after, start, end")
     .option("--field <path>", "Field path to Lexical richtext field")
     .option("--paragraph <text>", "Create a paragraph node with text")
     .option("--heading <text>", "Create a heading node with text")
@@ -155,9 +148,7 @@ export function registerLexicalCommands(program: Command): void {
           setByPath(doc, path, newChildren);
           await writeDocument(file, doc);
           printValidationWarnings(newChildren);
-          console.log(
-            JSON.stringify({ ok: true, operation: "add", address: opts.at }),
-          );
+          console.log(JSON.stringify({ ok: true, operation: "add", address: opts.at }));
         } catch (error) {
           console.error("Error:", (error as Error).message);
           process.exit(1);
@@ -227,9 +218,7 @@ export function registerLexicalCommands(program: Command): void {
         setByPath(doc, path, newChildren);
         await writeDocument(file, doc);
         printValidationWarnings(newChildren);
-        console.log(
-          JSON.stringify({ ok: true, operation: "remove", address: opts.at }),
-        );
+        console.log(JSON.stringify({ ok: true, operation: "remove", address: opts.at }));
       } catch (error) {
         console.error("Error:", (error as Error).message);
         process.exit(1);
@@ -266,20 +255,14 @@ export function registerLexicalCommands(program: Command): void {
 
           const doc = await readDocument(file);
           const { path, children } = getChildren(doc, opts.field);
-          const newChildren = setNodeProp(
-            children,
-            opts.at,
-            opts.prop,
-            parsedValue,
-            { create: opts.create },
-          );
+          const newChildren = setNodeProp(children, opts.at, opts.prop, parsedValue, {
+            create: opts.create,
+          });
 
           setByPath(doc, path, newChildren);
           await writeDocument(file, doc);
           printValidationWarnings(newChildren);
-          console.log(
-            JSON.stringify({ ok: true, operation: "set", address: opts.at }),
-          );
+          console.log(JSON.stringify({ ok: true, operation: "set", address: opts.at }));
         } catch (error) {
           console.error("Error:", (error as Error).message);
           process.exit(1);
@@ -289,23 +272,15 @@ export function registerLexicalCommands(program: Command): void {
 
   lexical
     .command("link")
-    .description(
-      "Wrap the first unlinked text match in an internal link (skips existing links)",
-    )
+    .description("Wrap the first unlinked text match in an internal link (skips existing links)")
     .argument("<file>", "Path to JSON document")
     .option("--search <text>", "Text to find and wrap in a link")
-    .option(
-      "--relationTo <collection>",
-      "Target collection (e.g. countries, regions)",
-    )
+    .option("--relationTo <collection>", "Target collection (e.g. countries, regions)")
     .option("--value <id>", "Target document ID")
     .option("--label <label>", "Link label (defaults to search text)")
     .option("--field <path>", "Field path to Lexical richtext field")
     .option("--from <file>", "Source file to read link from (use with --at)")
-    .option(
-      "--at <address>",
-      "Address of link node in source file (use with --from)",
-    )
+    .option("--at <address>", "Address of link node in source file (use with --from)")
     .action(
       async (
         file: string,
@@ -330,15 +305,10 @@ export function registerLexicalCommands(program: Command): void {
               process.exit(1);
             }
             const sourceDoc = await readDocument(opts.from);
-            const { children: sourceChildren } = getChildren(
-              sourceDoc,
-              opts.field,
-            );
+            const { children: sourceChildren } = getChildren(sourceDoc, opts.field);
             const node = getNode(sourceChildren, opts.at);
             if (node.type !== "link") {
-              console.error(
-                `Error: node at ${opts.at} is "${node.type}", not a link`,
-              );
+              console.error(`Error: node at ${opts.at} is "${node.type}", not a link`);
               process.exit(1);
             }
             const fields = node.fields as Record<string, unknown>;
@@ -392,207 +362,169 @@ export function registerLexicalCommands(program: Command): void {
 
   lexical
     .command("diff")
-    .description(
-      "Compare links and blocks between two files (e.g. locale variants)",
-    )
+    .description("Compare links and blocks between two files (e.g. locale variants)")
     .argument("<source>", "Source file (e.g. document_de.json)")
     .argument("<target>", "Target file (e.g. document_en.json)")
     .option("--field <path>", "Field path to Lexical richtext field")
-    .action(
-      async (
-        sourceFile: string,
-        targetFile: string,
-        opts: { field?: string },
-      ) => {
-        try {
-          const sourceDoc = await readDocument(sourceFile);
-          const targetDoc = await readDocument(targetFile);
-          const { children: sourceChildren } = getChildren(
-            sourceDoc,
-            opts.field,
-          );
-          const { children: targetChildren } = getChildren(
-            targetDoc,
-            opts.field,
-          );
+    .action(async (sourceFile: string, targetFile: string, opts: { field?: string }) => {
+      try {
+        const sourceDoc = await readDocument(sourceFile);
+        const targetDoc = await readDocument(targetFile);
+        const { children: sourceChildren } = getChildren(sourceDoc, opts.field);
+        const { children: targetChildren } = getChildren(targetDoc, opts.field);
 
-          // Compare links
-          const sourceLinks = extractLinks(sourceChildren);
-          const targetLinks = extractLinks(targetChildren);
+        // Compare links
+        const sourceLinks = extractLinks(sourceChildren);
+        const targetLinks = extractLinks(targetChildren);
 
-          const targetLinkKeys = new Set(
-            targetLinks.map((l) => `${l.relationTo}:${l.value}`),
-          );
-          const sourceLinkKeys = new Set(
-            sourceLinks.map((l) => `${l.relationTo}:${l.value}`),
-          );
+        const targetLinkKeys = new Set(targetLinks.map((l) => `${l.relationTo}:${l.value}`));
+        const sourceLinkKeys = new Set(sourceLinks.map((l) => `${l.relationTo}:${l.value}`));
 
-          const onlyInSource = sourceLinks.filter(
-            (l) => !targetLinkKeys.has(`${l.relationTo}:${l.value}`),
-          );
-          const onlyInTarget = targetLinks.filter(
-            (l) => !sourceLinkKeys.has(`${l.relationTo}:${l.value}`),
-          );
-          const inBoth = sourceLinks.filter((l) =>
-            targetLinkKeys.has(`${l.relationTo}:${l.value}`),
-          );
+        const onlyInSource = sourceLinks.filter(
+          (l) => !targetLinkKeys.has(`${l.relationTo}:${l.value}`),
+        );
+        const onlyInTarget = targetLinks.filter(
+          (l) => !sourceLinkKeys.has(`${l.relationTo}:${l.value}`),
+        );
+        const inBoth = sourceLinks.filter((l) => targetLinkKeys.has(`${l.relationTo}:${l.value}`));
 
-          // Compare blocks
-          const sourceBlocks = extractBlocks(sourceChildren);
-          const targetBlocks = extractBlocks(targetChildren);
+        // Compare blocks
+        const sourceBlocks = extractBlocks(sourceChildren);
+        const targetBlocks = extractBlocks(targetChildren);
 
-          const targetBlockTypes = new Set(
-            targetBlocks.map((b) => b.blockType),
-          );
-          const sourceBlockTypes = new Set(
-            sourceBlocks.map((b) => b.blockType),
-          );
+        const targetBlockTypes = new Set(targetBlocks.map((b) => b.blockType));
+        const sourceBlockTypes = new Set(sourceBlocks.map((b) => b.blockType));
 
-          const blocksOnlyInSource = sourceBlocks.filter(
-            (b) => !targetBlockTypes.has(b.blockType),
-          );
-          const blocksOnlyInTarget = targetBlocks.filter(
-            (b) => !sourceBlockTypes.has(b.blockType),
-          );
+        const blocksOnlyInSource = sourceBlocks.filter((b) => !targetBlockTypes.has(b.blockType));
+        const blocksOnlyInTarget = targetBlocks.filter((b) => !sourceBlockTypes.has(b.blockType));
 
-          // For each missing link, check if the text exists in the target
-          type LinkWithMatch = (typeof onlyInSource)[number] & {
-            match?: string;
-          };
-          const onlyInSourceWithMatches: LinkWithMatch[] = onlyInSource.map(
-            (l) => {
-              // Try exact match first
-              const exactMatches = searchText(targetChildren, l.text);
-              if (exactMatches.length > 0) {
-                return { ...l, match: l.text };
-              }
-              // Try significant words (4+ chars, longest first, split on spaces and hyphens)
-              const stopWords = new Set([
-                "the",
-                "and",
-                "for",
-                "with",
-                "from",
-                "that",
-                "this",
-                "your",
-                "der",
-                "die",
-                "das",
-                "und",
-                "für",
-                "mit",
-                "von",
-                "den",
-                "dem",
-                "des",
-                "ein",
-                "eine",
-                "sich",
-                "nach",
-                "zur",
-                "zum",
-                "ist",
-                "sind",
-                "hat",
-                "haben",
-                "wird",
-                "werden",
-                "kann",
-                "nicht",
-                "auch",
-                "oder",
-                "aber",
-                "wie",
-                "was",
-                "wir",
-              ]);
-              const words = l.text
-                .split(/[\s\-–]+/)
-                .filter((w) => w.length >= 4 && !stopWords.has(w.toLowerCase()))
-                .sort((a, b) => b.length - a.length);
-              for (const word of words) {
-                const wordMatches = searchText(targetChildren, word);
-                if (wordMatches.length > 0) {
-                  return { ...l, match: word };
-                }
-              }
-              return l;
-            },
-          );
+        // For each missing link, check if the text exists in the target
+        type LinkWithMatch = (typeof onlyInSource)[number] & {
+          match?: string;
+        };
+        const onlyInSourceWithMatches: LinkWithMatch[] = onlyInSource.map((l) => {
+          // Try exact match first
+          const exactMatches = searchText(targetChildren, l.text);
+          if (exactMatches.length > 0) {
+            return { ...l, match: l.text };
+          }
+          // Try significant words (4+ chars, longest first, split on spaces and hyphens)
+          const stopWords = new Set([
+            "the",
+            "and",
+            "for",
+            "with",
+            "from",
+            "that",
+            "this",
+            "your",
+            "der",
+            "die",
+            "das",
+            "und",
+            "für",
+            "mit",
+            "von",
+            "den",
+            "dem",
+            "des",
+            "ein",
+            "eine",
+            "sich",
+            "nach",
+            "zur",
+            "zum",
+            "ist",
+            "sind",
+            "hat",
+            "haben",
+            "wird",
+            "werden",
+            "kann",
+            "nicht",
+            "auch",
+            "oder",
+            "aber",
+            "wie",
+            "was",
+            "wir",
+          ]);
+          const words = l.text
+            .split(/[\s\-–]+/)
+            .filter((w) => w.length >= 4 && !stopWords.has(w.toLowerCase()))
+            .sort((a, b) => b.length - a.length);
+          for (const word of words) {
+            const wordMatches = searchText(targetChildren, word);
+            if (wordMatches.length > 0) {
+              return { ...l, match: word };
+            }
+          }
+          return l;
+        });
 
-          // Output
-          if (onlyInSourceWithMatches.length > 0) {
+        // Output
+        if (onlyInSourceWithMatches.length > 0) {
+          console.log(`Links only in source (${onlyInSourceWithMatches.length}):`);
+          for (const link of onlyInSourceWithMatches) {
+            const matchHint = link.match
+              ? link.match === link.text
+                ? "  ✓ text found in target"
+                : `  ✓ use --search "${link.match}"`
+              : "  ✗ no match in target";
             console.log(
-              `Links only in source (${onlyInSourceWithMatches.length}):`,
+              `  [${link.address}] "${link.text}" → ${link.relationTo}/${link.value.slice(0, 8)}${matchHint}`,
             );
-            for (const link of onlyInSourceWithMatches) {
-              const matchHint = link.match
-                ? link.match === link.text
-                  ? "  ✓ text found in target"
-                  : `  ✓ use --search "${link.match}"`
-                : "  ✗ no match in target";
-              console.log(
-                `  [${link.address}] "${link.text}" → ${link.relationTo}/${link.value.slice(0, 8)}${matchHint}`,
-              );
-            }
-            console.log();
           }
-
-          if (onlyInTarget.length > 0) {
-            console.log(`Links only in target (${onlyInTarget.length}):`);
-            for (const link of onlyInTarget) {
-              console.log(
-                `  [${link.address}] "${link.text}" → ${link.relationTo}/${link.value.slice(0, 8)}`,
-              );
-            }
-            console.log();
-          }
-
-          if (blocksOnlyInSource.length > 0) {
-            console.log(
-              `Blocks only in source (${blocksOnlyInSource.length}):`,
-            );
-            for (const block of blocksOnlyInSource) {
-              const ctx = block.context ? `  ${block.context}` : "";
-              console.log(`  [${block.address}] ${block.blockType}${ctx}`);
-            }
-            console.log();
-          }
-
-          if (blocksOnlyInTarget.length > 0) {
-            console.log(
-              `Blocks only in target (${blocksOnlyInTarget.length}):`,
-            );
-            for (const block of blocksOnlyInTarget) {
-              const ctx = block.context ? `  ${block.context}` : "";
-              console.log(`  [${block.address}] ${block.blockType}${ctx}`);
-            }
-            console.log();
-          }
-
-          if (inBoth.length > 0) {
-            console.log(`Links in both (${inBoth.length}):`);
-            for (const link of inBoth) {
-              console.log(
-                `  "${link.text}" → ${link.relationTo}/${link.value.slice(0, 8)}`,
-              );
-            }
-            console.log();
-          }
-
-          if (
-            onlyInSource.length === 0 &&
-            onlyInTarget.length === 0 &&
-            blocksOnlyInSource.length === 0 &&
-            blocksOnlyInTarget.length === 0
-          ) {
-            console.log("Files are in sync.");
-          }
-        } catch (error) {
-          console.error("Error:", (error as Error).message);
-          process.exit(1);
+          console.log();
         }
-      },
-    );
+
+        if (onlyInTarget.length > 0) {
+          console.log(`Links only in target (${onlyInTarget.length}):`);
+          for (const link of onlyInTarget) {
+            console.log(
+              `  [${link.address}] "${link.text}" → ${link.relationTo}/${link.value.slice(0, 8)}`,
+            );
+          }
+          console.log();
+        }
+
+        if (blocksOnlyInSource.length > 0) {
+          console.log(`Blocks only in source (${blocksOnlyInSource.length}):`);
+          for (const block of blocksOnlyInSource) {
+            const ctx = block.context ? `  ${block.context}` : "";
+            console.log(`  [${block.address}] ${block.blockType}${ctx}`);
+          }
+          console.log();
+        }
+
+        if (blocksOnlyInTarget.length > 0) {
+          console.log(`Blocks only in target (${blocksOnlyInTarget.length}):`);
+          for (const block of blocksOnlyInTarget) {
+            const ctx = block.context ? `  ${block.context}` : "";
+            console.log(`  [${block.address}] ${block.blockType}${ctx}`);
+          }
+          console.log();
+        }
+
+        if (inBoth.length > 0) {
+          console.log(`Links in both (${inBoth.length}):`);
+          for (const link of inBoth) {
+            console.log(`  "${link.text}" → ${link.relationTo}/${link.value.slice(0, 8)}`);
+          }
+          console.log();
+        }
+
+        if (
+          onlyInSource.length === 0 &&
+          onlyInTarget.length === 0 &&
+          blocksOnlyInSource.length === 0 &&
+          blocksOnlyInTarget.length === 0
+        ) {
+          console.log("Files are in sync.");
+        }
+      } catch (error) {
+        console.error("Error:", (error as Error).message);
+        process.exit(1);
+      }
+    });
 }

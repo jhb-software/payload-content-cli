@@ -39,9 +39,7 @@ function warnIfShadowed(
     return;
   }
   warnedKeys.add(key);
-  console.warn(
-    `Warning: profile value for ${key} is overridden by environment variable ${key}.`,
-  );
+  console.warn(`Warning: profile value for ${key} is overridden by environment variable ${key}.`);
 }
 
 /**
@@ -51,10 +49,7 @@ function warnIfShadowed(
  * 3. Real environment variables (process.env)
  * 4. Explicit overrides (programmatic callers)
  */
-export function loadConfig(
-  overrides?: Partial<Config>,
-  profile?: Profile,
-): Config {
+export function loadConfig(overrides?: Partial<Config>, profile?: Profile): Config {
   const hasProfile = profile !== undefined;
 
   const url = resolveEnv("PAYLOAD_URL", hasProfile);
@@ -65,11 +60,7 @@ export function loadConfig(
   if (hasProfile) {
     warnIfShadowed("PAYLOAD_URL", profile.payloadUrl, url);
     warnIfShadowed("PAYLOAD_API_KEY", profile.apiKey, apiKey);
-    warnIfShadowed(
-      "PAYLOAD_AUTH_COLLECTION",
-      profile.authCollection,
-      authCollection,
-    );
+    warnIfShadowed("PAYLOAD_AUTH_COLLECTION", profile.authCollection, authCollection);
     warnIfShadowed("PAYLOAD_OUTPUT_DIR", profile.outputDir, outputDir);
   }
 
@@ -77,8 +68,7 @@ export function loadConfig(
     payloadUrl: overrides?.payloadUrl ?? url ?? profile?.payloadUrl,
     apiKey: overrides?.apiKey ?? apiKey ?? profile?.apiKey,
     authCollection: authCollection ?? profile?.authCollection ?? "api-keys",
-    outputDir:
-      overrides?.outputDir ?? outputDir ?? profile?.outputDir ?? "content",
+    outputDir: overrides?.outputDir ?? outputDir ?? profile?.outputDir ?? "content",
   });
 }
 
@@ -93,8 +83,6 @@ export function requireRemoteConfig(
   if (!config.payloadUrl) missing.push("PAYLOAD_URL");
   if (!config.apiKey) missing.push("PAYLOAD_API_KEY");
   if (missing.length > 0) {
-    throw new Error(
-      `Missing required env vars: ${missing.join(", ")}. Set them in .env.`,
-    );
+    throw new Error(`Missing required env vars: ${missing.join(", ")}. Set them in .env.`);
   }
 }

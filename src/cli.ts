@@ -1085,9 +1085,7 @@ profileCmd
       const profile = await resolveProfile(name);
       const { apiKey, ...rest } = profile;
       const redacted =
-        apiKey !== undefined
-          ? { ...rest, apiKey: maskApiKey(apiKey) }
-          : rest;
+        apiKey !== undefined ? { ...rest, apiKey: maskApiKey(apiKey) } : rest;
       console.log(JSON.stringify(redacted, null, 2));
     }),
   );

@@ -1083,12 +1083,11 @@ profileCmd
   .action(
     wrapAction(async (name: string) => {
       const profile = await resolveProfile(name);
-      const redacted = {
-        ...profile,
-        ...(profile.apiKey !== undefined && {
-          apiKey: maskApiKey(profile.apiKey),
-        }),
-      };
+      const { apiKey, ...rest } = profile;
+      const redacted =
+        apiKey !== undefined
+          ? { ...rest, apiKey: maskApiKey(apiKey) }
+          : rest;
       console.log(JSON.stringify(redacted, null, 2));
     }),
   );

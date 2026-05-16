@@ -86,12 +86,6 @@
     ]
   },
   "pnpm": {
-    "allowBuilds": {
-      "esbuild": true,
-      "sharp": true,
-      "@swc/core": true,
-      "unrs-resolver": true
-    },
     "overrides": {
       "dompurify": "^3.4.0",
       "vite": "^7.3.3",

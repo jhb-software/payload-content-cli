@@ -35,12 +35,19 @@ export async function status(config: Config): Promise<StatusResult | null> {
 
   // Scan for new files not in the manifest
   const trackedPaths = new Set(Object.keys(manifest.documents));
+  const collectionsRoot = path.join(outputDir, "collections");
+  const globalsRoot = path.join(outputDir, "globals");
 
   async function scanDir(dir: string) {
     let entries;
     try {
       entries = await fs.readdir(dir, { withFileTypes: true });
-    } catch {
+    } catch (error) {
+      if (dir === collectionsRoot || dir === globalsRoot) {
+        const err = error as NodeJS.ErrnoException;
+        const detail = err.code ? `${err.code}: ${err.message}` : String(error);
+        console.warn(`Could not scan content directory "${dir}" (${detail}).`);
+      }
       return;
     }
     for (const entry of entries) {
@@ -61,8 +68,8 @@ export async function status(config: Config): Promise<StatusResult | null> {
     }
   }
 
-  await scanDir(path.join(outputDir, "collections"));
-  await scanDir(path.join(outputDir, "globals"));
+  await scanDir(collectionsRoot);
+  await scanDir(globalsRoot);
 
   return result;
 }
@@ -108,6 +115,8 @@ export function printStatus(result: StatusResult | null): void {
   }
 }
 
+// Matches Payload content filenames based on MongoDB ObjectId:
+// 24 hex characters, optional locale suffix (e.g. `_en`), and `.json`.
 const OBJECT_ID_PATTERN = /^[0-9a-f]{24}(_[a-z][a-z0-9-]*)?\.json$/i;
 
 function countLikelyOrphans(added: string[]): number {

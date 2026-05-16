@@ -92,6 +92,13 @@
       "sharp",
       "@swc/core",
       "unrs-resolver"
-    ]
+    ],
+    "overrides": {
+      "dompurify": "^3.4.0",
+      "vite": "^7.3.3",
+      "postcss": "^8.5.10",
+      "uuid": "^11.1.1",
+      "mongoose": "^8.22.1"
+    }
   }
 }

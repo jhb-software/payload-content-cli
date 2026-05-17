@@ -12,7 +12,15 @@ const TSX_BIN = path.resolve("node_modules/.bin/tsx");
 function runCLI(args: string[]): SpawnSyncReturns<string> {
   return spawnSync(TSX_BIN, [CLI_ENTRY, ...args], {
     encoding: "utf-8",
-    env: { ...process.env, PAYLOAD_OUTPUT_DIR: CONTENT_DIR },
+    env: {
+      // Fake baseline env so local-only tests (lexical, arg validation) reach
+      // their assertions instead of failing the early "missing env vars" check.
+      // Remote tests gate on real env via hasRemoteEnv and override these.
+      PAYLOAD_URL: "http://payload.invalid",
+      PAYLOAD_API_KEY: "fake-key-for-local-tests",
+      ...process.env,
+      PAYLOAD_OUTPUT_DIR: CONTENT_DIR,
+    },
   });
 }
 

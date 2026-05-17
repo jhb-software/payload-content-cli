@@ -5,7 +5,7 @@
 ### Install
 
 ```bash
-pnpm add -D payload-content-cli
+pnpm add -D @jhb.software/payload-content-cli
 ```
 
 ### Add the plugin (optional)
@@ -16,7 +16,7 @@ The schema response is access-aware: each collection and global is included only
 
 ```ts
 // payload.config.ts
-import { contentCliPlugin } from "payload-content-cli/plugin";
+import { contentCliPlugin } from "@jhb.software/payload-content-cli/plugin";
 
 export default buildConfig({
   plugins: [contentCliPlugin()],

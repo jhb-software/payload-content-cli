@@ -1,6 +1,6 @@
 {
-  "name": "payload-content-cli",
-  "version": "0.1.0-beta.0",
+  "name": "@jhb.software/payload-content-cli",
+  "version": "0.1.0",
   "description": "A CLI for managing Payload CMS content, built for AI agents.",
   "type": "module",
   "exports": {
@@ -29,7 +29,7 @@
     "format": "oxfmt src/",
     "format:check": "oxfmt --check src/",
     "prepare": "husky",
-    "prepublishOnly": "pnpm build",
+    "prepublishOnly": "pnpm test && pnpm typecheck && pnpm lint && pnpm build",
     "test": "vitest run",
     "test:watch": "vitest",
     "example:dev": "pnpm --filter payload-content-cli-example dev",

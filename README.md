@@ -1,7 +1,7 @@
-# payload-content-cli
+# @jhb.software/payload-content-cli
 
 [![CI](https://github.com/jhb-software/payload-content-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/jhb-software/payload-content-cli/actions/workflows/ci.yml)
-[![npm version](https://img.shields.io/npm/v/payload-content-cli.svg)](https://www.npmjs.com/package/payload-content-cli)
+[![npm version](https://img.shields.io/npm/v/@jhb.software/payload-content-cli.svg)](https://www.npmjs.com/package/@jhb.software/payload-content-cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 A CLI for managing Payload CMS content, built for AI agents.
@@ -12,7 +12,7 @@ A CLI for managing Payload CMS content, built for AI agents.
 
 ```bash
 # Install
-pnpm add -D payload-content-cli
+pnpm add -D @jhb.software/payload-content-cli
 
 # Configure (in your project root)
 cat > .env << 'EOF'
@@ -53,7 +53,7 @@ The [official MCP plugin](https://github.com/payloadcms/payload-mcp) works well 
 
 Full comparison:
 
-|                    | MCP plugin (as of 05/2026)                             | payload-content-cli                                    |
+|                    | MCP plugin (as of 05/2026)                             | @jhb.software/payload-content-cli                      |
 | ------------------ | ------------------------------------------------------ | ------------------------------------------------------ |
 | Tool scaling       | One tool per operation per collection — bloats quickly | Collection-agnostic commands — fixed tool count        |
 | REST API parity    | Partial — limited query parameters                     | Full — all Payload REST API parameters supported       |

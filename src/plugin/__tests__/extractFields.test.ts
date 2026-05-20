@@ -125,6 +125,40 @@ describe("extractFields", () => {
     ]);
   });
 
+  it("hoists fields from unnamed groups", () => {
+    const fields = [
+      {
+        type: "group",
+        label: "Hero",
+        fields: [
+          { name: "heading", type: "text" },
+          { name: "description", type: "textarea" },
+        ],
+      },
+    ];
+    expect(extractFields(fields)).toEqual([
+      { name: "heading", type: "text" },
+      { name: "description", type: "textarea" },
+    ]);
+  });
+
+  it("keeps named groups as nested", () => {
+    const fields = [
+      {
+        name: "hero",
+        type: "group",
+        fields: [{ name: "heading", type: "text" }],
+      },
+    ];
+    expect(extractFields(fields)).toEqual([
+      {
+        name: "hero",
+        type: "group",
+        fields: [{ name: "heading", type: "text" }],
+      },
+    ]);
+  });
+
   it("handles nested tabs inside collapsibles", () => {
     const fields = [
       {

@@ -88,9 +88,10 @@ export function extractFields(
       continue;
     }
 
-    // Row / collapsible: unnamed layout wrappers — hoist their fields
+    // Row / collapsible / unnamed group: pure UI wrappers — hoist their fields.
+    // Payload stores unnamed-group fields at the parent level, just like row/collapsible.
     if (
-      (field.type === "row" || field.type === "collapsible") &&
+      (field.type === "row" || field.type === "collapsible" || field.type === "group") &&
       !field.name &&
       Array.isArray(field.fields)
     ) {

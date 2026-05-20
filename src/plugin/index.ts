@@ -56,6 +56,7 @@ interface FieldSchema {
   fields?: FieldSchema[];
   blocks?: { slug: string; fields: FieldSchema[] }[];
   options?: { label: string; value: string }[];
+  defaultValue?: unknown;
 }
 
 // Alternative: import { flattenTopLevelFields } from 'payload/utilities/flattenTopLevelFields'
@@ -111,6 +112,10 @@ export function extractFields(
     if (field.virtual) schema.virtual = true;
     if (field.hasMany) schema.hasMany = true;
     if (field.relationTo) schema.relationTo = field.relationTo;
+    // Skip function defaults — they need runtime context (req, user, locale) we can't supply.
+    if (field.defaultValue !== undefined && typeof field.defaultValue !== "function") {
+      schema.defaultValue = field.defaultValue;
+    }
 
     if (field.fields && Array.isArray(field.fields)) {
       schema.fields = extractFields(field.fields, blocksBySlug);

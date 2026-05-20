@@ -296,6 +296,19 @@ describe("extractFields", () => {
     ]);
   });
 
+  it("includes static defaultValues but skips function defaults", () => {
+    const fields = [
+      { name: "title", type: "text", defaultValue: "Untitled" },
+      { name: "tags", type: "array", defaultValue: [{ tag: "draft" }] },
+      { name: "createdAt", type: "date", defaultValue: () => new Date() },
+    ];
+    expect(extractFields(fields)).toEqual([
+      { name: "title", type: "text", defaultValue: "Untitled" },
+      { name: "tags", type: "array", defaultValue: [{ tag: "draft" }] },
+      { name: "createdAt", type: "date" },
+    ]);
+  });
+
   it("skips unnamed fields without layout semantics", () => {
     const fields = [
       { type: "ui", admin: { components: {} } },

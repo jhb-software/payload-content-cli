@@ -11,6 +11,7 @@ interface FieldSchema {
   fields?: FieldSchema[];
   blocks?: { slug: string; fields: FieldSchema[] }[];
   options?: { label: string; value: string }[];
+  defaultValue?: unknown;
 }
 
 function extractFields(fields: any[]): FieldSchema[] {
@@ -27,6 +28,10 @@ function extractFields(fields: any[]): FieldSchema[] {
       if (field.virtual) schema.virtual = true;
       if (field.hasMany) schema.hasMany = true;
       if (field.relationTo) schema.relationTo = field.relationTo;
+      // Skip function defaults — they need runtime context (req, user, locale) we can't supply.
+      if (field.defaultValue !== undefined && typeof field.defaultValue !== "function") {
+        schema.defaultValue = field.defaultValue;
+      }
 
       // Nested fields (group, array)
       if (field.fields && Array.isArray(field.fields)) {

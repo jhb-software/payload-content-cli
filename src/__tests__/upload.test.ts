@@ -121,6 +121,88 @@ describe("uploadDoc", () => {
     expect(file).toBeInstanceOf(Blob);
     expect(file.type).toBe("image/svg+xml");
   });
+
+  // Hotfix for payloadcms/payload#16670: the cloud-storage afterChange hook
+  // reads filename/mimeType/sizes from the select-projected doc, so any
+  // upload request whose `?select` strips those fields silently skips the S3
+  // upload. Until the upstream fix lands, the client must keep those keys in
+  // the select payload regardless of what the caller asked for.
+  describe("keeps cloud-storage-required fields in select (workaround for payload#16670)", () => {
+    const requiredKeys = ["filename", "mimeType", "filesize", "sizes"];
+
+    it("augments an include-mode select with filename/mimeType/filesize/sizes", async () => {
+      const fileData = new Uint8Array([0x00]);
+      await client.uploadDoc("media", { data: fileData, filename: "test.png" }, undefined, {
+        select: { id: true },
+      });
+
+      const url = lastFetchCall!.url;
+      expect(url).toContain("select%5Bid%5D=true");
+      for (const key of requiredKeys) {
+        expect(url).toContain(`select%5B${key}%5D=true`);
+      }
+    });
+
+    it("drops exclude-mode select entries that would strip filename/mimeType/filesize/sizes", async () => {
+      const fileData = new Uint8Array([0x00]);
+      await client.uploadDoc("media", { data: fileData, filename: "test.png" }, undefined, {
+        select: { mimeType: false, filename: false, sizes: false, foo: false },
+      });
+
+      const url = lastFetchCall!.url;
+      expect(url).toContain("select%5Bfoo%5D=false");
+      expect(url).not.toContain("select%5BmimeType%5D=false");
+      expect(url).not.toContain("select%5Bfilename%5D=false");
+      expect(url).not.toContain("select%5Bsizes%5D=false");
+    });
+
+    it("does not add select query params when no select was requested", async () => {
+      const fileData = new Uint8Array([0x00]);
+      await client.uploadDoc("media", { data: fileData, filename: "test.png" });
+
+      expect(lastFetchCall!.url).not.toContain("select%5B");
+    });
+  });
+});
+
+describe("createDoc for URL-based uploads", () => {
+  let client: PayloadClient;
+  let lastFetchCall: { url: string; init: RequestInit } | undefined;
+
+  beforeEach(() => {
+    client = new PayloadClient(clientConfig);
+    lastFetchCall = undefined;
+
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+      lastFetchCall = { url: url as string, init: init! };
+      return new Response(JSON.stringify({ doc: { id: "123" } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+  });
+
+  it("keeps filename/mimeType/filesize/sizes in select for url-uploads (payload#16670)", async () => {
+    await client.createDoc(
+      "media",
+      { url: "https://example.com/a.png", filename: "a.png" },
+      { select: { id: true } },
+    );
+
+    const url = lastFetchCall!.url;
+    for (const key of ["filename", "mimeType", "filesize", "sizes"]) {
+      expect(url).toContain(`select%5B${key}%5D=true`);
+    }
+  });
+
+  it("leaves a plain (non-upload) createDoc select alone", async () => {
+    await client.createDoc("articles", { title: "hi" }, { select: { id: true } });
+
+    const url = lastFetchCall!.url;
+    expect(url).toContain("select%5Bid%5D=true");
+    expect(url).not.toContain("select%5BmimeType%5D=true");
+    expect(url).not.toContain("select%5Bfilename%5D=true");
+  });
 });
 
 describe("upload CLI help", () => {

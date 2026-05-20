@@ -1,6 +1,6 @@
 import { extname } from "node:path";
 import type { Config } from "./config.js";
-import type { SelectType } from "./select.js";
+import type { SelectExcludeType, SelectIncludeType, SelectType } from "./select.js";
 
 const MIME_TYPES: Record<string, string> = {
   ".jpg": "image/jpeg",
@@ -61,6 +61,37 @@ export class PayloadApiError extends Error {
   get isNotFound(): boolean {
     return this.status === 404;
   }
+}
+
+// Hotfix for payloadcms/payload#16670: when ?select projects filename/
+// mimeType/sizes out of the response doc, plugin-cloud-storage's
+// afterChange hook (which reads those keys from the projected doc) silently
+// skips the S3 upload. Until that lands upstream, keep those keys in the
+// select for any upload-bound request. The filesize key is included for
+// symmetry with the variants the hook also needs.
+const CLOUD_STORAGE_REQUIRED_SELECT_KEYS = ["filename", "mimeType", "filesize", "sizes"] as const;
+
+function preserveUploadFieldsInSelect(select: SelectType | undefined): SelectType | undefined {
+  if (!select) return select;
+  const values = Object.values(select);
+  const isExcludeMode = values.length > 0 && values.every((v) => v === false);
+
+  if (isExcludeMode) {
+    const next: Record<string, false | SelectExcludeType> = {};
+    for (const [key, value] of Object.entries(select)) {
+      if ((CLOUD_STORAGE_REQUIRED_SELECT_KEYS as readonly string[]).includes(key)) continue;
+      next[key] = value as false | SelectExcludeType;
+    }
+    return next as SelectType;
+  }
+
+  const next: Record<string, true | SelectIncludeType> = {
+    ...(select as Record<string, true | SelectIncludeType>),
+  };
+  for (const key of CLOUD_STORAGE_REQUIRED_SELECT_KEYS) {
+    if (next[key] === undefined) next[key] = true;
+  }
+  return next as SelectType;
 }
 
 function flattenToQueryParams(prefix: string, obj: unknown): Record<string, string> {
@@ -489,7 +520,11 @@ export class PayloadClient {
     },
   ): Promise<Record<string, unknown>> {
     const params: Record<string, string> = {};
-    this.addCommonParams(params, options);
+    const isUpload = typeof data?.url === "string" && typeof data?.filename === "string";
+    this.addCommonParams(params, {
+      ...options,
+      select: isUpload ? preserveUploadFieldsInSelect(options?.select) : options?.select,
+    });
     this.addPublishParams(params, options);
     const body = options?.draft ? { ...data, _status: "draft" } : data;
     const result = await this.request<{ doc: Record<string, unknown> }>(`/${slug}`, {
@@ -517,7 +552,10 @@ export class PayloadClient {
     },
   ): Promise<Record<string, unknown>> {
     const params: Record<string, string> = {};
-    this.addCommonParams(params, options);
+    this.addCommonParams(params, {
+      ...options,
+      select: preserveUploadFieldsInSelect(options?.select),
+    });
     this.addPublishParams(params, options);
 
     const formData = new FormData();

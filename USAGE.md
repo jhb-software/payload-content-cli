@@ -459,7 +459,26 @@ payload-content profile remove old-project                            # delete a
 
 Selecting a profile via `--profile` or `PAYLOAD_PROFILE` opts out of `.env` autoloading so an ambient `.env` in your cwd cannot silently shadow profile credentials. Real environment variables (set in your shell) still override profile values to match AWS/Stripe CLI behavior, and a warning is printed when this happens.
 
-Flags for `profile add`: `--url`, `--api-key`, `--auth-collection`, `--output-dir`.
+Flags for `profile add`: `--url`, `--api-key`, `--credential-command`, `--keychain`, `--keychain-prompt`, `--auth-collection`, `--output-dir`.
+
+#### Keeping the API key out of `profiles.json`
+
+`--api-key` is written plaintext to `~/.payload-content/profiles.json` (mode `0600`). To avoid that:
+
+- `--credential-command "<cmd>"` — shell command that prints the key to stdout. Run on demand; the key is held in memory only.
+
+  ```bash
+  payload-content profile add prod --url https://cms.example.com \
+    --credential-command "op read 'op://Private/payload-prod/api-key'"
+  # Works with any helper: `pass show …`, `vault kv get …`, etc.
+  ```
+
+- `--keychain` (macOS) — stores `--api-key` in the login Keychain and wires up the matching `credentialCommand` for you. Add `--keychain-prompt` to require a Keychain access prompt on every read (recommended for production keys or shared machines).
+
+  ```bash
+  payload-content profile add prod --url https://cms.example.com \
+    --api-key 'sk_…' --keychain [--keychain-prompt]
+  ```
 
 ---
 

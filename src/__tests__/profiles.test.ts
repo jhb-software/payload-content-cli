@@ -11,6 +11,8 @@ import {
   listProfiles,
   resolveProfile,
   maskApiKey,
+  runCredentialCommand,
+  materializeProfile,
 } from "../profiles.js";
 
 // Mock os.homedir to use a temp directory
@@ -200,6 +202,72 @@ describe("maskApiKey", () => {
     expect(short.length).toBe(16);
     expect(medium.length).toBe(16);
     expect(long.length).toBe(16);
+  });
+});
+
+describe("runCredentialCommand", () => {
+  it.skipIf(process.platform === "win32")(
+    "returns trimmed stdout of the helper command",
+    async () => {
+      const key = await runCredentialCommand("printf 'secret-key-123\\n'");
+      expect(key).toBe("secret-key-123");
+    },
+  );
+
+  it.skipIf(process.platform === "win32")("surfaces stderr when the command fails", async () => {
+    await expect(runCredentialCommand("echo nope-from-stderr 1>&2 && exit 7")).rejects.toThrow(
+      /nope-from-stderr/,
+    );
+  });
+
+  it.skipIf(process.platform === "win32")(
+    "rejects when the command produces empty output",
+    async () => {
+      await expect(runCredentialCommand("true")).rejects.toThrow(/empty output/);
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "surfaces a Keychain-approval hint when the command times out",
+    async () => {
+      await expect(runCredentialCommand("sleep 5", { timeoutMs: 100 })).rejects.toThrow(
+        /timed out after .*s.*Keychain access prompt/s,
+      );
+    },
+  );
+});
+
+describe("profile schema", () => {
+  it("rejects a profile with both apiKey and credentialCommand on disk", async () => {
+    const dir = path.join(tmpDir, ".payload-content");
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(
+      path.join(dir, "profiles.json"),
+      JSON.stringify({
+        dev: { apiKey: "plain", credentialCommand: "echo other" },
+      }),
+    );
+    await expect(loadProfiles()).rejects.toThrow(/cannot set both apiKey and credentialCommand/i);
+  });
+});
+
+describe("materializeProfile", () => {
+  it.skipIf(process.platform === "win32")(
+    "populates apiKey from credentialCommand stdout",
+    async () => {
+      const materialized = await materializeProfile({
+        payloadUrl: "https://example.com",
+        credentialCommand: "printf 'from-helper\\n'",
+      });
+      expect(materialized.apiKey).toBe("from-helper");
+      expect(materialized.credentialCommand).toBeUndefined();
+    },
+  );
+
+  it("returns the profile unchanged when no credentialCommand is set", async () => {
+    const profile = { payloadUrl: "https://example.com", apiKey: "plain" };
+    const materialized = await materializeProfile(profile);
+    expect(materialized).toEqual(profile);
   });
 });
 

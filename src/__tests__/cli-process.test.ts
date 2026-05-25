@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import * as fs from "node:fs/promises";
+import * as os from "node:os";
 import * as path from "node:path";
 
 const hasRemoteEnv = Boolean(process.env.PAYLOAD_URL && process.env.PAYLOAD_API_KEY);
@@ -201,5 +202,68 @@ describe("cli (local-only)", () => {
     const result = runCLI(["find", "posts", "--where", "title=Welcome"]);
     expect(result.status).toBe(1);
     expect(result.stderr).toMatch(/--where must be valid JSON/);
+  });
+});
+
+// `profile add` mutates ~/.payload-content/profiles.json, so each test
+// gets its own HOME so we don't clobber the developer's real profiles.
+function runProfileAddCLI(args: string[], home: string): SpawnSyncReturns<string> {
+  return spawnSync(TSX_BIN, [CLI_ENTRY, "profile", "add", ...args], {
+    encoding: "utf-8",
+    env: { ...process.env, HOME: home },
+  });
+}
+
+describe("cli profile add (validation)", () => {
+  let home: string;
+
+  beforeAll(async () => {
+    home = await fs.mkdtemp(path.join(os.tmpdir(), "cli-profile-add-"));
+  });
+
+  afterAll(async () => {
+    await fs.rm(home, { recursive: true, force: true });
+  });
+
+  it("rejects --api-key together with --credential-command", () => {
+    const result = runProfileAddCLI(
+      ["p", "--url", "https://x", "--api-key", "k", "--credential-command", "echo k"],
+      home,
+    );
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/--api-key and --credential-command are mutually exclusive/);
+  });
+
+  it("rejects --keychain together with --credential-command", () => {
+    const result = runProfileAddCLI(
+      ["p", "--url", "https://x", "--keychain", "--credential-command", "echo k"],
+      home,
+    );
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/--keychain and --credential-command are mutually exclusive/);
+  });
+
+  it("rejects --keychain-prompt without --keychain", () => {
+    const result = runProfileAddCLI(
+      ["p", "--url", "https://x", "--api-key", "k", "--keychain-prompt"],
+      home,
+    );
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/--keychain-prompt requires --keychain/);
+  });
+
+  it.skipIf(process.platform !== "darwin")(
+    "rejects --keychain without --api-key to seed it",
+    () => {
+      const result = runProfileAddCLI(["p", "--url", "https://x", "--keychain"], home);
+      expect(result.status).toBe(1);
+      expect(result.stderr).toMatch(/--keychain requires --api-key/);
+    },
+  );
+
+  it("rejects an add with no fields at all", () => {
+    const result = runProfileAddCLI(["p"], home);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/provide at least one of/);
   });
 });

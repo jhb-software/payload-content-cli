@@ -5,6 +5,14 @@ import * as path from "node:path";
 import { createRequire } from "node:module";
 import { Command, Help } from "commander";
 
+import {
+  buildKeychainCommand,
+  deleteFromMacKeychain,
+  isManagedKeychainCommand,
+  keychainEntryFor,
+  storeInMacKeychain,
+} from "./keychain.js";
+
 const pkg = createRequire(import.meta.url)("../package.json") as {
   version: string;
 };
@@ -17,7 +25,16 @@ import { find as findLocal, printFindResults, type FindOptions } from "./find.js
 import { PayloadClient } from "./client.js";
 import { parseSelect } from "./select.js";
 import { registerLexicalCommands } from "./lexical/index.js";
-import { resolveProfile, setProfile, removeProfile, loadProfiles, maskApiKey } from "./profiles.js";
+import {
+  resolveProfile,
+  setProfile,
+  removeProfile,
+  loadProfiles,
+  maskApiKey,
+  materializeProfile,
+  runCredentialCommand,
+  getProfile,
+} from "./profiles.js";
 import type { Profile } from "./profiles.js";
 import {
   parseCommonOpts,
@@ -122,7 +139,8 @@ async function pooled<T>(tasks: (() => Promise<T>)[], concurrency: number): Prom
 
 async function getConfig(overrides?: Parameters<typeof loadConfig>[0]) {
   const profileName = program.opts().profile ?? resolvePayloadProfile();
-  const profile = profileName ? await resolveProfile(profileName) : undefined;
+  const raw = profileName ? await resolveProfile(profileName) : undefined;
+  const profile = raw ? await materializeProfile(raw) : undefined;
   return loadConfig(overrides, profile);
 }
 
@@ -906,23 +924,98 @@ profileCmd
   .description("Create or update a profile")
   .argument("<name>", "Profile name")
   .option("--url <url>", "Payload server URL")
-  .option("--api-key <key>", "API key")
+  .option(
+    "--api-key <key>",
+    "API key (stored plaintext unless --keychain or --credential-command is used)",
+  )
+  .option(
+    "--credential-command <cmd>",
+    "Shell command that prints the API key to stdout (e.g. \"op read 'op://Private/payload/api-key'\")",
+  )
+  .option(
+    "--keychain",
+    "macOS only: store --api-key in the login Keychain and reference it via `security`",
+  )
+  .option(
+    "--keychain-prompt",
+    "macOS only: tighten the Keychain ACL so every read shows a Keychain access prompt (default: silent reads via `security`)",
+  )
   .option("--auth-collection <slug>", "Auth collection slug")
   .option("--output-dir <dir>", "Local content directory")
   .action(
     wrapAction(async (name: string, opts: Record<string, unknown>) => {
-      if (!opts.url && !opts.apiKey && !opts.authCollection && !opts.outputDir) {
+      const hasAnything =
+        opts.url ||
+        opts.apiKey ||
+        opts.credentialCommand ||
+        opts.keychain ||
+        opts.authCollection ||
+        opts.outputDir;
+      if (!hasAnything) {
         console.error(
-          "Error: provide at least one of --url, --api-key, --auth-collection, --output-dir.",
+          "Error: provide at least one of --url, --api-key, --credential-command, --auth-collection, --output-dir.",
         );
         process.exit(1);
       }
+
+      if (opts.apiKey && opts.credentialCommand) {
+        console.error("Error: --api-key and --credential-command are mutually exclusive.");
+        process.exit(1);
+      }
+
+      if (opts.keychain && opts.credentialCommand) {
+        console.error(
+          "Error: --keychain and --credential-command are mutually exclusive (--keychain writes its own credentialCommand).",
+        );
+        process.exit(1);
+      }
+
+      if (opts.keychainPrompt && !opts.keychain) {
+        console.error("Error: --keychain-prompt requires --keychain.");
+        process.exit(1);
+      }
+
       const profile: Profile = {};
       if (opts.url) profile.payloadUrl = opts.url as string;
-      if (opts.apiKey) profile.apiKey = opts.apiKey as string;
       if (opts.authCollection) profile.authCollection = opts.authCollection as string;
       if (opts.outputDir) profile.outputDir = opts.outputDir as string;
+
+      if (opts.keychain) {
+        if (process.platform !== "darwin") {
+          console.error("Error: --keychain is only supported on macOS.");
+          process.exit(1);
+        }
+        if (!opts.apiKey) {
+          console.error("Error: --keychain requires --api-key to seed the Keychain entry.");
+          process.exit(1);
+        }
+        const { service, account } = keychainEntryFor(name);
+        const promptOnAccess = Boolean(opts.keychainPrompt);
+        await storeInMacKeychain(service, account, opts.apiKey as string, { promptOnAccess });
+        profile.credentialCommand = buildKeychainCommand(name);
+        const aclNote = promptOnAccess ? " — prompts on every read" : " — silent reads";
+        console.log(
+          `Stored API key in macOS Keychain (service="${service}", account="${account}")${aclNote}.`,
+        );
+      } else if (opts.credentialCommand) {
+        profile.credentialCommand = opts.credentialCommand as string;
+      } else if (opts.apiKey) {
+        profile.apiKey = opts.apiKey as string;
+      }
+
       await setProfile(name, profile);
+
+      // Verify the helper round-trips before the user discovers it at runtime.
+      // Print "saved" last so the verify outcome is visible alongside it instead
+      // of scrolling off after a delayed Keychain prompt.
+      if (profile.credentialCommand) {
+        try {
+          const key = await runCredentialCommand(profile.credentialCommand);
+          console.log(`Verified credentialCommand returns a ${key.length}-char key.`);
+        } catch (err) {
+          console.warn(`Warning: ${(err as Error).message}`);
+        }
+      }
       console.log(`Profile "${name}" saved.`);
     }),
   );
@@ -933,13 +1026,36 @@ profileCmd
   .argument("<name>", "Profile name")
   .action(
     wrapAction(async (name: string) => {
+      const existing = await getProfile(name);
+      const ownsKeychainEntry =
+        process.platform === "darwin" &&
+        isManagedKeychainCommand(name, existing?.credentialCommand);
+
       const removed = await removeProfile(name);
-      if (removed) {
-        console.log(`Profile "${name}" removed.`);
-      } else {
+      if (!removed) {
         console.error(`Profile "${name}" not found.`);
         process.exit(1);
       }
+
+      if (ownsKeychainEntry) {
+        const { service, account } = keychainEntryFor(name);
+        try {
+          const result = await deleteFromMacKeychain(service, account);
+          if (result === "deleted") {
+            console.log(
+              `Deleted macOS Keychain entry (service="${service}", account="${account}").`,
+            );
+          } else {
+            console.log(
+              `macOS Keychain entry (service="${service}", account="${account}") was already gone.`,
+            );
+          }
+        } catch (err) {
+          console.warn(`Warning: ${(err as Error).message}`);
+        }
+      }
+
+      console.log(`Profile "${name}" removed.`);
     }),
   );
 

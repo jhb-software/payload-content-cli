@@ -25,6 +25,51 @@ export default buildConfig({
 
 To hide collections from the CLI, use Payload's access control instead of plugin options.
 
+### Build custom tools with the schema API
+
+The same field extraction the `/schema` endpoint uses is exported for building your own tools — for example a trio of `listEntities` + `getEntitySchema` + `getBlockSchema` MCP tools. Each takes a Payload `req` (carrying `req.payload` and the authenticated user) and runs in-process, so no HTTP round-trip.
+
+`listReadableEntities` is the discovery half — it returns the collection and global slugs the request may read, plus localization:
+
+```ts
+import {
+  listReadableEntities,
+  getEntitySchema,
+} from "@jhb.software/payload-content-cli/plugin";
+
+// inside a Payload endpoint / MCP tool handler that has a `req`
+const { collections, globals, localization } = await listReadableEntities({
+  req,
+});
+// → { collections: ["posts", "pages"], globals: ["settings"],
+//     localization: { locales: ["en", "de"], defaultLocale: "en" } }
+```
+
+`getEntitySchema` is the describe half — it resolves one collection or global to `{ slug, fields, jsonSchema }` (the exact per-entity shape the endpoint returns):
+
+```ts
+const { slug, fields, jsonSchema } = await getEntitySchema({
+  req,
+  type: "collection", // or "global"
+  slug: "posts",
+});
+```
+
+`getBlockSchema` resolves richText block slugs — the ones `getEntitySchema` surfaces under `lexicalFeatures.blockNodes.block.slugs` without their fields — to `{ slug, fields }`:
+
+```ts
+import { getBlockSchema } from "@jhb.software/payload-content-cli/plugin";
+
+const blocks = await getBlockSchema({ req, slugs: ["cta", "quoteBlock"] });
+// → [{ slug: "cta", fields: [...] }, { slug: "quoteBlock", fields: [...] }]
+```
+
+- **Consistent and access-aware.** `listReadableEntities` and `getEntitySchema` evaluate the entity's `access.read` against `req` with the same lenient rule the endpoint uses (a `read` returning a `Where` clause still counts as readable), so everything `listReadableEntities` returns is resolvable by `getEntitySchema`. `getEntitySchema` **throws** on denied access; `listReadableEntities` simply omits what you can't read. `getBlockSchema` has no read check — blocks are config fragments, not access-controlled entities. Blocks must be defined globally on `config.blocks`; blocks declared inline in a lexical editor config are not supported (Payload v4 drops inline blocks, and defining blocks globally is more performant regardless).
+- **Explicit type.** Collections and globals live in separate namespaces and a slug may exist in both, so `getEntitySchema` takes a `type` rather than guessing.
+- **Bare slugs, no policy baked in.** `listReadableEntities` returns plain slugs filtered by access alone — apply your own addressing convention (e.g. a `globals/<slug>` prefix) or "internal collection" exclusions in your own handler.
+
+The lower-level pure transforms — `toFieldSchemas` (config → agent-friendly `FieldSchema[]`) and `entityToJsonSchema` (→ draft-07 validation doc) — are exported too, along with the `FieldSchema`, `JsonSchema`, and `LexicalFeatureSummary` types.
+
 ### Enable API key auth
 
 The CLI authenticates via Payload's API key feature. We recommend creating a dedicated `api-keys` collection rather than adding API keys to your `users` collection — this keeps machine credentials separate from user accounts. Example:
@@ -513,12 +558,42 @@ Each `_schema.json` describes field types after all plugins have run:
   "fields": [
     { "name": "title", "type": "text", "required": true, "localized": true },
     { "name": "path", "type": "text", "virtual": true, "localized": true },
-    { "name": "author", "type": "relationship", "relationTo": "users" }
+    { "name": "author", "type": "relationship", "relationTo": "users" },
+    {
+      "name": "content",
+      "type": "richText",
+      "lexicalFeatures": {
+        "textFormats": ["bold", "code", "italic"],
+        "blockNodes": {
+          "paragraph": true,
+          "heading": { "sizes": ["h2", "h3"] },
+          "quote": true,
+          "list": { "types": ["bullet", "number"] },
+          "horizontalrule": true,
+          "upload": { "enabledCollections": ["media"] },
+          "relationship": { "enabledCollections": ["authors"] },
+          "block": { "slugs": ["callout"] }
+        },
+        "inlineNodes": {
+          "link": { "enabledCollections": ["pages", "posts"] }
+        },
+        "layoutProps": ["align", "indent"],
+        "customNodes": ["spoilerBlock"]
+      }
+    }
   ]
 }
 ```
 
 Fields with `virtual: true` are computed (e.g. by plugins) and should not be edited.
+
+`richText` fields carry a `lexicalFeatures` summary of the Lexical nodes their editor accepts, so an agent knows what it may emit before authoring content. Each key under `blockNodes`/`inlineNodes` is the exact node `type` string to use, with its options co-located:
+
+- **`textFormats`** — format marks applied to text nodes via the `format` bitmask (`bold`, `italic`, `underline`, `strikethrough`, `code`, `subscript`, `superscript`).
+- **`blockNodes`** — block-level node types: `paragraph`, `heading` (`sizes`), `quote`, `list` (`types`: `bullet`/`check`/`number`, set via `listType`), `table`, `horizontalrule`, `upload` and `relationship` (each `enabledCollections`/`disabledCollections`; `upload` also carries per-collection custom `fields`), and `block` (`slugs` for Payload block decorators).
+- **`inlineNodes`** — inline node types that appear inside block children: `link` (`enabledCollections`/`disabledCollections`) and `inlineBlock` (`slugs`).
+- **`layoutProps`** — properties set on block nodes rather than node types: `align` (text-align) and `indent` (nesting).
+- **`customNodes`** — node `type` strings registered by custom features (any feature without a built-in projection). Emit `{ "type": "<value>", ... }` and consult that feature's own docs for the rest of the node's shape. Editor-UI-only features (toolbars, debug views) and built-in node types never appear here.
 
 ### Editor validation
 

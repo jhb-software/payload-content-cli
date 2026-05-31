@@ -1,4 +1,10 @@
 import type { PageCollectionConfig } from "@jhb.software/payload-pages-plugin";
+import {
+  BlocksFeature,
+  HeadingFeature,
+  LinkFeature,
+  lexicalEditor,
+} from "@payloadcms/richtext-lexical";
 
 export const Posts: PageCollectionConfig = {
   slug: "posts",
@@ -22,6 +28,28 @@ export const Posts: PageCollectionConfig = {
       name: "content",
       type: "richText",
       localized: true,
+      editor: lexicalEditor({
+        features: ({ defaultFeatures }) => [
+          ...defaultFeatures,
+          HeadingFeature({ enabledHeadingSizes: ["h2", "h3"] }),
+          BlocksFeature({
+            blocks: [
+              {
+                slug: "callout",
+                fields: [
+                  { name: "text", type: "text", required: true },
+                  {
+                    name: "variant",
+                    type: "select",
+                    options: ["info", "warning"],
+                  },
+                ],
+              },
+            ],
+          }),
+          LinkFeature({ enabledCollections: ["pages", "posts"] }),
+        ],
+      }),
     },
     {
       name: "excerpt",

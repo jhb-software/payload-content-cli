@@ -1,13 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { extractFields } from "../index.js";
+import { toFieldSchemas } from "../index.js";
 
-describe("extractFields", () => {
+describe("toFieldSchemas", () => {
   it("extracts basic named fields", () => {
     const fields = [
       { name: "title", type: "text", required: true },
       { name: "body", type: "richText" },
     ];
-    expect(extractFields(fields)).toEqual([
+    expect(toFieldSchemas(fields)).toEqual([
       { name: "title", type: "text", required: true },
       { name: "body", type: "richText" },
     ]);
@@ -32,7 +32,7 @@ describe("extractFields", () => {
         ],
       },
     ];
-    expect(extractFields(fields)).toEqual([
+    expect(toFieldSchemas(fields)).toEqual([
       { name: "title", type: "text" },
       { name: "body", type: "richText" },
       { name: "slug", type: "text" },
@@ -54,7 +54,7 @@ describe("extractFields", () => {
         ],
       },
     ];
-    expect(extractFields(fields)).toEqual([
+    expect(toFieldSchemas(fields)).toEqual([
       {
         name: "meta",
         type: "tab",
@@ -82,7 +82,7 @@ describe("extractFields", () => {
         ],
       },
     ];
-    expect(extractFields(fields)).toEqual([
+    expect(toFieldSchemas(fields)).toEqual([
       { name: "title", type: "text" },
       {
         name: "seo",
@@ -102,7 +102,7 @@ describe("extractFields", () => {
         ],
       },
     ];
-    expect(extractFields(fields)).toEqual([
+    expect(toFieldSchemas(fields)).toEqual([
       { name: "firstName", type: "text" },
       { name: "lastName", type: "text" },
     ]);
@@ -119,7 +119,7 @@ describe("extractFields", () => {
         ],
       },
     ];
-    expect(extractFields(fields)).toEqual([
+    expect(toFieldSchemas(fields)).toEqual([
       { name: "cssClass", type: "text" },
       { name: "anchor", type: "text" },
     ]);
@@ -136,7 +136,7 @@ describe("extractFields", () => {
         ],
       },
     ];
-    expect(extractFields(fields)).toEqual([
+    expect(toFieldSchemas(fields)).toEqual([
       { name: "heading", type: "text" },
       { name: "description", type: "textarea" },
     ]);
@@ -150,7 +150,7 @@ describe("extractFields", () => {
         fields: [{ name: "heading", type: "text" }],
       },
     ];
-    expect(extractFields(fields)).toEqual([
+    expect(toFieldSchemas(fields)).toEqual([
       {
         name: "hero",
         type: "group",
@@ -177,7 +177,7 @@ describe("extractFields", () => {
         ],
       },
     ];
-    expect(extractFields(fields)).toEqual([{ name: "info", type: "text" }]);
+    expect(toFieldSchemas(fields)).toEqual([{ name: "info", type: "text" }]);
   });
 
   it("resolves blockReferences from blocksBySlug", () => {
@@ -199,7 +199,7 @@ describe("extractFields", () => {
         blockReferences: ["quote", "cta"],
       },
     ];
-    expect(extractFields(fields, blocksBySlug)).toEqual([
+    expect(toFieldSchemas(fields, blocksBySlug)).toEqual([
       {
         name: "layout",
         type: "blocks",
@@ -237,7 +237,7 @@ describe("extractFields", () => {
         blockReferences: ["cta"],
       },
     ];
-    expect(extractFields(fields, blocksBySlug)).toEqual([
+    expect(toFieldSchemas(fields, blocksBySlug)).toEqual([
       {
         name: "layout",
         type: "blocks",
@@ -264,7 +264,7 @@ describe("extractFields", () => {
         blockReferences: ["nonexistent"],
       },
     ];
-    expect(extractFields(fields, {})).toEqual([{ name: "layout", type: "blocks" }]);
+    expect(toFieldSchemas(fields, {})).toEqual([{ name: "layout", type: "blocks" }]);
   });
 
   it("handles blockReferences as objects with slug", () => {
@@ -282,7 +282,7 @@ describe("extractFields", () => {
         blockReferences: [{ slug: "quote" }],
       },
     ];
-    expect(extractFields(fields, blocksBySlug)).toEqual([
+    expect(toFieldSchemas(fields, blocksBySlug)).toEqual([
       {
         name: "content",
         type: "blocks",
@@ -302,7 +302,7 @@ describe("extractFields", () => {
       { name: "tags", type: "array", defaultValue: [{ tag: "draft" }] },
       { name: "createdAt", type: "date", defaultValue: () => new Date() },
     ];
-    expect(extractFields(fields)).toEqual([
+    expect(toFieldSchemas(fields)).toEqual([
       { name: "title", type: "text", defaultValue: "Untitled" },
       { name: "tags", type: "array", defaultValue: [{ tag: "draft" }] },
       { name: "createdAt", type: "date" },
@@ -314,6 +314,6 @@ describe("extractFields", () => {
       { type: "ui", admin: { components: {} } },
       { name: "title", type: "text" },
     ];
-    expect(extractFields(fields)).toEqual([{ name: "title", type: "text" }]);
+    expect(toFieldSchemas(fields)).toEqual([{ name: "title", type: "text" }]);
   });
 });

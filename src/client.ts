@@ -74,7 +74,7 @@ const CLOUD_STORAGE_REQUIRED_SELECT_KEYS = ["filename", "mimeType", "filesize", 
 function preserveUploadFieldsInSelect(select: SelectType | undefined): SelectType | undefined {
   if (!select) return select;
   const values = Object.values(select);
-  const isExcludeMode = values.length > 0 && values.every((v) => v === false);
+  const isExcludeMode = values.length > 0 && values.every((value) => value === false);
 
   if (isExcludeMode) {
     const next: Record<string, false | SelectExcludeType> = {};

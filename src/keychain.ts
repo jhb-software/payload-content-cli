@@ -3,9 +3,9 @@ import { promisify } from "node:util";
 
 const execFileP = promisify(execFile);
 
-function shellQuote(s: string): string {
+function shellQuote(value: string): string {
   // POSIX single-quote escape — safe for sh -c invocations on macOS/Linux.
-  return `'${s.replace(/'/g, `'\\''`)}'`;
+  return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
 /**

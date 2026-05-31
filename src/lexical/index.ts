@@ -377,36 +377,46 @@ export function registerLexicalCommands(program: Command): void {
         const sourceLinks = extractLinks(sourceChildren);
         const targetLinks = extractLinks(targetChildren);
 
-        const targetLinkKeys = new Set(targetLinks.map((l) => `${l.relationTo}:${l.value}`));
-        const sourceLinkKeys = new Set(sourceLinks.map((l) => `${l.relationTo}:${l.value}`));
+        const targetLinkKeys = new Set(
+          targetLinks.map((link) => `${link.relationTo}:${link.value}`),
+        );
+        const sourceLinkKeys = new Set(
+          sourceLinks.map((link) => `${link.relationTo}:${link.value}`),
+        );
 
         const onlyInSource = sourceLinks.filter(
-          (l) => !targetLinkKeys.has(`${l.relationTo}:${l.value}`),
+          (link) => !targetLinkKeys.has(`${link.relationTo}:${link.value}`),
         );
         const onlyInTarget = targetLinks.filter(
-          (l) => !sourceLinkKeys.has(`${l.relationTo}:${l.value}`),
+          (link) => !sourceLinkKeys.has(`${link.relationTo}:${link.value}`),
         );
-        const inBoth = sourceLinks.filter((l) => targetLinkKeys.has(`${l.relationTo}:${l.value}`));
+        const inBoth = sourceLinks.filter((link) =>
+          targetLinkKeys.has(`${link.relationTo}:${link.value}`),
+        );
 
         // Compare blocks
         const sourceBlocks = extractBlocks(sourceChildren);
         const targetBlocks = extractBlocks(targetChildren);
 
-        const targetBlockTypes = new Set(targetBlocks.map((b) => b.blockType));
-        const sourceBlockTypes = new Set(sourceBlocks.map((b) => b.blockType));
+        const targetBlockTypes = new Set(targetBlocks.map((block) => block.blockType));
+        const sourceBlockTypes = new Set(sourceBlocks.map((block) => block.blockType));
 
-        const blocksOnlyInSource = sourceBlocks.filter((b) => !targetBlockTypes.has(b.blockType));
-        const blocksOnlyInTarget = targetBlocks.filter((b) => !sourceBlockTypes.has(b.blockType));
+        const blocksOnlyInSource = sourceBlocks.filter(
+          (block) => !targetBlockTypes.has(block.blockType),
+        );
+        const blocksOnlyInTarget = targetBlocks.filter(
+          (block) => !sourceBlockTypes.has(block.blockType),
+        );
 
         // For each missing link, check if the text exists in the target
         type LinkWithMatch = (typeof onlyInSource)[number] & {
           match?: string;
         };
-        const onlyInSourceWithMatches: LinkWithMatch[] = onlyInSource.map((l) => {
+        const onlyInSourceWithMatches: LinkWithMatch[] = onlyInSource.map((link) => {
           // Try exact match first
-          const exactMatches = searchText(targetChildren, l.text);
+          const exactMatches = searchText(targetChildren, link.text);
           if (exactMatches.length > 0) {
-            return { ...l, match: l.text };
+            return { ...link, match: link.text };
           }
           // Try significant words (4+ chars, longest first, split on spaces and hyphens)
           const stopWords = new Set([
@@ -449,17 +459,17 @@ export function registerLexicalCommands(program: Command): void {
             "was",
             "wir",
           ]);
-          const words = l.text
+          const words = link.text
             .split(/[\s\-–]+/)
-            .filter((w) => w.length >= 4 && !stopWords.has(w.toLowerCase()))
+            .filter((word) => word.length >= 4 && !stopWords.has(word.toLowerCase()))
             .sort((a, b) => b.length - a.length);
           for (const word of words) {
             const wordMatches = searchText(targetChildren, word);
             if (wordMatches.length > 0) {
-              return { ...l, match: word };
+              return { ...link, match: word };
             }
           }
-          return l;
+          return link;
         });
 
         // Output

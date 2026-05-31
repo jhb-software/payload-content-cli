@@ -64,7 +64,7 @@ async function scanDir(
 
       const fields: Record<string, string> = {};
       if (options.select) {
-        const isExclude = Object.values(options.select).every((v) => !v);
+        const isExclude = Object.values(options.select).every((selected) => !selected);
         if (isExclude) {
           for (const key of Object.keys(doc)) {
             if (!(key in options.select)) {

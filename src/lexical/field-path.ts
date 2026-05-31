@@ -26,10 +26,10 @@ function getByPath(obj: Record<string, unknown>, path: string): unknown {
  */
 function findBlockByType(children: LexicalNode[], blockType: string): LexicalNode | undefined {
   return children.find(
-    (n) =>
-      n.type === "block" &&
-      (n as Record<string, unknown>).fields &&
-      ((n as Record<string, unknown>).fields as Record<string, unknown>).blockType === blockType,
+    (node) =>
+      node.type === "block" &&
+      (node as Record<string, unknown>).fields &&
+      ((node as Record<string, unknown>).fields as Record<string, unknown>).blockType === blockType,
   );
 }
 
@@ -119,7 +119,7 @@ export function autoDetectLexicalField(doc: Record<string, unknown>): {
   }
 
   if (candidates.length > 1) {
-    const names = candidates.map((c) => c.path).join(", ");
+    const names = candidates.map((candidate) => candidate.path).join(", ");
     throw new Error(
       `Multiple Lexical richtext fields found: ${names}. Use --field to specify which one.`,
     );

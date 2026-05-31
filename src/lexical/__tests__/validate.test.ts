@@ -42,7 +42,7 @@ describe("validateTree", () => {
     ];
     const warnings = validateTree(children);
     expect(warnings.length).toBeGreaterThan(0);
-    expect(warnings.some((w) => w.startsWith("[0.0]"))).toBe(true);
+    expect(warnings.some((warning) => warning.startsWith("[0.0]"))).toBe(true);
   });
 
   it("returns empty for empty array", () => {

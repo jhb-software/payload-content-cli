@@ -116,7 +116,7 @@ export async function push(config: Config, options: PushOptions = {}): Promise<v
   // Determine which files to push
   let filePaths: string[];
   if (options.files?.length) {
-    filePaths = options.files.map((f) => path.resolve(f));
+    filePaths = options.files.map((file) => path.resolve(file));
   } else {
     // Default: push only modified + added files (via status)
     const localStatus = await status(config);
@@ -131,8 +131,8 @@ export async function push(config: Config, options: PushOptions = {}): Promise<v
   }
 
   const entries = filePaths
-    .map((f) => parseContentPath(f, outputDir))
-    .filter((e): e is ContentEntry => e !== null);
+    .map((file) => parseContentPath(file, outputDir))
+    .filter((entry): entry is ContentEntry => entry !== null);
 
   if (entries.length === 0) {
     console.log("No changes to push.");

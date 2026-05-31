@@ -27,7 +27,9 @@ export function validateTree(children: LexicalNode[], prefix: string = ""): stri
     }
 
     if (Array.isArray(node.children)) {
-      validateTree(node.children as LexicalNode[], addr).forEach((w) => warnings.push(w));
+      validateTree(node.children as LexicalNode[], addr).forEach((warning) =>
+        warnings.push(warning),
+      );
     }
   }
 

@@ -36,7 +36,7 @@ function stripVirtualFields(doc: Record<string, unknown>, fields: FieldSchema[])
       if (Array.isArray(doc[field.name])) {
         for (const item of doc[field.name] as Record<string, unknown>[]) {
           const blockType = item.blockType as string | undefined;
-          const blockDef = field.blocks.find((b) => b.slug === blockType);
+          const blockDef = field.blocks.find((block) => block.slug === blockType);
           if (blockDef) {
             stripVirtualFields(item, blockDef.fields);
           }
@@ -286,8 +286,8 @@ export async function pull(config: Config, options: PullOptions = {}): Promise<v
   // Clear entries matching the pulled scope (only when pulling full collections)
   if (!options.where) {
     const pulledPrefixes = [
-      ...targetCollections.map((s) => `collections/${s}/`),
-      ...targetGlobals.map((s) => `globals/${s}/`),
+      ...targetCollections.map((slug) => `collections/${slug}/`),
+      ...targetGlobals.map((slug) => `globals/${slug}/`),
     ];
     for (const key of Object.keys(manifest.documents)) {
       if (pulledPrefixes.some((prefix) => key.startsWith(prefix))) {

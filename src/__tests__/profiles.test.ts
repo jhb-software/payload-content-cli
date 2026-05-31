@@ -352,8 +352,8 @@ describe("loadConfig with profile", () => {
         apiKey: "profile-key",
       });
 
-      const apiKeyWarnings = warnSpy.mock.calls.filter((c) =>
-        String(c[0]).includes("PAYLOAD_API_KEY"),
+      const apiKeyWarnings = warnSpy.mock.calls.filter((call) =>
+        String(call[0]).includes("PAYLOAD_API_KEY"),
       );
       expect(apiKeyWarnings.length).toBe(1);
     } finally {
@@ -371,8 +371,8 @@ describe("loadConfig with profile", () => {
       const { loadConfig } = await import("../config.js");
       loadConfig(undefined, { apiKey: "same-key" });
 
-      const apiKeyWarnings = warnSpy.mock.calls.filter((c) =>
-        String(c[0]).includes("PAYLOAD_API_KEY"),
+      const apiKeyWarnings = warnSpy.mock.calls.filter((call) =>
+        String(call[0]).includes("PAYLOAD_API_KEY"),
       );
       expect(apiKeyWarnings.length).toBe(0);
     } finally {

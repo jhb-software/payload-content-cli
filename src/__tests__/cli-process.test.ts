@@ -40,7 +40,9 @@ describe.skipIf(!hasRemoteEnv)("cli (remote)", () => {
 
   it("push exits with code 2 on conflict", async () => {
     const dir = path.join(CONTENT_DIR, "collections", "posts");
-    const files = (await fs.readdir(dir)).filter((f) => f.endsWith(".json") && !f.startsWith("_"));
+    const files = (await fs.readdir(dir)).filter(
+      (file) => file.endsWith(".json") && !file.startsWith("_"),
+    );
     expect(files.length).toBeGreaterThan(0);
     const target = path.join(dir, files[0]);
 
@@ -79,7 +81,7 @@ describe.skipIf(!hasRemoteEnv)("cli (remote)", () => {
     expect(localized.status, localized.stderr).toBe(0);
 
     const dir = path.join(CONTENT_DIR, "collections", "posts");
-    const enFiles = (await fs.readdir(dir)).filter((f) => f.endsWith("_en.json"));
+    const enFiles = (await fs.readdir(dir)).filter((file) => file.endsWith("_en.json"));
     expect(enFiles.length).toBeGreaterThan(1);
 
     // Locally edit one file before the next pull
@@ -96,7 +98,7 @@ describe.skipIf(!hasRemoteEnv)("cli (remote)", () => {
     expect(repulled.stdout).toMatch(/Kept 1 orphan file/);
 
     // Clean orphans (non-edited) gone, edited orphan preserved
-    const remaining = (await fs.readdir(dir)).filter((f) => f.endsWith("_en.json"));
+    const remaining = (await fs.readdir(dir)).filter((file) => file.endsWith("_en.json"));
     expect(remaining).toEqual([enFiles[0]]);
   });
 

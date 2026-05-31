@@ -76,7 +76,7 @@ program
         Utilities: ["me", "discover", "skill", "lexical", "clean", "profile"],
       };
 
-      const cmds = new Map(cmd.commands.map((c: Command) => [c.name(), c]));
+      const cmds = new Map(cmd.commands.map((command: Command) => [command.name(), command]));
 
       let output = `Usage: ${helper.commandUsage(cmd)}\n\n`;
       output += `${cmd.description()}\n`;
@@ -188,13 +188,13 @@ program
         const localWhere: Record<string, string> = {};
         if (opts.where) {
           const parsed = parseWhere(opts.where as string);
-          for (const [k, v] of Object.entries(parsed)) {
-            if (typeof v === "object" && v !== null) {
-              const inner = v as Record<string, unknown>;
-              const val = inner.equals ?? inner.like ?? Object.values(inner)[0];
-              if (val !== undefined) localWhere[k] = String(val);
+          for (const [key, value] of Object.entries(parsed)) {
+            if (typeof value === "object" && value !== null) {
+              const inner = value as Record<string, unknown>;
+              const resolvedValue = inner.equals ?? inner.like ?? Object.values(inner)[0];
+              if (resolvedValue !== undefined) localWhere[key] = String(resolvedValue);
             } else {
-              localWhere[k] = String(v);
+              localWhere[key] = String(value);
             }
           }
         }
@@ -314,13 +314,15 @@ program
         // Bulk update via PATCH with where params
         const where = parseWhere(opts.where as string);
         const whereParams: Record<string, string> = {};
-        for (const [k, v] of Object.entries(where)) {
-          if (typeof v === "object" && v !== null) {
-            for (const [op, val] of Object.entries(v as Record<string, unknown>)) {
-              whereParams[`where[${k}][${op}]`] = String(val);
+        for (const [key, value] of Object.entries(where)) {
+          if (typeof value === "object" && value !== null) {
+            for (const [operator, operatorValue] of Object.entries(
+              value as Record<string, unknown>,
+            )) {
+              whereParams[`where[${key}][${operator}]`] = String(operatorValue);
             }
           } else {
-            whereParams[`where[${k}][equals]`] = String(v);
+            whereParams[`where[${key}][equals]`] = String(value);
           }
         }
         result = await client.rawPatch(
@@ -553,8 +555,8 @@ program
             withFileTypes: true,
           });
           files = entries
-            .filter((e) => e.isFile())
-            .map((e) => path.join(opts.dir as string, e.name))
+            .filter((entry) => entry.isFile())
+            .map((entry) => path.join(opts.dir as string, entry.name))
             .sort();
         } else {
           files = [];

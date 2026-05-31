@@ -6,25 +6,35 @@
  * building blocks for custom tools (e.g. a schema MCP server). They share the
  * endpoint's lenient, access-aware `canRead` rule.
  *
- * Types are kept inline to avoid a hard dependency on `payload`.
+ * Uses type-only imports from `payload`, so the package never pulls Payload in
+ * at runtime.
  */
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
+import type {
+  Block,
+  Payload,
+  PayloadRequest,
+  SanitizedCollectionConfig,
+  SanitizedGlobalConfig,
+} from "payload";
 
 import { toFieldSchemas } from "./fields.js";
 import type { FieldSchema } from "./fields.js";
 import { entityToJsonSchema } from "./jsonSchema.js";
 import type { JsonSchema } from "./jsonSchema.js";
 
+/** A collection or global config, the two access-controlled entity kinds. */
+type EntityConfig = SanitizedCollectionConfig | SanitizedGlobalConfig;
+
 // Mirrors Payload's read-access evaluation (see auth/getEntityPermissions.ts):
 // a function returning true OR a Where clause counts as "has read access";
 // falsy counts as "denied". With no `access.read` defined, Payload's default
 // is `isLoggedIn`.
-export async function canRead(entity: any, req: any): Promise<boolean> {
-  const fn = entity?.access?.read;
-  if (typeof fn !== "function") return !!req.user;
+export async function canRead(entity: EntityConfig, req: PayloadRequest): Promise<boolean> {
+  const readAccess = entity?.access?.read;
+  if (typeof readAccess !== "function") return !!req.user;
   try {
-    const result = await fn({ req });
+    const result = await readAccess({ req });
     return !!result;
   } catch {
     return false;
@@ -32,8 +42,8 @@ export async function canRead(entity: any, req: any): Promise<boolean> {
 }
 
 /** Build the slug → top-level block lookup used to resolve `blockReferences`. */
-export function buildBlocksBySlug(payload: any): Record<string, any> {
-  const blocksBySlug: Record<string, any> = {};
+export function buildBlocksBySlug(payload: Payload): Record<string, Block> {
+  const blocksBySlug: Record<string, Block> = {};
   for (const block of payload.config.blocks ?? []) {
     blocksBySlug[block.slug] = block;
   }
@@ -42,12 +52,12 @@ export function buildBlocksBySlug(payload: any): Record<string, any> {
 
 /** Project Payload's localization config to its CLI/JSON shape, or null. */
 export function buildLocalization(
-  payload: any,
+  payload: Payload,
 ): { locales: string[]; defaultLocale: string } | null {
   const localization = payload.config.localization;
   if (!localization) return null;
   return {
-    locales: (localization.locales as any[]).map((locale: any) =>
+    locales: localization.locales.map((locale) =>
       typeof locale === "string" ? locale : locale.code,
     ),
     defaultLocale: localization.defaultLocale,
@@ -56,8 +66,8 @@ export function buildLocalization(
 
 /** Assemble the per-entity schema shape from an already-resolved entity config. */
 export function entityToSchema(
-  entity: any,
-  blocksBySlug: Record<string, any>,
+  entity: EntityConfig,
+  blocksBySlug: Record<string, Block>,
 ): { slug: string; fields: FieldSchema[]; jsonSchema: JsonSchema } {
   const fields = toFieldSchemas(entity.fields, blocksBySlug);
   return { slug: entity.slug, fields, jsonSchema: entityToJsonSchema(entity.slug, fields) };
@@ -81,13 +91,14 @@ export async function getEntitySchema({
   type,
   slug,
 }: {
-  req: any;
+  req: PayloadRequest;
   type: "collection" | "global";
   slug: string;
 }): Promise<{ slug: string; fields: FieldSchema[]; jsonSchema: JsonSchema }> {
   const payload = req.payload;
-  const list = type === "collection" ? payload.config.collections : payload.config.globals;
-  const entity = (list ?? []).find((e: any) => e.slug === slug);
+  const list: EntityConfig[] =
+    type === "collection" ? payload.config.collections : payload.config.globals;
+  const entity = (list ?? []).find((candidate) => candidate.slug === slug);
   if (!entity) {
     throw new Error(`No ${type} with slug "${slug}"`);
   }
@@ -121,7 +132,7 @@ export async function getBlockSchema({
   req,
   slugs,
 }: {
-  req: any;
+  req: PayloadRequest;
   slugs: string[];
 }): Promise<{ slug: string; fields: FieldSchema[] }[]> {
   const blocksBySlug = buildBlocksBySlug(req.payload);
@@ -157,7 +168,7 @@ export async function getBlockSchema({
  * prefix) or "internal collection" filtering in the caller; this helper mirrors
  * the endpoint and filters by access alone.
  */
-export async function listReadableEntities({ req }: { req: any }): Promise<{
+export async function listReadableEntities({ req }: { req: PayloadRequest }): Promise<{
   collections: string[];
   globals: string[];
   localization: { locales: string[]; defaultLocale: string } | null;

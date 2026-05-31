@@ -55,13 +55,13 @@ function fieldToJsonSchema(field: FieldSchema): JsonSchema | null {
     case "date":
       return { type: "string", format: "date-time" };
     case "select": {
-      const enumValues = field.options?.map((o) => o.value) ?? [];
+      const enumValues = field.options?.map((option) => option.value) ?? [];
       const single: JsonSchema =
         enumValues.length > 0 ? { type: "string", enum: enumValues } : { type: "string" };
       return field.hasMany ? { type: "array", items: single } : single;
     }
     case "radio": {
-      const enumValues = field.options?.map((o) => o.value) ?? [];
+      const enumValues = field.options?.map((option) => option.value) ?? [];
       return enumValues.length > 0 ? { type: "string", enum: enumValues } : { type: "string" };
     }
     case "relationship":

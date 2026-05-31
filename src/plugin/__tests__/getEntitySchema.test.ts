@@ -1,11 +1,12 @@
 import { describe, it, expect } from "vitest";
+import type { PayloadRequest } from "payload";
 import { getEntitySchema } from "../index.js";
 
 /** Build a mock PayloadRequest carrying a config and an optional user. */
 function mockReq(
   config: { collections?: any[]; globals?: any[]; blocks?: any[] },
   user: any = { id: 1 },
-) {
+): PayloadRequest {
   return {
     user,
     payload: {
@@ -15,7 +16,7 @@ function mockReq(
         blocks: config.blocks ?? [],
       },
     },
-  };
+  } as unknown as PayloadRequest;
 }
 
 describe("getEntitySchema", () => {

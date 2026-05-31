@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { toFieldSchemas } from "../index.js";
+import { toFieldSchemas as toFieldSchemasStrict, type FieldSchema } from "../index.js";
+
+// Tests pass deliberately-partial field fixtures; loosen the input types here.
+// The strict signature is exercised by the plugin source under `tsc`.
+const toFieldSchemas = toFieldSchemasStrict as unknown as (
+  fields: unknown[],
+  blocksBySlug?: Record<string, unknown>,
+) => FieldSchema[];
 
 describe("toFieldSchemas", () => {
   it("extracts basic named fields", () => {

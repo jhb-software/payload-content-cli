@@ -15,7 +15,7 @@ const profileSchema = z
     authCollection: z.string().min(1).optional(),
     outputDir: z.string().min(1).optional(),
   })
-  .refine((p) => !(p.apiKey && p.credentialCommand), {
+  .refine((profile) => !(profile.apiKey && profile.credentialCommand), {
     message: "Profile cannot set both apiKey and credentialCommand",
     path: ["credentialCommand"],
   });

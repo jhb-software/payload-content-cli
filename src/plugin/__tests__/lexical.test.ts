@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { toFieldSchemas } from "../index.js";
+import { toFieldSchemas as toFieldSchemasStrict, type FieldSchema } from "../index.js";
+
+// Tests pass deliberately-partial field fixtures (and synthetic lexical editor
+// shapes); loosen the input types here. The strict signature is exercised by
+// the plugin source under `tsc`.
+const toFieldSchemas = toFieldSchemasStrict as unknown as (
+  fields: unknown[],
+  blocksBySlug?: Record<string, unknown>,
+) => FieldSchema[];
 
 /**
  * A lexical editor as it appears on a sanitized Payload config: an object with
@@ -19,13 +27,13 @@ function resolvedEditor(
   features: { key: string; sanitizedServerFeatureProps?: unknown; nodeTypes?: string[] }[],
 ) {
   const resolvedFeatureMap = new Map(
-    features.map((f) => [
-      f.key,
+    features.map((feature) => [
+      feature.key,
       {
-        sanitizedServerFeatureProps: f.sanitizedServerFeatureProps,
+        sanitizedServerFeatureProps: feature.sanitizedServerFeatureProps,
         // Mirror Payload's resolved-feature `nodes` shape: each entry is
         // `{ node }` where `node.getType()` returns the node's `type` string.
-        nodes: (f.nodeTypes ?? []).map((type) => ({ node: { getType: () => type } })),
+        nodes: (feature.nodeTypes ?? []).map((type) => ({ node: { getType: () => type } })),
       },
     ]),
   );

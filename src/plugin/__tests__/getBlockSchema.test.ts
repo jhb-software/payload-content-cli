@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest";
+import type { PayloadRequest } from "payload";
 import { getBlockSchema } from "../index.js";
 
 /** Build a mock PayloadRequest carrying top-level block definitions. */
-function mockReq(blocks: any[], user: any = { id: 1 }) {
-  return { user, payload: { config: { blocks } } };
+function mockReq(blocks: any[], user: any = { id: 1 }): PayloadRequest {
+  return { user, payload: { config: { blocks } } } as unknown as PayloadRequest;
 }
 
 describe("getBlockSchema", () => {
@@ -28,7 +29,7 @@ describe("getBlockSchema", () => {
     ]);
 
     const result = await getBlockSchema({ req, slugs: ["b", "a"] });
-    expect(result.map((r) => r.slug)).toEqual(["b", "a"]);
+    expect(result.map((block) => block.slug)).toEqual(["b", "a"]);
   });
 
   it("resolves nested blockReferences within a block via the shared map", async () => {

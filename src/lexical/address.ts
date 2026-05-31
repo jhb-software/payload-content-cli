@@ -8,11 +8,11 @@ export function parseAddress(str: string): Address {
   const parts = trimmed.split(".");
   const address: Address = [];
   for (const part of parts) {
-    const n = Number(part);
-    if (!Number.isInteger(n) || n < 0) {
+    const segment = Number(part);
+    if (!Number.isInteger(segment) || segment < 0) {
       throw new Error(`Invalid address segment "${part}" — must be a non-negative integer`);
     }
-    address.push(n);
+    address.push(segment);
   }
   return address;
 }

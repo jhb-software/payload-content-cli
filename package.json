@@ -66,6 +66,14 @@
     "dotenv": "^17.4.2",
     "zod": "^4.4.3"
   },
+  "peerDependencies": {
+    "payload": "^3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "payload": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@commitlint/cli": "^20.5.0",
     "@commitlint/config-conventional": "^20.5.0",
@@ -75,6 +83,7 @@
     "lint-staged": "^17.0.5",
     "oxfmt": "^0.50.0",
     "oxlint": "^1.65.0",
+    "payload": "3.84.1",
     "tsx": "^4.22.0",
     "typescript": "^6.0.3",
     "vitest": "4.1.6"

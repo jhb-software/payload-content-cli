@@ -24,7 +24,7 @@ async function cleanup() {
 
 async function readJsonDir(dir: string): Promise<string[]> {
   const entries = await fs.readdir(dir);
-  return entries.filter((f) => f.endsWith(".json") && !f.startsWith("_"));
+  return entries.filter((file) => file.endsWith(".json") && !file.startsWith("_"));
 }
 
 async function readJson(filePath: string): Promise<Record<string, unknown>> {
@@ -72,7 +72,7 @@ describe.skipIf(!hasRemoteEnv)("integration", () => {
       expect(schema.slug).toBe("posts");
 
       const fields = schema.fields as Array<{ name: string; type: string }>;
-      const titleField = fields.find((f) => f.name === "title");
+      const titleField = fields.find((field) => field.name === "title");
       expect(titleField).toBeDefined();
       expect(titleField!.type).toBe("text");
     });
@@ -84,13 +84,13 @@ describe.skipIf(!hasRemoteEnv)("integration", () => {
         virtual?: boolean;
       }>;
 
-      const pathField = fields.find((f) => f.name === "path");
+      const pathField = fields.find((field) => field.name === "path");
       expect(pathField?.virtual).toBe(true);
 
-      const breadcrumbsField = fields.find((f) => f.name === "breadcrumbs");
+      const breadcrumbsField = fields.find((field) => field.name === "breadcrumbs");
       expect(breadcrumbsField?.virtual).toBe(true);
 
-      const titleField = fields.find((f) => f.name === "title");
+      const titleField = fields.find((field) => field.name === "title");
       expect(titleField?.virtual).toBeUndefined();
     });
 
@@ -208,7 +208,7 @@ describe.skipIf(!hasRemoteEnv)("integration", () => {
 
       const result = await status(config);
       expect(result!.added.length).toBeGreaterThanOrEqual(1);
-      expect(result!.added.some((a) => a.includes("test-new-status"))).toBe(true);
+      expect(result!.added.some((addedPath) => addedPath.includes("test-new-status"))).toBe(true);
 
       await fs.unlink(newFile);
     });
@@ -291,7 +291,7 @@ describe.skipIf(!hasRemoteEnv)("integration", () => {
         limit: 100,
       });
       const created = response.docs.find(
-        (d) => (d as Record<string, unknown>).slug === "push-create-test",
+        (doc) => (doc as Record<string, unknown>).slug === "push-create-test",
       ) as Record<string, unknown> | undefined;
       expect(created).toBeDefined();
       expect(created!.name).toBe("Push Create Test");
@@ -347,8 +347,8 @@ describe.skipIf(!hasRemoteEnv)("integration", () => {
       // After push, manifest is updated — but note the file content still differs
       // from what the server returns (we wrote it, server may add fields)
       const manifest = await loadManifest(CONTENT_DIR);
-      const key = Object.keys(manifest!.documents).find((k) =>
-        k.includes(files[0].replace(".json", "")),
+      const key = Object.keys(manifest!.documents).find((candidate) =>
+        candidate.includes(files[0].replace(".json", "")),
       );
       expect(key).toBeDefined();
       expect(manifest!.documents[key!].updatedAt).toBeTruthy();
@@ -394,12 +394,14 @@ describe.skipIf(!hasRemoteEnv)("integration", () => {
       expect(Array.isArray(schema!.endpoints)).toBe(true);
 
       // The example project registers /example-plugin/stats (GET) and /example-plugin/publish-all (POST)
-      const stats = schema!.endpoints!.find((ep) => ep.path === "/api/example-plugin/stats");
+      const stats = schema!.endpoints!.find(
+        (endpoint) => endpoint.path === "/api/example-plugin/stats",
+      );
       expect(stats).toBeDefined();
       expect(stats!.method).toBe("get");
 
       const publishAll = schema!.endpoints!.find(
-        (ep) => ep.path === "/api/example-plugin/publish-all",
+        (endpoint) => endpoint.path === "/api/example-plugin/publish-all",
       );
       expect(publishAll).toBeDefined();
       expect(publishAll!.method).toBe("post");
@@ -411,7 +413,9 @@ describe.skipIf(!hasRemoteEnv)("integration", () => {
         endpoints?: { path: string }[];
       } | null;
 
-      const schemaEndpoint = schema!.endpoints!.find((ep) => ep.path === "/api/content-cli/schema");
+      const schemaEndpoint = schema!.endpoints!.find(
+        (endpoint) => endpoint.path === "/api/content-cli/schema",
+      );
       expect(schemaEndpoint).toBeUndefined();
     });
 
@@ -538,8 +542,9 @@ describe.skipIf(!hasRemoteEnv)("integration", () => {
         depth: 0,
       });
       const originalVersion = (versions.docs as Record<string, unknown>[]).find(
-        (v) =>
-          ((v.version as Record<string, unknown>).excerpt as string) === "version-test-original",
+        (version) =>
+          ((version.version as Record<string, unknown>).excerpt as string) ===
+          "version-test-original",
       );
       expect(originalVersion).toBeDefined();
 
@@ -613,7 +618,7 @@ describe.skipIf(!hasRemoteEnv)("integration", () => {
       const files = await readJsonDir(postsDir);
 
       // Files should have _de suffix
-      expect(files.every((f) => f.endsWith("_de.json"))).toBe(true);
+      expect(files.every((file) => file.endsWith("_de.json"))).toBe(true);
 
       const post = await readJson(path.join(postsDir, files[0]));
       // Localized fields must be flat strings
@@ -627,8 +632,8 @@ describe.skipIf(!hasRemoteEnv)("integration", () => {
       const postsDir = path.join(CONTENT_DIR, "collections", "posts");
       const files = await readJsonDir(postsDir);
 
-      const enFiles = files.filter((f) => f.endsWith("_en.json"));
-      const deFiles = files.filter((f) => f.endsWith("_de.json"));
+      const enFiles = files.filter((file) => file.endsWith("_en.json"));
+      const deFiles = files.filter((file) => file.endsWith("_de.json"));
       expect(enFiles.length).toBeGreaterThan(0);
       expect(deFiles.length).toBeGreaterThan(0);
       expect(enFiles.length).toBe(deFiles.length);
@@ -640,7 +645,7 @@ describe.skipIf(!hasRemoteEnv)("integration", () => {
 
       const manifest = await loadManifest(CONTENT_DIR);
       const keys = Object.keys(manifest!.documents);
-      expect(keys.every((k) => k.endsWith("_de.json"))).toBe(true);
+      expect(keys.every((key) => key.endsWith("_de.json"))).toBe(true);
     });
 
     it("omits locale from filenames and manifest keys when not specified", async () => {
@@ -650,11 +655,15 @@ describe.skipIf(!hasRemoteEnv)("integration", () => {
       const postsDir = path.join(CONTENT_DIR, "collections", "posts");
       const files = await readJsonDir(postsDir);
       // No locale suffix
-      expect(files.every((f) => !f.includes("_en.json") && !f.includes("_de.json"))).toBe(true);
+      expect(files.every((file) => !file.includes("_en.json") && !file.includes("_de.json"))).toBe(
+        true,
+      );
 
       const manifest = await loadManifest(CONTENT_DIR);
       const keys = Object.keys(manifest!.documents);
-      expect(keys.every((k) => !k.includes("_en.json") && !k.includes("_de.json"))).toBe(true);
+      expect(keys.every((key) => !key.includes("_en.json") && !key.includes("_de.json"))).toBe(
+        true,
+      );
     });
   });
 }); // describe.skipIf

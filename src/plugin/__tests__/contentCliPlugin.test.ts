@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { contentCliPlugin } from "../index.js";
+import { contentCliPlugin as contentCliPluginStrict } from "../index.js";
+
+// Tests drive the plugin with partial Payload config/request mocks; loosen the
+// config input and result shape here. The strict signature (Config -> Config)
+// is exercised by the plugin source under `tsc`.
+const contentCliPlugin = contentCliPluginStrict as unknown as (
+  options?: Parameters<typeof contentCliPluginStrict>[0],
+) => (config: unknown) => { endpoints: any[] };
 
 describe("contentCliPlugin endpoint metadata", () => {
   it("resolves full paths and captures custom metadata", async () => {
@@ -54,7 +61,9 @@ describe("contentCliPlugin endpoint metadata", () => {
     };
 
     const result = plugin(config);
-    const schemaEndpoint = result.endpoints.find((ep: any) => ep.path === "/content-cli/schema");
+    const schemaEndpoint = result.endpoints.find(
+      (endpoint: any) => endpoint.path === "/content-cli/schema",
+    );
 
     const mockReq = {
       user: { id: 1 },
@@ -99,7 +108,9 @@ describe("contentCliPlugin endpoint metadata", () => {
   it("returns 401 when the request has no authenticated user", async () => {
     const plugin = contentCliPlugin();
     const result = plugin({ endpoints: [] });
-    const schemaEndpoint = result.endpoints.find((ep: any) => ep.path === "/content-cli/schema");
+    const schemaEndpoint = result.endpoints.find(
+      (endpoint: any) => endpoint.path === "/content-cli/schema",
+    );
 
     const response = await schemaEndpoint.handler({ user: null, payload: {} });
     expect(response.status).toBe(401);
@@ -111,7 +122,9 @@ describe("contentCliPlugin endpoint metadata", () => {
       access: (req: any) => req.headers?.get("x-secret") === "open-sesame",
     });
     const result = plugin({ endpoints: [] });
-    const schemaEndpoint = result.endpoints.find((ep: any) => ep.path === "/content-cli/schema");
+    const schemaEndpoint = result.endpoints.find(
+      (endpoint: any) => endpoint.path === "/content-cli/schema",
+    );
 
     // denied — wrong secret
     const denied = await schemaEndpoint.handler({
@@ -141,7 +154,9 @@ describe("contentCliPlugin endpoint metadata", () => {
       },
     });
     const result = plugin({ endpoints: [] });
-    const schemaEndpoint = result.endpoints.find((ep: any) => ep.path === "/content-cli/schema");
+    const schemaEndpoint = result.endpoints.find(
+      (endpoint: any) => endpoint.path === "/content-cli/schema",
+    );
 
     const mockReq = {
       user: null,
@@ -166,7 +181,7 @@ describe("contentCliPlugin per-entity read access", () => {
   function getSchemaEndpoint(config: any) {
     const plugin = contentCliPlugin();
     const result = plugin(config);
-    return result.endpoints.find((ep: any) => ep.path === "/content-cli/schema");
+    return result.endpoints.find((endpoint: any) => endpoint.path === "/content-cli/schema");
   }
 
   it("omits collections whose access.read returns false", async () => {
@@ -301,7 +316,7 @@ describe("contentCliPlugin per-entity read access", () => {
       })
     ).json();
 
-    const paths = body.endpoints.map((e: any) => e.path);
+    const paths = body.endpoints.map((endpoint: any) => endpoint.path);
     expect(paths).toContain("/api/stats");
     expect(paths).toContain("/api/posts/publish");
     expect(paths).not.toContain("/api/secrets/leak");
@@ -337,7 +352,7 @@ describe("contentCliPlugin per-entity read access", () => {
       })
     ).json();
 
-    const paths = body.endpoints.map((e: any) => e.path);
+    const paths = body.endpoints.map((endpoint: any) => endpoint.path);
     expect(paths).toContain("/api/globals/settings/refresh");
     expect(paths).not.toContain("/api/globals/hidden/peek");
   });

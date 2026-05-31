@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1
+
+- fix: the plugin's exported API (`contentCliPlugin`, `toFieldSchemas`, `getEntitySchema`, `getBlockSchema`, `listReadableEntities`) is now typed against Payload's own `Config`/`Field`/`PayloadRequest` shapes instead of `any`, so consumers get type-checking and autocomplete. `payload` is declared as an optional peer dependency and imported type-only — nothing is added to the runtime.
+
 ## 0.3.0
 
 - feat: the plugin entry now exports the schema API for building custom tools (e.g. `listEntities` + `getEntitySchema` + `getBlockSchema` MCP tools) without going through HTTP. `listReadableEntities({ req })` returns the readable collection/global slugs plus localization; `getEntitySchema({ req, type, slug })` returns the same `{ slug, fields, jsonSchema }` the `/schema` endpoint produces for one entity; `getBlockSchema({ req, slugs })` resolves richText block slugs to `{ slug, fields }`.

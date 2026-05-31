@@ -3,15 +3,25 @@
  *
  * Projects a `richText` field's lexical editor config into a
  * `LexicalFeatureSummary` describing the nodes an agent may emit. Detection is
- * structural, so there is no hard dependency on `@payloadcms/richtext-lexical`.
- *
- * Types are kept inline to avoid a hard dependency on `payload`.
+ * structural — it probes the resolved editor config without naming any
+ * `@payloadcms/richtext-lexical` type — so the plugin never depends on the
+ * lexical package, only on `payload`'s own `Field`/`Block` types.
  */
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
+import type { Block } from "payload";
 
 import { toFieldSchemas } from "./fields.js";
 import type { FieldSchema } from "./fields.js";
+
+/** Narrow an unknown to a plain (non-array) object so its keys can be read. */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+/** Read one property off an unknown value, returning `undefined` for non-objects. */
+function getProp(value: unknown, key: string): unknown {
+  return isRecord(value) ? value[key] : undefined;
+}
 
 /**
  * Per-`richText`-field summary of the lexical editor's enabled nodes.
@@ -146,12 +156,12 @@ const KNOWN_NODE_TYPES = new Set([
 ]);
 
 /** Pull a feature's resolved props off whichever shape carries them. */
-function toProps(feature: any): Record<string, unknown> {
+function toProps(feature: unknown): Record<string, unknown> {
   const candidate =
-    feature?.sanitizedServerFeatureProps ?? feature?.serverFeatureProps ?? feature?.props ?? {};
-  return candidate && typeof candidate === "object" && !Array.isArray(candidate)
-    ? (candidate as Record<string, unknown>)
-    : {};
+    getProp(feature, "sanitizedServerFeatureProps") ??
+    getProp(feature, "serverFeatureProps") ??
+    getProp(feature, "props");
+  return isRecord(candidate) ? candidate : {};
 }
 
 /**
@@ -161,17 +171,18 @@ function toProps(feature: any): Record<string, unknown> {
  * Returns `[]` for features that register no nodes (text-format marks, layout,
  * editor chrome) or shapes without resolved nodes (e.g. unit-test fixtures).
  */
-function nodeTypesOf(feature: any): string[] {
-  const nodes = feature?.nodes;
+function nodeTypesOf(feature: unknown): string[] {
+  const nodes = getProp(feature, "nodes");
   if (!Array.isArray(nodes)) return [];
   const types: string[] = [];
-  for (const n of nodes) {
-    const entry = n?.node;
+  for (const node of nodes) {
+    const entry = getProp(node, "node");
     if (!entry) continue;
-    const target = typeof entry === "object" && "with" in entry ? entry.replace : entry;
-    if (target && typeof target.getType === "function") {
+    const target = isRecord(entry) && "with" in entry ? getProp(entry, "replace") : entry;
+    const getType = getProp(target, "getType");
+    if (typeof getType === "function") {
       try {
-        const type = target.getType();
+        const type = (getType as () => unknown).call(target);
         if (typeof type === "string") types.push(type);
       } catch {
         // A node whose getType throws without an instance is not authorable
@@ -198,10 +209,12 @@ function nodeTypesOf(feature: any): string[] {
  */
 type NormalizedFeature = { key: string; props: Record<string, unknown>; nodeTypes: string[] };
 
-function normalizeLexicalFeatures(editor: any): NormalizedFeature[] | undefined {
-  if (!editor || typeof editor !== "object") return undefined;
+function normalizeLexicalFeatures(editor: unknown): NormalizedFeature[] | undefined {
+  if (!isRecord(editor)) return undefined;
 
-  const resolvedMap = editor.editorConfig?.resolvedFeatureMap ?? editor.resolvedFeatureMap;
+  const resolvedMap =
+    getProp(getProp(editor, "editorConfig"), "resolvedFeatureMap") ??
+    getProp(editor, "resolvedFeatureMap");
   if (resolvedMap instanceof Map) {
     const entries: NormalizedFeature[] = [];
     for (const [key, value] of resolvedMap.entries()) {
@@ -211,10 +224,15 @@ function normalizeLexicalFeatures(editor: any): NormalizedFeature[] | undefined 
     return entries;
   }
 
-  if (Array.isArray(editor.features)) {
-    return editor.features
-      .filter((f: any) => f && typeof f === "object" && typeof f.key === "string")
-      .map((f: any) => ({ key: f.key, props: toProps(f), nodeTypes: nodeTypesOf(f) }));
+  const features = editor.features;
+  if (Array.isArray(features)) {
+    const result: NormalizedFeature[] = [];
+    for (const feature of features) {
+      const key = getProp(feature, "key");
+      if (typeof key !== "string") continue;
+      result.push({ key, props: toProps(feature), nodeTypes: nodeTypesOf(feature) });
+    }
+    return result;
   }
 
   return undefined;
@@ -232,8 +250,8 @@ function normalizeLexicalFeatures(editor: any): NormalizedFeature[] | undefined 
  * map. Returns `undefined` when no recognizable features are present.
  */
 export function extractLexicalSummary(
-  field: any,
-  blocksBySlug: Record<string, any>,
+  field: { editor?: unknown },
+  blocksBySlug: Record<string, Block>,
 ): LexicalFeatureSummary | undefined {
   const normalized = normalizeLexicalFeatures(field.editor);
   if (!normalized || normalized.length === 0) return undefined;
@@ -288,7 +306,7 @@ export function extractLexicalSummary(
       const sizes = props.enabledHeadingSizes;
       blockNodes.heading = {
         sizes:
-          Array.isArray(sizes) && sizes.every((s) => typeof s === "string")
+          Array.isArray(sizes) && sizes.every((size) => typeof size === "string")
             ? (sizes as string[])
             : ["h1", "h2", "h3", "h4", "h5", "h6"],
       };
@@ -332,16 +350,12 @@ export function extractLexicalSummary(
       // `collections: { [slug]: { fields } }` adds custom fields to the upload
       // node when it targets that collection — surface them keyed by slug.
       const collections = props.collections;
-      if (collections && typeof collections === "object" && !Array.isArray(collections)) {
+      if (isRecord(collections)) {
         const fieldsByCollection: Record<string, FieldSchema[]> = {};
-        for (const [slug, cfg] of Object.entries(collections as Record<string, any>)) {
-          if (
-            cfg &&
-            typeof cfg === "object" &&
-            Array.isArray(cfg.fields) &&
-            cfg.fields.length > 0
-          ) {
-            fieldsByCollection[slug] = toFieldSchemas(cfg.fields, blocksBySlug);
+        for (const [slug, cfg] of Object.entries(collections)) {
+          const cfgFields = getProp(cfg, "fields");
+          if (Array.isArray(cfgFields) && cfgFields.length > 0) {
+            fieldsByCollection[slug] = toFieldSchemas(cfgFields, blocksBySlug);
           }
         }
         if (Object.keys(fieldsByCollection).length > 0) uploadOpts.fields = fieldsByCollection;
@@ -395,7 +409,7 @@ export function extractLexicalSummary(
  */
 function extractBlockSlugs(
   props: Record<string, unknown>,
-  blocksBySlug: Record<string, any>,
+  blocksBySlug: Record<string, Block>,
 ): string[] | undefined {
   const raw = props.blocks;
   if (!Array.isArray(raw)) return undefined;
@@ -403,9 +417,11 @@ function extractBlockSlugs(
   for (const entry of raw) {
     if (typeof entry === "string") {
       slugs.push(entry);
-    } else if (entry && typeof entry === "object" && typeof entry.slug === "string") {
+    } else if (isRecord(entry) && typeof entry.slug === "string") {
       slugs.push(entry.slug);
-      if (!(entry.slug in blocksBySlug)) blocksBySlug[entry.slug] = entry;
+      // Inline `Block` objects declared on the feature are registered so later
+      // `blockReferences` to them resolve; they're structurally Block configs.
+      if (!(entry.slug in blocksBySlug)) blocksBySlug[entry.slug] = entry as unknown as Block;
     }
   }
   return slugs.length > 0 ? slugs : undefined;
@@ -418,6 +434,6 @@ function extractBlockSlugs(
  */
 function toStringArray(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) return undefined;
-  if (value.every((v) => typeof v === "string")) return value;
+  if (value.every((item) => typeof item === "string")) return value;
   return undefined;
 }

@@ -7,10 +7,11 @@
  * and `blockReferences` are resolved against the shared block map. Each
  * `richText` field carries a `lexicalFeatures` summary (see `./lexical.ts`).
  *
- * Types are kept inline to avoid a hard dependency on `payload`.
+ * Uses type-only imports from `payload`, so the package never pulls Payload in
+ * at runtime.
  */
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
+import type { Block, Field, Tab } from "payload";
 
 import { extractLexicalSummary } from "./lexical.js";
 import type { LexicalFeatureSummary } from "./lexical.js";
@@ -30,22 +31,50 @@ export interface FieldSchema {
   lexicalFeatures?: LexicalFeatureSummary;
 }
 
-// Alternative: import { flattenTopLevelFields } from 'payload/utilities/flattenTopLevelFields'
-// with moveSubFieldsToTop: true — but that adds a hard dependency on `payload`.
+/**
+ * Permissive read-view over Payload's `Field` union for structural projection.
+ *
+ * `toFieldSchemas` walks every field type generically, probing properties
+ * (`name`, `fields`, `blocks`, `tabs`, `options`, …) as they appear rather than
+ * narrowing the 20-member discriminated union member by member. The public
+ * signature still takes the real `Field`/`Block` types; this view is only how
+ * the body reads each field. Nested `fields`/`tabs`/`blocks` keep their real
+ * Payload types so recursion stays type-checked; `options` is intentionally
+ * narrowed to the string-label shape the CLI projects.
+ */
+interface FieldView {
+  type: string;
+  name?: string;
+  required?: boolean;
+  localized?: boolean;
+  virtual?: boolean;
+  hasMany?: boolean;
+  relationTo?: string | string[];
+  defaultValue?: unknown;
+  fields?: Field[];
+  tabs?: Tab[];
+  blocks?: Block[];
+  blockReferences?: (Block | string)[];
+  options?: (string | { label: string; value: string })[];
+  editor?: unknown;
+}
+
+// Alternative: import { flattenTopLevelFields } from 'payload/shared' with
+// moveSubFieldsToTop: true — but that adds a runtime dependency on `payload`.
 export function toFieldSchemas(
-  fields: any[],
-  blocksBySlug: Record<string, any> = {},
+  fields: Field[],
+  blocksBySlug: Record<string, Block> = {},
 ): FieldSchema[] {
   const result: FieldSchema[] = [];
 
-  for (const field of fields) {
+  for (const field of fields as unknown as FieldView[]) {
     // UI fields are admin-only React widgets — no data, irrelevant to agents.
     if (field.type === "ui") continue;
 
     // Tabs field: hoist unnamed tab fields, keep named tabs as nested
     if (field.type === "tabs" && Array.isArray(field.tabs)) {
       for (const tab of field.tabs) {
-        if (tab.name) {
+        if ("name" in tab && tab.name) {
           // Named tab — behaves like a group
           result.push({
             name: tab.name,
@@ -93,10 +122,10 @@ export function toFieldSchemas(
     }
 
     // Resolve inline blocks + blockReferences (slugs pointing to config.blocks)
-    const inlineBlocks: any[] = field.blocks && Array.isArray(field.blocks) ? field.blocks : [];
-    const refBlocks: any[] = Array.isArray(field.blockReferences)
+    const inlineBlocks: Block[] = Array.isArray(field.blocks) ? field.blocks : [];
+    const refBlocks: Block[] = Array.isArray(field.blockReferences)
       ? field.blockReferences
-          .map((blockRef: any) => {
+          .map((blockRef) => {
             const slug = typeof blockRef === "string" ? blockRef : blockRef.slug;
             return blocksBySlug[slug];
           })
@@ -105,14 +134,14 @@ export function toFieldSchemas(
     const allBlocks = [...inlineBlocks, ...refBlocks];
 
     if (allBlocks.length > 0) {
-      schema.blocks = allBlocks.map((block: any) => ({
+      schema.blocks = allBlocks.map((block) => ({
         slug: block.slug,
         fields: toFieldSchemas(block.fields || [], blocksBySlug),
       }));
     }
 
     if (field.options && Array.isArray(field.options)) {
-      schema.options = field.options.map((option: any) =>
+      schema.options = field.options.map((option) =>
         typeof option === "string"
           ? { label: option, value: option }
           : { label: option.label, value: option.value },

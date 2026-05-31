@@ -13,11 +13,11 @@
  *
  * This module is the Payload plugin wiring (endpoint capture, response
  * assembly). The reusable schema API lives in `./schemaApi.ts`, field/JSON-schema
- * projection in `./fields.ts`, `./lexical.ts`, and `./jsonSchema.ts`. Types are
- * kept inline to avoid a hard dependency on `payload`.
+ * projection in `./fields.ts`, `./lexical.ts`, and `./jsonSchema.ts`. All Payload
+ * types are imported type-only, so the package never pulls Payload in at runtime.
  */
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
+import type { Config, PayloadRequest } from "payload";
 
 import { buildBlocksBySlug, buildLocalization, canRead, entityToSchema } from "./schemaApi.js";
 import type { FieldSchema } from "./fields.js";
@@ -60,18 +60,22 @@ interface EndpointSchema {
 }
 
 /** Extract optional CLI metadata from an endpoint's `custom` property. */
-export function extractEndpointMeta(custom: any): Pick<EndpointSchema, "description" | "schema"> {
+export function extractEndpointMeta(
+  custom: unknown,
+): Pick<EndpointSchema, "description" | "schema"> {
   if (!custom || typeof custom !== "object") return {};
+  const customRecord = custom as Record<string, unknown>;
   const meta: Pick<EndpointSchema, "description" | "schema"> = {};
-  if (typeof custom.description === "string") meta.description = custom.description;
-  if (custom.schema && typeof custom.schema === "object") {
+  if (typeof customRecord.description === "string") meta.description = customRecord.description;
+  if (customRecord.schema && typeof customRecord.schema === "object") {
+    const schemaRecord = customRecord.schema as Record<string, unknown>;
     const schema: NonNullable<EndpointSchema["schema"]> = {};
-    if (custom.schema.query && typeof custom.schema.query === "object")
-      schema.query = custom.schema.query;
-    if (custom.schema.body && typeof custom.schema.body === "object")
-      schema.body = custom.schema.body;
-    if (custom.schema.response && typeof custom.schema.response === "object")
-      schema.response = custom.schema.response;
+    if (schemaRecord.query && typeof schemaRecord.query === "object")
+      schema.query = schemaRecord.query as Record<string, unknown>;
+    if (schemaRecord.body && typeof schemaRecord.body === "object")
+      schema.body = schemaRecord.body as Record<string, unknown>;
+    if (schemaRecord.response && typeof schemaRecord.response === "object")
+      schema.response = schemaRecord.response as Record<string, unknown>;
     if (Object.keys(schema).length > 0) meta.schema = schema;
   }
   return meta;
@@ -80,7 +84,7 @@ export function extractEndpointMeta(custom: any): Pick<EndpointSchema, "descript
 export interface ContentCliPluginOptions {
   /** Override the default auth check for the /schema endpoint.
    *  Return true to allow access, false to deny. */
-  access?: (req: any) => boolean | Promise<boolean>;
+  access?: (req: PayloadRequest) => boolean | Promise<boolean>;
 }
 
 type ScopedEndpoint = EndpointSchema & {
@@ -88,7 +92,7 @@ type ScopedEndpoint = EndpointSchema & {
 };
 
 export function contentCliPlugin(options?: ContentCliPluginOptions) {
-  return (config: any): any => {
+  return (config: Config): Config => {
     // Capture custom endpoints from the raw user config before Payload
     // merges its built-in CRUD/auth routes into the runtime config.
     const customEndpoints: ScopedEndpoint[] = [];
@@ -103,7 +107,7 @@ export function contentCliPlugin(options?: ContentCliPluginOptions) {
     }
 
     for (const collection of config.collections ?? []) {
-      for (const endpoint of collection.endpoints ?? []) {
+      for (const endpoint of collection.endpoints || []) {
         customEndpoints.push({
           path: `/api/${collection.slug}${endpoint.path}`,
           method: endpoint.method,
@@ -114,7 +118,7 @@ export function contentCliPlugin(options?: ContentCliPluginOptions) {
     }
 
     for (const global of config.globals ?? []) {
-      for (const endpoint of global.endpoints ?? []) {
+      for (const endpoint of global.endpoints || []) {
         customEndpoints.push({
           path: `/api/globals/${global.slug}${endpoint.path}`,
           method: endpoint.method,
@@ -131,7 +135,7 @@ export function contentCliPlugin(options?: ContentCliPluginOptions) {
         {
           path: "/content-cli/schema",
           method: "get",
-          handler: async (req: any) => {
+          handler: async (req: PayloadRequest) => {
             const allowed = options?.access ? await options.access(req) : !!req.user;
             if (!allowed) {
               return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -164,12 +168,12 @@ export function contentCliPlugin(options?: ContentCliPluginOptions) {
             }
 
             const endpoints: EndpointSchema[] = customEndpoints
-              .filter((ep) => {
-                if (!ep._scope) return true;
-                if (ep._scope.type === "collection") {
-                  return readableCollections.has(ep._scope.slug);
+              .filter((endpoint) => {
+                if (!endpoint._scope) return true;
+                if (endpoint._scope.type === "collection") {
+                  return readableCollections.has(endpoint._scope.slug);
                 }
-                return readableGlobals.has(ep._scope.slug);
+                return readableGlobals.has(endpoint._scope.slug);
               })
               .map(({ _scope, ...rest }) => rest);
 

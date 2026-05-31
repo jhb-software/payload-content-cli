@@ -49,6 +49,9 @@ importers:
       oxlint:
         specifier: ^1.65.0
         version: 1.65.0
+      payload:
+        specifier: 3.84.1
+        version: 3.84.1(graphql@16.14.0)(typescript@6.0.3)
       tsx:
         specifier: ^4.22.0
         version: 4.22.0

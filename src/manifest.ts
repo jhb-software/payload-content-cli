@@ -34,6 +34,24 @@ export function parseLocaleFilename(filename: string): {
   return { base: stem };
 }
 
+/**
+ * In Payload, `updatedAt` is a document-level field shared across all locales,
+ * so pushing one locale bumps it for every locale of the same document. Given a
+ * manifest key, these are the keys of the other locale files for the same
+ * document (same directory and base id). A push uses them to propagate the new
+ * `updatedAt`, so the next locale's push doesn't see a self-inflicted conflict.
+ */
+export function siblingLocaleKeys(documents: Record<string, DocumentEntry>, key: string): string[] {
+  const dir = path.dirname(key);
+  const { base, locale } = parseLocaleFilename(path.basename(key));
+  if (!locale) return [];
+  return Object.keys(documents).filter((k) => {
+    if (k === key || path.dirname(k) !== dir) return false;
+    const sibling = parseLocaleFilename(path.basename(k));
+    return sibling.locale !== undefined && sibling.base === base;
+  });
+}
+
 export async function loadManifest(outputDir: string): Promise<Manifest | null> {
   try {
     const raw = await fs.readFile(path.join(outputDir, ".manifest.json"), "utf-8");

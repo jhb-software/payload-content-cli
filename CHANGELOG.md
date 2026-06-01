@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- fix: pushing one locale of a document no longer triggers a false "remote was modified" conflict when pushing another locale of the same document. `updatedAt` is document-level in Payload, so the first push bumps it for every locale; the push now propagates the new `updatedAt` to the sibling locale entries in the manifest instead of mistaking its own bump for a remote change.
+
 ## 0.3.0
 
 - feat: the plugin entry now exports the schema API for building custom tools (e.g. `listEntities` + `getEntitySchema` + `getBlockSchema` MCP tools) without going through HTTP. `listReadableEntities({ req })` returns the readable collection/global slugs plus localization; `getEntitySchema({ req, type, slug })` returns the same `{ slug, fields, jsonSchema }` the `/schema` endpoint produces for one entity; `getBlockSchema({ req, slugs })` resolves richText block slugs to `{ slug, fields }`.

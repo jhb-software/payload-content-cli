@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { loadConfig, requireRemoteConfig } from "../config.js";
@@ -374,6 +374,67 @@ describe.skipIf(!hasRemoteEnv)("integration", () => {
       // Restore file
       content.title = beforeDoc.title;
       await fs.writeFile(filePath, JSON.stringify(content, null, 2) + "\n");
+    });
+  });
+
+  // ─── Multi-locale push ───────────────────────────────────────────────────
+
+  describe("multi-locale push", () => {
+    beforeAll(async () => {
+      await cleanup();
+      await pull(config, { locales: ["en", "de"] });
+    });
+
+    it("pushing one locale does not flag a self-inflicted conflict on the next locale of the same document", async () => {
+      const postsDir = path.join(CONTENT_DIR, "collections", "posts");
+      const files = await readJsonDir(postsDir);
+      const enFile = files.find((f) => f.endsWith("_en.json"))!;
+      const base = enFile.replace(/_en\.json$/, "");
+      const enPath = path.join(postsDir, enFile);
+      const dePath = path.join(postsDir, `${base}_de.json`);
+
+      const enContent = await readJson(enPath);
+      const deContent = await readJson(dePath);
+      const id = enContent.id as string;
+      const originalEnTitle = enContent.title;
+      const originalDeTitle = deContent.title;
+
+      const stamp = Date.now();
+      const enTitle = `EN multi-locale ${stamp}`;
+      const deTitle = `DE multi-locale ${stamp}`;
+      enContent.title = enTitle;
+      deContent.title = deTitle;
+      await fs.writeFile(enPath, JSON.stringify(enContent, null, 2) + "\n");
+      await fs.writeFile(dePath, JSON.stringify(deContent, null, 2) + "\n");
+
+      // Push DE first (bumps the document-level updatedAt), then EN. The EN push
+      // must not interpret the DE push as a remote modification and skip it as a
+      // conflict. No --force, so a conflict would actually block the EN write.
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+      try {
+        await push(config, { files: [dePath] });
+        await push(config, { files: [enPath] });
+      } finally {
+        warn.mockRestore();
+        exit.mockRestore();
+      }
+
+      // Both locales must have landed. Before the fix, the EN push was skipped as
+      // a conflict and the remote EN title stayed unchanged.
+      const client = new PayloadClient(config);
+      const enDoc = await client.getDoc("posts", id, { locale: "en" });
+      const deDoc = await client.getDoc("posts", id, { locale: "de" });
+      expect(enDoc.title).toBe(enTitle);
+      expect(deDoc.title).toBe(deTitle);
+      expect(exit).not.toHaveBeenCalled();
+
+      // Restore both locales
+      enContent.title = originalEnTitle;
+      deContent.title = originalDeTitle;
+      await fs.writeFile(enPath, JSON.stringify(enContent, null, 2) + "\n");
+      await fs.writeFile(dePath, JSON.stringify(deContent, null, 2) + "\n");
+      await push(config, { files: [enPath, dePath], force: true });
     });
   });
 

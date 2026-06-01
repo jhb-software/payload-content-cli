@@ -7,6 +7,7 @@ import {
   saveManifest,
   contentHash,
   parseLocaleFilename,
+  siblingLocaleKeys,
   type Manifest,
 } from "./manifest.js";
 import { status } from "./status.js";
@@ -53,6 +54,26 @@ export function parseContentPath(filePath: string, outputDir: string): ContentEn
   }
 
   return null;
+}
+
+function recordPush(
+  manifest: Manifest,
+  outputDir: string,
+  filePath: string,
+  raw: string,
+  updatedAt: string | null,
+): void {
+  const key = path.relative(outputDir, filePath);
+  manifest.documents[key] = { hash: contentHash(raw), updatedAt };
+  // `updatedAt` is document-level in Payload, so this push also bumped it for
+  // every other locale of the same document. Propagate the new value to the
+  // sibling locale entries so a later push of those locales doesn't mistake our
+  // own bump for a remote modification and skip it as a conflict.
+  if (updatedAt) {
+    for (const sibling of siblingLocaleKeys(manifest.documents, key)) {
+      manifest.documents[sibling].updatedAt = updatedAt;
+    }
+  }
 }
 
 async function checkConflict(
@@ -180,11 +201,13 @@ export async function push(config: Config, options: PushOptions = {}): Promise<v
         console.log(`  Updated global: ${entry.collection}`);
         pushed++;
         if (manifest) {
-          const key = path.relative(outputDir, entry.filePath);
-          manifest.documents[key] = {
-            hash: contentHash(raw),
-            updatedAt: (result.updatedAt as string) ?? null,
-          };
+          recordPush(
+            manifest,
+            outputDir,
+            entry.filePath,
+            raw,
+            (result.updatedAt as string) ?? null,
+          );
         }
       } catch (err) {
         console.error(`  Failed to update global ${entry.collection}: ${(err as Error).message}`);
@@ -223,11 +246,13 @@ export async function push(config: Config, options: PushOptions = {}): Promise<v
           console.log(`  Updated ${entry.collection}/${id}`);
           pushed++;
           if (manifest) {
-            const key = path.relative(outputDir, entry.filePath);
-            manifest.documents[key] = {
-              hash: contentHash(raw),
-              updatedAt: (result.updatedAt as string) ?? null,
-            };
+            recordPush(
+              manifest,
+              outputDir,
+              entry.filePath,
+              raw,
+              (result.updatedAt as string) ?? null,
+            );
           }
         } catch (err) {
           if (err instanceof PayloadApiError && err.isNotFound) {

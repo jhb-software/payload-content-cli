@@ -43,8 +43,11 @@ export async function status(config: Config): Promise<StatusResult | null> {
     try {
       entries = await fs.readdir(dir, { withFileTypes: true });
     } catch (error) {
-      if (dir === collectionsRoot || dir === globalsRoot) {
-        const err = error as NodeJS.ErrnoException;
+      const err = error as NodeJS.ErrnoException;
+      // A missing root directory is normal: it just means that content type
+      // wasn't pulled (e.g. a collections-only pull leaves no globals/ dir).
+      // Only surface genuine errors (permissions, etc.).
+      if (err.code !== "ENOENT" && (dir === collectionsRoot || dir === globalsRoot)) {
         const detail = err.code ? `${err.code}: ${err.message}` : String(error);
         console.warn(`Could not scan content directory "${dir}" (${detail}).`);
       }

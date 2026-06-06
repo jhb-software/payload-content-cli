@@ -10,6 +10,7 @@ import {
   type Manifest,
 } from "./manifest.js";
 import { status } from "./status.js";
+import { loadEntitySchemas, remoteContentChanged, type EntitySchemas } from "./conflict.js";
 
 export interface PushOptions {
   files?: string[];
@@ -55,33 +56,46 @@ export function parseContentPath(filePath: string, outputDir: string): ContentEn
   return null;
 }
 
+function recordPush(
+  manifest: Manifest,
+  outputDir: string,
+  filePath: string,
+  raw: string,
+  updatedAt: string | null,
+): void {
+  const key = path.relative(outputDir, filePath);
+  manifest.documents[key] = { hash: contentHash(raw), updatedAt };
+}
+
 async function checkConflict(
   client: PayloadClient,
   entry: ContentEntry,
   manifest: Manifest | null,
   outputDir: string,
+  schemas: EntitySchemas | null,
+  draft: boolean | undefined,
 ): Promise<string | null> {
-  if (!manifest) return null;
+  if (!manifest || !schemas) return null;
 
   const key = path.relative(outputDir, entry.filePath);
   const manifestEntry = manifest.documents[key];
-  if (!manifestEntry?.updatedAt) return null;
+  if (!manifestEntry) return null;
 
   try {
-    let remoteDoc: Record<string, unknown>;
-    if (entry.type === "global") {
-      remoteDoc = await client.getGlobal(entry.collection, {
+    const changed = await remoteContentChanged(
+      client,
+      {
+        type: entry.type,
+        collection: entry.collection,
+        id: entry.id,
         locale: entry.locale,
-      });
-    } else {
-      remoteDoc = await client.getDoc(entry.collection, entry.id!, {
-        locale: entry.locale,
-      });
-    }
-
-    const remoteUpdatedAt = remoteDoc.updatedAt as string | undefined;
-    if (remoteUpdatedAt && remoteUpdatedAt !== manifestEntry.updatedAt) {
-      return `Remote was modified after your last pull (remote: ${remoteUpdatedAt}, pulled: ${manifestEntry.updatedAt})`;
+        draft,
+      },
+      manifestEntry.hash,
+      schemas,
+    );
+    if (changed) {
+      return "Remote content changed after your last pull";
     }
   } catch (err) {
     if (err instanceof PayloadApiError && err.isNotFound) return null;
@@ -141,6 +155,11 @@ export async function push(config: Config, options: PushOptions = {}): Promise<v
 
   console.log(`Pushing ${entries.length} documents to ${config.payloadUrl}...`);
 
+  // Conflict detection compares the remote against the hash stored at pull time,
+  // which requires the same schema metadata pull used. Fetch it once, only when
+  // conflict checks will actually run.
+  const schemas = !options.force && !options.dryRun ? await loadEntitySchemas(client) : null;
+
   let pushed = 0;
   let created = 0;
   let skipped = 0;
@@ -154,7 +173,14 @@ export async function push(config: Config, options: PushOptions = {}): Promise<v
     if (entry.type === "global") {
       // Conflict check
       if (!options.force && !options.dryRun) {
-        const conflict = await checkConflict(client, entry, manifest, outputDir);
+        const conflict = await checkConflict(
+          client,
+          entry,
+          manifest,
+          outputDir,
+          schemas,
+          options.draft,
+        );
         if (conflict) {
           const relPath = path.relative(process.cwd(), entry.filePath);
           console.warn(`  CONFLICT globals/${entry.collection}: ${conflict}`);
@@ -180,11 +206,13 @@ export async function push(config: Config, options: PushOptions = {}): Promise<v
         console.log(`  Updated global: ${entry.collection}`);
         pushed++;
         if (manifest) {
-          const key = path.relative(outputDir, entry.filePath);
-          manifest.documents[key] = {
-            hash: contentHash(raw),
-            updatedAt: (result.updatedAt as string) ?? null,
-          };
+          recordPush(
+            manifest,
+            outputDir,
+            entry.filePath,
+            raw,
+            (result.updatedAt as string) ?? null,
+          );
         }
       } catch (err) {
         console.error(`  Failed to update global ${entry.collection}: ${(err as Error).message}`);
@@ -195,7 +223,14 @@ export async function push(config: Config, options: PushOptions = {}): Promise<v
 
       // Conflict check (only for existing docs)
       if (!options.force && !options.dryRun && doc.id) {
-        const conflict = await checkConflict(client, entry, manifest, outputDir);
+        const conflict = await checkConflict(
+          client,
+          entry,
+          manifest,
+          outputDir,
+          schemas,
+          options.draft,
+        );
         if (conflict) {
           const relPath = path.relative(process.cwd(), entry.filePath);
           console.warn(`  CONFLICT ${entry.collection}/${id}: ${conflict}`);
@@ -223,11 +258,13 @@ export async function push(config: Config, options: PushOptions = {}): Promise<v
           console.log(`  Updated ${entry.collection}/${id}`);
           pushed++;
           if (manifest) {
-            const key = path.relative(outputDir, entry.filePath);
-            manifest.documents[key] = {
-              hash: contentHash(raw),
-              updatedAt: (result.updatedAt as string) ?? null,
-            };
+            recordPush(
+              manifest,
+              outputDir,
+              entry.filePath,
+              raw,
+              (result.updatedAt as string) ?? null,
+            );
           }
         } catch (err) {
           if (err instanceof PayloadApiError && err.isNotFound) {

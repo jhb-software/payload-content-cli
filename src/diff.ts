@@ -2,6 +2,7 @@ import * as path from "node:path";
 import { type Config, requireRemoteConfig } from "./config.js";
 import { PayloadClient } from "./client.js";
 import { loadManifest, parseLocaleFilename } from "./manifest.js";
+import { loadEntitySchemas, remoteContentChanged } from "./conflict.js";
 
 export interface DiffResult {
   localOnly: string[];
@@ -36,6 +37,8 @@ export async function diff(config: Config): Promise<DiffResult> {
   const localStatus = await status(config);
   const localModifiedSet = new Set(localStatus?.modified ?? []);
 
+  const schemas = await loadEntitySchemas(client);
+
   // Check each tracked document against remote
   for (const [key, entry] of Object.entries(manifest.documents)) {
     const parts = key.split(path.sep);
@@ -59,15 +62,12 @@ export async function diff(config: Config): Promise<DiffResult> {
     }
 
     try {
-      let remoteDoc: Record<string, unknown>;
-      if (type === "global") {
-        remoteDoc = await client.getGlobal(collection, { locale });
-      } else {
-        remoteDoc = await client.getDoc(collection, id!, { locale });
-      }
-
-      const remoteUpdatedAt = remoteDoc.updatedAt as string | undefined;
-      const remoteChanged = remoteUpdatedAt && remoteUpdatedAt !== entry.updatedAt;
+      const remoteChanged = await remoteContentChanged(
+        client,
+        { type, collection, id, locale },
+        entry.hash,
+        schemas,
+      );
       const localChanged = localModifiedSet.has(key);
 
       if (remoteChanged && localChanged) {

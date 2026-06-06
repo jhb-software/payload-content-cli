@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- fix: `push` and `diff` now detect remote changes by comparing the remote document's content against the hash stored at pull time, instead of comparing the document-level `updatedAt`. Because `updatedAt` is shared across all locales, pushing one locale (e.g. `de`) bumped it for every locale and made a subsequent push of another locale (e.g. `en`) of the same document look like a remote modification. Content hashing is locale-accurate, so this self-inflicted conflict no longer happens, and `diff` no longer mislabels such documents as remotely modified.
+
 ## 0.3.0
 
 - feat: the plugin entry now exports the schema API for building custom tools (e.g. `listEntities` + `getEntitySchema` + `getBlockSchema` MCP tools) without going through HTTP. `listReadableEntities({ req })` returns the readable collection/global slugs plus localization; `getEntitySchema({ req, type, slug })` returns the same `{ slug, fields, jsonSchema }` the `/schema` endpoint produces for one entity; `getBlockSchema({ req, slugs })` resolves richText block slugs to `{ slug, fields }`.

@@ -4,8 +4,8 @@ export async function readDocument(filePath: string): Promise<Record<string, unk
   const raw = await fs.readFile(filePath, "utf-8");
   try {
     return JSON.parse(raw) as Record<string, unknown>;
-  } catch {
-    throw new Error(`Failed to parse JSON from ${filePath}`);
+  } catch (error) {
+    throw new Error(`Failed to parse JSON from ${filePath}: ${(error as Error).message}`);
   }
 }
 

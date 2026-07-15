@@ -68,4 +68,62 @@ describe("setByPath", () => {
     setByPath(doc, "content", newChildren);
     expect((doc.content as { root: { children: unknown[] } }).root.children).toEqual(newChildren);
   });
+
+  it("throws on missing field", () => {
+    expect(() => setByPath({}, "missing", [])).toThrow("not found");
+  });
+});
+
+describe("block-aware paths", () => {
+  function makeBlockDoc() {
+    return {
+      content: {
+        root: {
+          type: "root",
+          version: 1,
+          children: [
+            {
+              type: "block",
+              version: 2,
+              fields: {
+                blockType: "TwoColumnRichText",
+                firstColumn: JSON.parse(JSON.stringify(lexicalField)),
+              },
+            },
+          ],
+        },
+      },
+    };
+  }
+
+  it("resolves a lexical field inside a block by blockType", () => {
+    const children = resolveFieldPath(makeBlockDoc(), "content.TwoColumnRichText.firstColumn");
+    expect(children).toHaveLength(1);
+    expect(children[0].type).toBe("paragraph");
+  });
+
+  it("round-trips get and set through a block path", () => {
+    const doc = makeBlockDoc();
+    const path = "content.TwoColumnRichText.firstColumn";
+    const newChildren = [
+      {
+        type: "paragraph",
+        children: [{ type: "text", text: "Updated", version: 1 }],
+        version: 1,
+      },
+    ];
+
+    setByPath(doc, path, newChildren);
+    const roundTripped = resolveFieldPath(doc, path);
+    expect(roundTripped).toEqual(newChildren);
+  });
+
+  it("throws with the failing segment when a blockType does not exist", () => {
+    expect(() => resolveFieldPath(makeBlockDoc(), "content.MissingBlock.firstColumn")).toThrow(
+      /segment "MissingBlock" not found/,
+    );
+    expect(() => setByPath(makeBlockDoc(), "content.MissingBlock.firstColumn", [])).toThrow(
+      /segment "MissingBlock" not found/,
+    );
+  });
 });

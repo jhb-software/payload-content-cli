@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateTree } from "../validate.js";
+import { validateTree, assertValidTree } from "../validate.js";
 import type { LexicalNode } from "../types.js";
 
 describe("validateTree", () => {
@@ -47,5 +47,26 @@ describe("validateTree", () => {
 
   it("returns empty for empty array", () => {
     expect(validateTree([])).toEqual([]);
+  });
+});
+
+describe("assertValidTree", () => {
+  it("passes silently for a valid tree", () => {
+    expect(() =>
+      assertValidTree([
+        {
+          type: "paragraph",
+          children: [{ type: "text", text: "Hello", version: 1 }],
+          version: 1,
+        },
+      ]),
+    ).not.toThrow();
+  });
+
+  it("throws with all validation errors for an invalid tree", () => {
+    const children = [{ type: "paragraph" }, { type: "text", version: 1 }];
+    expect(() => assertValidTree(children)).toThrow(/Validation failed/);
+    expect(() => assertValidTree(children)).toThrow(/missing "version"/);
+    expect(() => assertValidTree(children)).toThrow(/missing "text"/);
   });
 });

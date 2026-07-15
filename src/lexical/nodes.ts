@@ -32,7 +32,12 @@ export function buildParagraph(text: string): LexicalElementNode {
   };
 }
 
+const HEADING_TAGS = ["h1", "h2", "h3", "h4", "h5", "h6"];
+
 export function buildHeading(text: string, tag: string = "h2"): LexicalElementNode {
+  if (!HEADING_TAGS.includes(tag)) {
+    throw new Error(`Invalid heading tag "${tag}" — must be one of ${HEADING_TAGS.join(", ")}`);
+  }
   return {
     type: "heading",
     tag,
@@ -77,6 +82,17 @@ export interface NodeArgOptions {
 }
 
 export async function parseNodeArg(options: NodeArgOptions): Promise<LexicalNode> {
+  const provided = [
+    options.paragraph !== undefined && "--paragraph",
+    options.heading !== undefined && "--heading",
+    options.text !== undefined && "--text",
+    options.json !== undefined && "--json",
+  ].filter(Boolean);
+  if (provided.length > 1) {
+    throw new Error(
+      `Provide only one of --paragraph, --heading, --text, or --json (got ${provided.join(", ")})`,
+    );
+  }
   if (options.paragraph !== undefined) {
     return buildParagraph(options.paragraph);
   }

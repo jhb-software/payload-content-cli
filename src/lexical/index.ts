@@ -1,4 +1,5 @@
 import { Command } from "commander";
+import { wrapAction } from "../cli-helpers.js";
 import { readDocument, writeDocument } from "./io.js";
 import { resolveFieldPath, autoDetectLexicalField, setByPath } from "./field-path.js";
 import {
@@ -11,10 +12,10 @@ import {
   linkText,
   searchText,
   extractLinks,
-  extractBlocks,
 } from "./operations.js";
+import { diffLexicalDocs } from "./diff.js";
 import { parseNodeArg, buildInternalLink } from "./nodes.js";
-import { validateTree } from "./validate.js";
+import { assertValidTree } from "./validate.js";
 import type { LexicalNode } from "./types.js";
 
 function getChildren(
@@ -27,11 +28,16 @@ function getChildren(
   return autoDetectLexicalField(doc);
 }
 
-function printValidationWarnings(children: LexicalNode[]): void {
-  const warnings = validateTree(children);
-  for (const warning of warnings) {
-    console.error(`warning: ${warning}`);
-  }
+/** Validate the new tree, then persist it — invalid trees are never written. */
+async function writeChildren(
+  file: string,
+  doc: Record<string, unknown>,
+  path: string,
+  children: LexicalNode[],
+): Promise<void> {
+  assertValidTree(children);
+  setByPath(doc, path, children);
+  await writeDocument(file, doc);
 }
 
 export function registerLexicalCommands(program: Command): void {
@@ -44,8 +50,8 @@ export function registerLexicalCommands(program: Command): void {
     .description("Show all nodes with index addresses")
     .argument("<file>", "Path to JSON document")
     .option("--field <path>", "Field path to Lexical richtext field")
-    .action(async (file: string, opts: { field?: string }) => {
-      try {
+    .action(
+      wrapAction(async (file: string, opts: { field?: string }) => {
         const doc = await readDocument(file);
         const { children } = getChildren(doc, opts.field);
         const entries = listNodes(children);
@@ -56,11 +62,8 @@ export function registerLexicalCommands(program: Command): void {
           const preview = entry.preview ? ` ${entry.preview}` : "";
           console.log(`${indent}[${entry.address}] ${entry.type}${preview}`);
         }
-      } catch (error) {
-        console.error("Error:", (error as Error).message);
-        process.exit(1);
-      }
-    });
+      }),
+    );
 
   lexical
     .command("get")
@@ -68,17 +71,14 @@ export function registerLexicalCommands(program: Command): void {
     .argument("<file>", "Path to JSON document")
     .requiredOption("--at <address>", "Node address (e.g. 0, 1, 2.0)")
     .option("--field <path>", "Field path to Lexical richtext field")
-    .action(async (file: string, opts: { at: string; field?: string }) => {
-      try {
+    .action(
+      wrapAction(async (file: string, opts: { at: string; field?: string }) => {
         const doc = await readDocument(file);
         const { children } = getChildren(doc, opts.field);
         const node = getNode(children, opts.at);
         console.log(JSON.stringify(node, null, 2));
-      } catch (error) {
-        console.error("Error:", (error as Error).message);
-        process.exit(1);
-      }
-    });
+      }),
+    );
 
   lexical
     .command("search")
@@ -86,8 +86,8 @@ export function registerLexicalCommands(program: Command): void {
     .argument("<file>", "Path to JSON document")
     .requiredOption("--text <text>", "Text to search for")
     .option("--field <path>", "Field path to Lexical richtext field")
-    .action(async (file: string, opts: { text: string; field?: string }) => {
-      try {
+    .action(
+      wrapAction(async (file: string, opts: { text: string; field?: string }) => {
         const doc = await readDocument(file);
         const { children } = getChildren(doc, opts.field);
         const matches = searchText(children, opts.text);
@@ -100,11 +100,8 @@ export function registerLexicalCommands(program: Command): void {
         for (const match of matches) {
           console.log(`[${match.address}] "${match.context}"`);
         }
-      } catch (error) {
-        console.error("Error:", (error as Error).message);
-        process.exit(1);
-      }
-    });
+      }),
+    );
 
   lexical
     .command("add")
@@ -119,20 +116,20 @@ export function registerLexicalCommands(program: Command): void {
     .option("--tag <tag>", "Heading tag (h1-h6)", "h2")
     .option("--json <json>", "Raw JSON node, @file.json, or - for stdin")
     .action(
-      async (
-        file: string,
-        opts: {
-          at: string;
-          position: string;
-          field?: string;
-          paragraph?: string;
-          heading?: string;
-          text?: string;
-          tag?: string;
-          json?: string;
-        },
-      ) => {
-        try {
+      wrapAction(
+        async (
+          file: string,
+          opts: {
+            at: string;
+            position: string;
+            field?: string;
+            paragraph?: string;
+            heading?: string;
+            text?: string;
+            tag?: string;
+            json?: string;
+          },
+        ) => {
           const pos = opts.position as "before" | "after" | "start" | "end";
           if (!["before", "after", "start", "end"].includes(pos)) {
             throw new Error(
@@ -145,15 +142,10 @@ export function registerLexicalCommands(program: Command): void {
           const { path, children } = getChildren(doc, opts.field);
           const newChildren = addNode(children, opts.at, pos, node);
 
-          setByPath(doc, path, newChildren);
-          await writeDocument(file, doc);
-          printValidationWarnings(newChildren);
+          await writeChildren(file, doc, path, newChildren);
           console.log(JSON.stringify({ ok: true, operation: "add", address: opts.at }));
-        } catch (error) {
-          console.error("Error:", (error as Error).message);
-          process.exit(1);
-        }
-      },
+        },
+      ),
     );
 
   lexical
@@ -168,27 +160,25 @@ export function registerLexicalCommands(program: Command): void {
     .option("--tag <tag>", "Heading tag (h1-h6)", "h2")
     .option("--json <json>", "Raw JSON node, @file.json, or - for stdin")
     .action(
-      async (
-        file: string,
-        opts: {
-          at: string;
-          field?: string;
-          paragraph?: string;
-          heading?: string;
-          text?: string;
-          tag?: string;
-          json?: string;
-        },
-      ) => {
-        try {
+      wrapAction(
+        async (
+          file: string,
+          opts: {
+            at: string;
+            field?: string;
+            paragraph?: string;
+            heading?: string;
+            text?: string;
+            tag?: string;
+            json?: string;
+          },
+        ) => {
           const node = await parseNodeArg(opts);
           const doc = await readDocument(file);
           const { path, children } = getChildren(doc, opts.field);
           const newChildren = replaceNode(children, opts.at, node);
 
-          setByPath(doc, path, newChildren);
-          await writeDocument(file, doc);
-          printValidationWarnings(newChildren);
+          await writeChildren(file, doc, path, newChildren);
           console.log(
             JSON.stringify({
               ok: true,
@@ -196,11 +186,8 @@ export function registerLexicalCommands(program: Command): void {
               address: opts.at,
             }),
           );
-        } catch (error) {
-          console.error("Error:", (error as Error).message);
-          process.exit(1);
-        }
-      },
+        },
+      ),
     );
 
   lexical
@@ -209,21 +196,16 @@ export function registerLexicalCommands(program: Command): void {
     .argument("<file>", "Path to JSON document")
     .requiredOption("--at <address>", "Node address (e.g. 0, 1, 2.0)")
     .option("--field <path>", "Field path to Lexical richtext field")
-    .action(async (file: string, opts: { at: string; field?: string }) => {
-      try {
+    .action(
+      wrapAction(async (file: string, opts: { at: string; field?: string }) => {
         const doc = await readDocument(file);
         const { path, children } = getChildren(doc, opts.field);
         const newChildren = removeNode(children, opts.at);
 
-        setByPath(doc, path, newChildren);
-        await writeDocument(file, doc);
-        printValidationWarnings(newChildren);
+        await writeChildren(file, doc, path, newChildren);
         console.log(JSON.stringify({ ok: true, operation: "remove", address: opts.at }));
-      } catch (error) {
-        console.error("Error:", (error as Error).message);
-        process.exit(1);
-      }
-    });
+      }),
+    );
 
   lexical
     .command("set")
@@ -235,17 +217,17 @@ export function registerLexicalCommands(program: Command): void {
     .option("--field <path>", "Field path to Lexical richtext field")
     .option("--create", "Allow creating a new property that doesn't exist yet")
     .action(
-      async (
-        file: string,
-        opts: {
-          at: string;
-          prop: string;
-          value: string;
-          field?: string;
-          create?: boolean;
-        },
-      ) => {
-        try {
+      wrapAction(
+        async (
+          file: string,
+          opts: {
+            at: string;
+            prop: string;
+            value: string;
+            field?: string;
+            create?: boolean;
+          },
+        ) => {
           let parsedValue: unknown;
           try {
             parsedValue = JSON.parse(opts.value);
@@ -259,15 +241,10 @@ export function registerLexicalCommands(program: Command): void {
             create: opts.create,
           });
 
-          setByPath(doc, path, newChildren);
-          await writeDocument(file, doc);
-          printValidationWarnings(newChildren);
+          await writeChildren(file, doc, path, newChildren);
           console.log(JSON.stringify({ ok: true, operation: "set", address: opts.at }));
-        } catch (error) {
-          console.error("Error:", (error as Error).message);
-          process.exit(1);
-        }
-      },
+        },
+      ),
     );
 
   lexical
@@ -282,54 +259,49 @@ export function registerLexicalCommands(program: Command): void {
     .option("--from <file>", "Source file to read link from (use with --at)")
     .option("--at <address>", "Address of link node in source file (use with --from)")
     .action(
-      async (
-        file: string,
-        opts: {
-          search?: string;
-          relationTo?: string;
-          value?: string;
-          label?: string;
-          field?: string;
-          from?: string;
-          at?: string;
-        },
-      ) => {
-        try {
+      wrapAction(
+        async (
+          file: string,
+          opts: {
+            search?: string;
+            relationTo?: string;
+            value?: string;
+            label?: string;
+            field?: string;
+            from?: string;
+            at?: string;
+          },
+        ) => {
           let search: string;
           let relationTo: string;
           let value: string;
 
           if (opts.from) {
             if (!opts.at) {
-              console.error("Error: --from requires --at");
-              process.exit(1);
+              throw new Error("--from requires --at");
             }
             const sourceDoc = await readDocument(opts.from);
             const { children: sourceChildren } = getChildren(sourceDoc, opts.field);
             const node = getNode(sourceChildren, opts.at);
             if (node.type !== "link") {
-              console.error(`Error: node at ${opts.at} is "${node.type}", not a link`);
-              process.exit(1);
+              throw new Error(`node at ${opts.at} is "${node.type}", not a link`);
             }
             const fields = node.fields as Record<string, unknown>;
             if (fields.linkType !== "internal" || !fields.doc) {
-              console.error("Error: node is not an internal link");
-              process.exit(1);
+              throw new Error("node is not an internal link");
             }
             const sourceLinks = extractLinks([node]);
             if (sourceLinks.length === 0) {
-              console.error("Error: could not extract link from source node");
-              process.exit(1);
+              throw new Error("could not extract link from source node");
             }
             search = opts.search ?? sourceLinks[0].text;
             relationTo = sourceLinks[0].relationTo;
             value = sourceLinks[0].value;
           } else {
             if (!opts.search || !opts.relationTo || !opts.value) {
-              console.error(
-                "Error: --search, --relationTo, and --value are required (or use --from --at)",
+              throw new Error(
+                "--search, --relationTo, and --value are required (or use --from --at)",
               );
-              process.exit(1);
             }
             search = opts.search;
             relationTo = opts.relationTo;
@@ -341,9 +313,7 @@ export function registerLexicalCommands(program: Command): void {
           const { path, children } = getChildren(doc, opts.field);
           const newChildren = linkText(children, search, link);
 
-          setByPath(doc, path, newChildren);
-          await writeDocument(file, doc);
-          printValidationWarnings(newChildren);
+          await writeChildren(file, doc, path, newChildren);
           console.log(
             JSON.stringify({
               ok: true,
@@ -353,11 +323,8 @@ export function registerLexicalCommands(program: Command): void {
               value,
             }),
           );
-        } catch (error) {
-          console.error("Error:", (error as Error).message);
-          process.exit(1);
-        }
-      },
+        },
+      ),
     );
 
   lexical
@@ -366,106 +333,18 @@ export function registerLexicalCommands(program: Command): void {
     .argument("<source>", "Source file (e.g. document_de.json)")
     .argument("<target>", "Target file (e.g. document_en.json)")
     .option("--field <path>", "Field path to Lexical richtext field")
-    .action(async (sourceFile: string, targetFile: string, opts: { field?: string }) => {
-      try {
+    .action(
+      wrapAction(async (sourceFile: string, targetFile: string, opts: { field?: string }) => {
         const sourceDoc = await readDocument(sourceFile);
         const targetDoc = await readDocument(targetFile);
         const { children: sourceChildren } = getChildren(sourceDoc, opts.field);
         const { children: targetChildren } = getChildren(targetDoc, opts.field);
 
-        // Compare links
-        const sourceLinks = extractLinks(sourceChildren);
-        const targetLinks = extractLinks(targetChildren);
+        const result = diffLexicalDocs(sourceChildren, targetChildren);
 
-        const targetLinkKeys = new Set(targetLinks.map((l) => `${l.relationTo}:${l.value}`));
-        const sourceLinkKeys = new Set(sourceLinks.map((l) => `${l.relationTo}:${l.value}`));
-
-        const onlyInSource = sourceLinks.filter(
-          (l) => !targetLinkKeys.has(`${l.relationTo}:${l.value}`),
-        );
-        const onlyInTarget = targetLinks.filter(
-          (l) => !sourceLinkKeys.has(`${l.relationTo}:${l.value}`),
-        );
-        const inBoth = sourceLinks.filter((l) => targetLinkKeys.has(`${l.relationTo}:${l.value}`));
-
-        // Compare blocks
-        const sourceBlocks = extractBlocks(sourceChildren);
-        const targetBlocks = extractBlocks(targetChildren);
-
-        const targetBlockTypes = new Set(targetBlocks.map((b) => b.blockType));
-        const sourceBlockTypes = new Set(sourceBlocks.map((b) => b.blockType));
-
-        const blocksOnlyInSource = sourceBlocks.filter((b) => !targetBlockTypes.has(b.blockType));
-        const blocksOnlyInTarget = targetBlocks.filter((b) => !sourceBlockTypes.has(b.blockType));
-
-        // For each missing link, check if the text exists in the target
-        type LinkWithMatch = (typeof onlyInSource)[number] & {
-          match?: string;
-        };
-        const onlyInSourceWithMatches: LinkWithMatch[] = onlyInSource.map((l) => {
-          // Try exact match first
-          const exactMatches = searchText(targetChildren, l.text);
-          if (exactMatches.length > 0) {
-            return { ...l, match: l.text };
-          }
-          // Try significant words (4+ chars, longest first, split on spaces and hyphens)
-          const stopWords = new Set([
-            "the",
-            "and",
-            "for",
-            "with",
-            "from",
-            "that",
-            "this",
-            "your",
-            "der",
-            "die",
-            "das",
-            "und",
-            "für",
-            "mit",
-            "von",
-            "den",
-            "dem",
-            "des",
-            "ein",
-            "eine",
-            "sich",
-            "nach",
-            "zur",
-            "zum",
-            "ist",
-            "sind",
-            "hat",
-            "haben",
-            "wird",
-            "werden",
-            "kann",
-            "nicht",
-            "auch",
-            "oder",
-            "aber",
-            "wie",
-            "was",
-            "wir",
-          ]);
-          const words = l.text
-            .split(/[\s\-–]+/)
-            .filter((w) => w.length >= 4 && !stopWords.has(w.toLowerCase()))
-            .sort((a, b) => b.length - a.length);
-          for (const word of words) {
-            const wordMatches = searchText(targetChildren, word);
-            if (wordMatches.length > 0) {
-              return { ...l, match: word };
-            }
-          }
-          return l;
-        });
-
-        // Output
-        if (onlyInSourceWithMatches.length > 0) {
-          console.log(`Links only in source (${onlyInSourceWithMatches.length}):`);
-          for (const link of onlyInSourceWithMatches) {
+        if (result.linksOnlyInSource.length > 0) {
+          console.log(`Links only in source (${result.linksOnlyInSource.length}):`);
+          for (const link of result.linksOnlyInSource) {
             const matchHint = link.match
               ? link.match === link.text
                 ? "  ✓ text found in target"
@@ -478,9 +357,9 @@ export function registerLexicalCommands(program: Command): void {
           console.log();
         }
 
-        if (onlyInTarget.length > 0) {
-          console.log(`Links only in target (${onlyInTarget.length}):`);
-          for (const link of onlyInTarget) {
+        if (result.linksOnlyInTarget.length > 0) {
+          console.log(`Links only in target (${result.linksOnlyInTarget.length}):`);
+          for (const link of result.linksOnlyInTarget) {
             console.log(
               `  [${link.address}] "${link.text}" → ${link.relationTo}/${link.value.slice(0, 8)}`,
             );
@@ -488,43 +367,35 @@ export function registerLexicalCommands(program: Command): void {
           console.log();
         }
 
-        if (blocksOnlyInSource.length > 0) {
-          console.log(`Blocks only in source (${blocksOnlyInSource.length}):`);
-          for (const block of blocksOnlyInSource) {
+        if (result.blocksOnlyInSource.length > 0) {
+          console.log(`Blocks only in source (${result.blocksOnlyInSource.length}):`);
+          for (const block of result.blocksOnlyInSource) {
             const ctx = block.context ? `  ${block.context}` : "";
             console.log(`  [${block.address}] ${block.blockType}${ctx}`);
           }
           console.log();
         }
 
-        if (blocksOnlyInTarget.length > 0) {
-          console.log(`Blocks only in target (${blocksOnlyInTarget.length}):`);
-          for (const block of blocksOnlyInTarget) {
+        if (result.blocksOnlyInTarget.length > 0) {
+          console.log(`Blocks only in target (${result.blocksOnlyInTarget.length}):`);
+          for (const block of result.blocksOnlyInTarget) {
             const ctx = block.context ? `  ${block.context}` : "";
             console.log(`  [${block.address}] ${block.blockType}${ctx}`);
           }
           console.log();
         }
 
-        if (inBoth.length > 0) {
-          console.log(`Links in both (${inBoth.length}):`);
-          for (const link of inBoth) {
+        if (result.linksInBoth.length > 0) {
+          console.log(`Links in both (${result.linksInBoth.length}):`);
+          for (const link of result.linksInBoth) {
             console.log(`  "${link.text}" → ${link.relationTo}/${link.value.slice(0, 8)}`);
           }
           console.log();
         }
 
-        if (
-          onlyInSource.length === 0 &&
-          onlyInTarget.length === 0 &&
-          blocksOnlyInSource.length === 0 &&
-          blocksOnlyInTarget.length === 0
-        ) {
+        if (result.inSync) {
           console.log("Files are in sync.");
         }
-      } catch (error) {
-        console.error("Error:", (error as Error).message);
-        process.exit(1);
-      }
-    });
+      }),
+    );
 }

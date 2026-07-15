@@ -1,4 +1,5 @@
 import type { LexicalNode } from "./types.js";
+import { hasChildren, isBlockNode, isLinkNode, isTextNode } from "./types.js";
 import { parseAddress, resolveNode, resolveParentAndIndex } from "./address.js";
 
 export interface ListEntry {
@@ -13,15 +14,15 @@ function textPreview(node: LexicalNode): string {
     return `"${preview}"`;
   }
   if (
-    node.type === "block" &&
+    isBlockNode(node) &&
     node.fields &&
     typeof (node.fields as Record<string, unknown>).blockType === "string"
   ) {
     return `(${(node.fields as Record<string, unknown>).blockType})`;
   }
-  if (Array.isArray(node.children)) {
+  if (hasChildren(node)) {
     const texts: string[] = [];
-    for (const child of node.children as LexicalNode[]) {
+    for (const child of node.children) {
       if (typeof child.text === "string") {
         texts.push(child.text);
       }
@@ -44,8 +45,8 @@ function collectNodes(children: LexicalNode[], prefix: string, entries: ListEntr
       type: node.type ?? "unknown",
       preview: textPreview(node),
     });
-    if (Array.isArray(node.children)) {
-      collectNodes(node.children as LexicalNode[], addr, entries);
+    if (hasChildren(node)) {
+      collectNodes(node.children, addr, entries);
     }
   }
 }
@@ -151,16 +152,16 @@ export function linkText(
     for (let i = 0; i < nodes.length; i++) {
       const node = nodes[i];
 
-      // Skip existing link nodes
-      if (node.type === "link") continue;
+      // Skip existing link/autolink nodes
+      if (isLinkNode(node)) continue;
 
       // Check text nodes for the search string
-      if (node.type === "text" && typeof node.text === "string") {
-        const idx = (node.text as string).indexOf(search);
+      if (isTextNode(node) && typeof node.text === "string") {
+        const idx = node.text.indexOf(search);
         if (idx === -1) continue;
 
-        const before = (node.text as string).slice(0, idx);
-        const after = (node.text as string).slice(idx + search.length);
+        const before = node.text.slice(0, idx);
+        const after = node.text.slice(idx + search.length);
 
         const newNodes: LexicalNode[] = [];
         if (before) {
@@ -176,8 +177,8 @@ export function linkText(
       }
 
       // Recurse into element nodes
-      if (Array.isArray(node.children)) {
-        if (findAndLink(node.children as LexicalNode[])) return true;
+      if (hasChildren(node)) {
+        if (findAndLink(node.children)) return true;
       }
     }
     return false;
@@ -203,12 +204,12 @@ export function searchText(children: LexicalNode[], search: string): SearchMatch
       const addr = prefix ? `${prefix}.${i}` : `${i}`;
       const node = nodes[i];
 
-      // Skip existing link nodes
-      if (node.type === "link") continue;
+      // Skip existing link/autolink nodes
+      if (isLinkNode(node)) continue;
 
-      if (node.type === "text" && typeof node.text === "string") {
+      if (isTextNode(node) && typeof node.text === "string") {
         if (node.text.includes(search)) {
-          const text = node.text as string;
+          const text = node.text;
           const idx = text.indexOf(search);
           const start = Math.max(0, idx - 30);
           const end = Math.min(text.length, idx + search.length + 30);
@@ -218,8 +219,8 @@ export function searchText(children: LexicalNode[], search: string): SearchMatch
         }
       }
 
-      if (Array.isArray(node.children)) {
-        walk(node.children as LexicalNode[], addr);
+      if (hasChildren(node)) {
+        walk(node.children, addr);
       }
     }
   }
@@ -265,7 +266,16 @@ export interface ExtractedLink {
   address: string;
   text: string;
   relationTo: string;
+  /** Target document ID; populated relationship objects are normalized to their id. */
   value: string;
+}
+
+/** Normalize a relationship value: depth>0 pulls populate it into a full document object. */
+function relationshipId(value: unknown): string {
+  if (typeof value === "object" && value !== null) {
+    return String((value as { id?: unknown }).id ?? "");
+  }
+  return String(value ?? "");
 }
 
 /** Extract all internal link nodes from a Lexical tree. */
@@ -277,7 +287,7 @@ export function extractLinks(children: LexicalNode[]): ExtractedLink[] {
       const addr = prefix ? `${prefix}.${i}` : `${i}`;
       const node = nodes[i];
 
-      if (node.type === "link") {
+      if (isLinkNode(node)) {
         const fields = node.fields as Record<string, unknown> | undefined;
         if (fields?.linkType === "internal" && fields.doc) {
           const doc = fields.doc as Record<string, unknown>;
@@ -285,14 +295,14 @@ export function extractLinks(children: LexicalNode[]): ExtractedLink[] {
           links.push({
             address: addr,
             text,
-            relationTo: doc.relationTo as string,
-            value: doc.value as string,
+            relationTo: String(doc.relationTo ?? ""),
+            value: relationshipId(doc.value),
           });
         }
       }
 
-      if (Array.isArray(node.children)) {
-        walk(node.children as LexicalNode[], addr);
+      if (hasChildren(node)) {
+        walk(node.children, addr);
       }
     }
   }
@@ -304,8 +314,8 @@ export function extractLinks(children: LexicalNode[]): ExtractedLink[] {
 /** Extract text content from a node and its children. */
 function textContent(node: LexicalNode): string {
   if (typeof node.text === "string") return node.text;
-  if (Array.isArray(node.children)) {
-    return (node.children as LexicalNode[]).map(textContent).join("");
+  if (hasChildren(node)) {
+    return node.children.map(textContent).join("");
   }
   return "";
 }
@@ -316,33 +326,42 @@ export interface ExtractedBlock {
   context: string;
 }
 
-/** Extract all block nodes from a Lexical tree with surrounding context. */
+/** Extract all block nodes from a Lexical tree (recursively) with surrounding context. */
 export function extractBlocks(children: LexicalNode[]): ExtractedBlock[] {
   const blocks: ExtractedBlock[] = [];
 
-  for (let i = 0; i < children.length; i++) {
-    const node = children[i];
-    if (node.type !== "block") continue;
+  function walk(nodes: LexicalNode[], prefix: string): void {
+    for (let i = 0; i < nodes.length; i++) {
+      const addr = prefix ? `${prefix}.${i}` : `${i}`;
+      const node = nodes[i];
 
-    const fields = node.fields as Record<string, unknown> | undefined;
-    const blockType = (fields?.blockType as string) ?? "unknown";
+      if (isBlockNode(node)) {
+        const fields = node.fields as Record<string, unknown> | undefined;
+        const blockType = (fields?.blockType as string) ?? "unknown";
 
-    // Find surrounding heading or paragraph for context
-    let context = "";
-    for (let j = i - 1; j >= 0 && j >= i - 3; j--) {
-      const prev = children[j];
-      if (prev.type === "heading" || prev.type === "paragraph") {
-        const text = textContent(prev);
-        if (text) {
-          const label = prev.type === "heading" ? "after heading" : "after";
-          context = `${label} "${text.length > 50 ? text.slice(0, 47) + "..." : text}"`;
-          break;
+        // Find preceding heading or paragraph sibling for context
+        let context = "";
+        for (let j = i - 1; j >= 0 && j >= i - 3; j--) {
+          const prev = nodes[j];
+          if (prev.type === "heading" || prev.type === "paragraph") {
+            const text = textContent(prev);
+            if (text) {
+              const label = prev.type === "heading" ? "after heading" : "after";
+              context = `${label} "${text.length > 50 ? text.slice(0, 47) + "..." : text}"`;
+              break;
+            }
+          }
         }
+
+        blocks.push({ address: addr, blockType, context });
+      }
+
+      if (hasChildren(node)) {
+        walk(node.children, addr);
       }
     }
-
-    blocks.push({ address: `${i}`, blockType, context });
   }
 
+  walk(children, "");
   return blocks;
 }

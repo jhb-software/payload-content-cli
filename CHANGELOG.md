@@ -13,6 +13,9 @@
 - fix: `_jsonschema.json` now emits array types for `hasMany` text and number fields instead of falsely flagging pulled arrays as invalid.
 - fix: `join` fields are marked virtual and excluded from JSON schemas, so pulls strip this read-only data instead of round-tripping it into invalid pushes.
 - fix: a throwing `access.read` function now logs a warning naming the entity instead of silently dropping it from the schema response.
+- fix: `lexical diff` and `lexical link --from` now resolve populated relationship objects (depth>0 pulls) to their document ID instead of rendering `[object Object]`.
+- feat: mutating `lexical` commands validate the resulting tree before writing and refuse to write invalid documents (previously they wrote first and warned after).
+- fix: `lexical search`/`lexical link` no longer match text inside autolink nodes, `lexical diff` finds blocks nested in container nodes, and invalid `--tag` values or conflicting node flags are rejected with clear errors.
 - fix: `push`/`status` no longer warn `Could not scan content directory` when a content type was intentionally not pulled (e.g. a collections-only pull leaves no `globals/` directory). A missing root directory is treated as "nothing of that type"; only genuine errors (permissions, etc.) are reported.
 
 ## 0.3.0

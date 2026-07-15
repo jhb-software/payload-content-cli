@@ -7,6 +7,9 @@ import {
   removeNode,
   setNodeProp,
   searchText,
+  linkText,
+  extractLinks,
+  extractBlocks,
 } from "../operations.js";
 import type { LexicalNode } from "../types.js";
 
@@ -203,6 +206,218 @@ describe("searchText", () => {
   it("returns empty array when no matches", () => {
     const matches = searchText(makeChildren(), "nonexistent");
     expect(matches).toHaveLength(0);
+  });
+
+  it("skips text inside autolink nodes", () => {
+    const children: LexicalNode[] = [
+      {
+        type: "paragraph",
+        children: [
+          {
+            type: "autolink",
+            children: [{ type: "text", text: "Great Migration", version: 1 }],
+            version: 1,
+          },
+        ],
+        version: 1,
+      },
+    ];
+
+    expect(searchText(children, "Great Migration")).toHaveLength(0);
+  });
+});
+
+describe("linkText", () => {
+  const link: LexicalNode = {
+    type: "link",
+    version: 3,
+    children: [{ type: "text", text: "Migration", version: 1 }],
+    fields: { linkType: "internal", doc: { relationTo: "topics", value: "m1" } },
+  };
+
+  it("splits a text node into before/link/after and preserves formatting", () => {
+    const children: LexicalNode[] = [
+      {
+        type: "paragraph",
+        children: [{ type: "text", text: "The Migration starts.", format: 1, version: 1 }],
+        version: 1,
+      },
+    ];
+
+    const result = linkText(children, "Migration", link);
+    const para = result[0] as unknown as { children: LexicalNode[] };
+    expect(para.children).toHaveLength(3);
+    expect(para.children[0]).toMatchObject({ type: "text", text: "The ", format: 1 });
+    expect(para.children[1].type).toBe("link");
+    expect(para.children[2]).toMatchObject({ type: "text", text: " starts.", format: 1 });
+  });
+
+  it("omits empty before/after nodes when the match spans the whole text", () => {
+    const children: LexicalNode[] = [
+      {
+        type: "paragraph",
+        children: [{ type: "text", text: "Migration", version: 1 }],
+        version: 1,
+      },
+    ];
+
+    const result = linkText(children, "Migration", link);
+    const para = result[0] as unknown as { children: LexicalNode[] };
+    expect(para.children).toHaveLength(1);
+    expect(para.children[0].type).toBe("link");
+  });
+
+  it("links only the first match", () => {
+    const children: LexicalNode[] = [
+      {
+        type: "paragraph",
+        children: [{ type: "text", text: "Migration here", version: 1 }],
+        version: 1,
+      },
+      {
+        type: "paragraph",
+        children: [{ type: "text", text: "Migration there", version: 1 }],
+        version: 1,
+      },
+    ];
+
+    const result = linkText(children, "Migration", link);
+    const first = result[0] as unknown as { children: LexicalNode[] };
+    const second = result[1] as unknown as { children: LexicalNode[] };
+    expect(first.children.some((c) => c.type === "link")).toBe(true);
+    expect(second.children.some((c) => c.type === "link")).toBe(false);
+    expect(second.children[0].text).toBe("Migration there");
+  });
+
+  it("does not re-link text inside existing link nodes", () => {
+    const children: LexicalNode[] = [
+      {
+        type: "paragraph",
+        children: [
+          {
+            type: "link",
+            children: [{ type: "text", text: "Migration", version: 1 }],
+            version: 1,
+          },
+        ],
+        version: 1,
+      },
+    ];
+
+    expect(() => linkText(children, "Migration", link)).toThrow(/not found/);
+  });
+
+  it("does not re-link text inside autolink nodes", () => {
+    const children: LexicalNode[] = [
+      {
+        type: "paragraph",
+        children: [
+          {
+            type: "autolink",
+            children: [{ type: "text", text: "Migration", version: 1 }],
+            version: 1,
+          },
+        ],
+        version: 1,
+      },
+    ];
+
+    expect(() => linkText(children, "Migration", link)).toThrow(/not found/);
+  });
+
+  it("throws when the text is not found", () => {
+    expect(() => linkText(makeChildren(), "missing", link)).toThrow(/not found/);
+  });
+});
+
+describe("extractLinks", () => {
+  it("extracts internal links with text, target, and address", () => {
+    const children: LexicalNode[] = [
+      {
+        type: "paragraph",
+        children: [
+          {
+            type: "link",
+            version: 3,
+            children: [{ type: "text", text: "Kenya", version: 1 }],
+            fields: { linkType: "internal", doc: { relationTo: "countries", value: "abc123" } },
+          },
+        ],
+        version: 1,
+      },
+    ];
+
+    const links = extractLinks(children);
+    expect(links).toEqual([
+      { address: "0.0", text: "Kenya", relationTo: "countries", value: "abc123" },
+    ]);
+  });
+
+  it("normalizes a populated relationship object to its id", () => {
+    const children: LexicalNode[] = [
+      {
+        type: "link",
+        version: 3,
+        children: [{ type: "text", text: "Kenya", version: 1 }],
+        fields: {
+          linkType: "internal",
+          doc: {
+            relationTo: "countries",
+            value: { id: "abc123def456abc123def456", title: "Kenya" },
+          },
+        },
+      },
+    ];
+
+    const links = extractLinks(children);
+    expect(links).toHaveLength(1);
+    expect(links[0].value).toBe("abc123def456abc123def456");
+  });
+
+  it("ignores custom/external links", () => {
+    const children: LexicalNode[] = [
+      {
+        type: "link",
+        version: 3,
+        children: [{ type: "text", text: "Site", version: 1 }],
+        fields: { linkType: "custom", url: "https://example.com" },
+      },
+    ];
+
+    expect(extractLinks(children)).toHaveLength(0);
+  });
+});
+
+describe("extractBlocks", () => {
+  it("extracts top-level blocks with context from the preceding heading", () => {
+    const children: LexicalNode[] = [
+      {
+        type: "heading",
+        tag: "h2",
+        children: [{ type: "text", text: "Gallery section", version: 1 }],
+        version: 1,
+      },
+      { type: "block", version: 2, fields: { blockType: "Gallery" } },
+    ];
+
+    const blocks = extractBlocks(children);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]).toMatchObject({ address: "1", blockType: "Gallery" });
+    expect(blocks[0].context).toContain("Gallery section");
+  });
+
+  it("finds blocks nested inside container nodes", () => {
+    const children: LexicalNode[] = [
+      {
+        type: "quote",
+        version: 1,
+        children: [{ type: "block", version: 2, fields: { blockType: "Cta" } }],
+      },
+    ];
+
+    const blocks = extractBlocks(children);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]).toMatchObject({ address: "0.0", blockType: "Cta" });
   });
 });
 

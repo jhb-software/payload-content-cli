@@ -1,4 +1,5 @@
 import type { LexicalNode, LexicalRoot } from "./types.js";
+import { isBlockNode } from "./types.js";
 
 function isLexicalRoot(value: unknown): value is LexicalRoot {
   return (
@@ -27,47 +28,42 @@ function getByPath(obj: Record<string, unknown>, path: string): unknown {
 function findBlockByType(children: LexicalNode[], blockType: string): LexicalNode | undefined {
   return children.find(
     (n) =>
-      n.type === "block" &&
+      isBlockNode(n) &&
       (n as Record<string, unknown>).fields &&
       ((n as Record<string, unknown>).fields as Record<string, unknown>).blockType === blockType,
   );
 }
 
-export function resolveFieldPath(doc: Record<string, unknown>, fieldPath: string): LexicalNode[] {
-  // First try direct path resolution
-  const value = getByPath(doc, fieldPath);
-  if (value !== undefined && value !== null) {
-    const maybeRoot = (value as Record<string, unknown>).root;
-    if (isLexicalRoot(maybeRoot)) {
-      return maybeRoot.children;
-    }
-    if (isLexicalRoot(value)) {
-      return (value as LexicalRoot).children;
-    }
+/**
+ * Resolve a field path to its value. Tries plain property/index access first,
+ * then a block-aware walk where a segment may name a blockType inside a
+ * lexical tree (e.g. "content.TwoColumnRichText.firstColumn").
+ * Shared by both reads (resolveFieldPath) and writes (setByPath) so get and
+ * set always agree on which container a path refers to.
+ */
+function resolvePathValue(doc: Record<string, unknown>, fieldPath: string): unknown {
+  const direct = getByPath(doc, fieldPath);
+  if (direct !== undefined && direct !== null) {
+    return direct;
   }
 
-  // Try block-aware resolution: e.g. "content.TwoColumnRichText.firstColumn"
-  // Split into segments and walk, looking for block types in lexical trees
   const segments = fieldPath.replace(/\[(\d+)\]/g, ".$1").split(".");
   let current: unknown = doc;
 
-  for (let i = 0; i < segments.length; i++) {
-    const seg = segments[i];
-
+  for (const seg of segments) {
     if (current === null || current === undefined || typeof current !== "object") {
       throw new Error(`Field "${fieldPath}" not found in document`);
     }
 
     // Try direct property access first
-    const direct = (current as Record<string, unknown>)[seg];
-    if (direct !== undefined) {
-      current = direct;
+    const prop = (current as Record<string, unknown>)[seg];
+    if (prop !== undefined) {
+      current = prop;
       continue;
     }
 
     // If current value is a lexical field, search for a block by blockType
-    const currentObj = current as Record<string, unknown>;
-    const root = currentObj.root;
+    const root = (current as Record<string, unknown>).root;
     if (isLexicalRoot(root)) {
       const block = findBlockByType(root.children, seg);
       if (block) {
@@ -86,12 +82,18 @@ export function resolveFieldPath(doc: Record<string, unknown>, fieldPath: string
     throw new Error(`Field "${fieldPath}" resolved to null/undefined`);
   }
 
-  const maybeRoot = (current as Record<string, unknown>).root;
+  return current;
+}
+
+export function resolveFieldPath(doc: Record<string, unknown>, fieldPath: string): LexicalNode[] {
+  const value = resolvePathValue(doc, fieldPath);
+
+  const maybeRoot = (value as Record<string, unknown>).root;
   if (isLexicalRoot(maybeRoot)) {
     return maybeRoot.children;
   }
-  if (isLexicalRoot(current)) {
-    return (current as LexicalRoot).children;
+  if (isLexicalRoot(value)) {
+    return (value as LexicalRoot).children;
   }
 
   throw new Error(
@@ -133,37 +135,10 @@ export function setByPath(
   fieldPath: string,
   children: LexicalNode[],
 ): void {
-  // Try direct path first
-  let value = getByPath(obj, fieldPath);
+  const value = resolvePathValue(obj, fieldPath);
 
-  // If direct path fails, try block-aware resolution
-  if (value === undefined || value === null) {
-    const segments = fieldPath.replace(/\[(\d+)\]/g, ".$1").split(".");
-    let current: unknown = obj;
-    for (const seg of segments) {
-      if (current === null || current === undefined || typeof current !== "object") break;
-      const direct = (current as Record<string, unknown>)[seg];
-      if (direct !== undefined) {
-        current = direct;
-        continue;
-      }
-      const currentObj = current as Record<string, unknown>;
-      const root = currentObj.root;
-      if (isLexicalRoot(root)) {
-        const block = findBlockByType(root.children, seg);
-        if (block) {
-          current = ((block as Record<string, unknown>).fields as Record<string, unknown>) ?? {};
-          continue;
-        }
-      }
-      current = undefined;
-      break;
-    }
-    value = current;
-  }
-
-  if (value === undefined || value === null || typeof value !== "object") {
-    throw new Error(`Field "${fieldPath}" not found in document`);
+  if (typeof value !== "object") {
+    throw new Error(`Field "${fieldPath}" does not contain a Lexical richtext structure`);
   }
 
   const maybeRoot = (value as Record<string, unknown>).root;

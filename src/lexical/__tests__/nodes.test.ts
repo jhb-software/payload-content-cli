@@ -37,6 +37,11 @@ describe("buildHeading", () => {
     const node = buildHeading("Title", "h3");
     expect(node.tag).toBe("h3");
   });
+
+  it("rejects an invalid heading tag", () => {
+    expect(() => buildHeading("Title", "h7")).toThrow(/Invalid heading tag "h7"/);
+    expect(() => buildHeading("Title", "div")).toThrow(/Invalid heading tag/);
+  });
 });
 
 describe("parseNodeArg", () => {
@@ -79,5 +84,10 @@ describe("parseNodeArg", () => {
 
   it("throws when no input provided", async () => {
     await expect(parseNodeArg({})).rejects.toThrow("Node input required");
+  });
+
+  it("rejects more than one node input option", async () => {
+    await expect(parseNodeArg({ paragraph: "a", heading: "b" })).rejects.toThrow(/only one of/);
+    await expect(parseNodeArg({ text: "a", json: "{}" })).rejects.toThrow(/only one of/);
   });
 });

@@ -80,7 +80,10 @@ export function toFieldSchemas(
 
     if (field.required) schema.required = true;
     if (field.localized) schema.localized = true;
-    if (field.virtual) schema.virtual = true;
+    // Join fields are computed from the other side of a relationship —
+    // read-only, so mark them virtual so pulls strip them (pushing pulled
+    // join data back would be invalid).
+    if (field.virtual || field.type === "join") schema.virtual = true;
     if (field.hasMany) schema.hasMany = true;
     if (field.relationTo) schema.relationTo = field.relationTo;
     // Skip function defaults — they need runtime context (req, user, locale) we can't supply.

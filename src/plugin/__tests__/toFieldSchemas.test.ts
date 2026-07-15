@@ -309,6 +309,17 @@ describe("toFieldSchemas", () => {
     ]);
   });
 
+  it("marks join fields as virtual so pulls strip them", () => {
+    const fields = [
+      { name: "title", type: "text" },
+      { name: "relatedPosts", type: "join", collection: "posts", on: "category" },
+    ];
+    expect(toFieldSchemas(fields)).toEqual([
+      { name: "title", type: "text" },
+      { name: "relatedPosts", type: "join", virtual: true },
+    ]);
+  });
+
   it("skips unnamed fields without layout semantics", () => {
     const fields = [
       { type: "ui", admin: { components: {} } },

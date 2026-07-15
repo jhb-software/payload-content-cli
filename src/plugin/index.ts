@@ -8,7 +8,7 @@
  * plugin options.
  *
  * Usage in payload.config.ts:
- *   import { contentCliPlugin, type EndpointCustom } from 'payload-content-cli/plugin'
+ *   import { contentCliPlugin, type EndpointCustom } from '@jhb.software/payload-content-cli/plugin'
  *   export default buildConfig({ plugins: [contentCliPlugin()] })
  *
  * This module is the Payload plugin wiring (endpoint capture, response
@@ -20,8 +20,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { buildBlocksBySlug, buildLocalization, canRead, entityToSchema } from "./schemaApi.js";
-import type { FieldSchema } from "./fields.js";
-import type { JsonSchema } from "./jsonSchema.js";
+import { SCHEMA_CONTRACT_VERSION } from "../schema-contract.js";
+import type { EndpointSchema, EntitySchema, SchemaResponse } from "../schema-contract.js";
 
 export { toFieldSchemas } from "./fields.js";
 export { entityToJsonSchema } from "./jsonSchema.js";
@@ -29,6 +29,13 @@ export { getBlockSchema, getEntitySchema, listReadableEntities } from "./schemaA
 export type { FieldSchema } from "./fields.js";
 export type { JsonSchema } from "./jsonSchema.js";
 export type { LexicalFeatureSummary } from "./lexical.js";
+export { SCHEMA_CONTRACT_VERSION } from "../schema-contract.js";
+export type {
+  EndpointSchema,
+  EntitySchema,
+  LocalizationSchema,
+  SchemaResponse,
+} from "../schema-contract.js";
 
 /** Type for the `custom` property on Payload endpoints, used by the CLI plugin. */
 export interface EndpointCustom {
@@ -41,20 +48,6 @@ export interface EndpointCustom {
     /** Request body shape */
     body?: Record<string, unknown>;
     /** Response shape */
-    response?: Record<string, unknown>;
-  };
-}
-
-interface EndpointSchema {
-  /** Resolved API path, e.g. "/api/posts/publish" */
-  path: string;
-  method: string;
-  /** Human-readable description of what the endpoint does */
-  description?: string;
-  /** Describes the endpoint's request/response contract */
-  schema?: {
-    query?: Record<string, unknown>;
-    body?: Record<string, unknown>;
     response?: Record<string, unknown>;
   };
 }
@@ -89,14 +82,22 @@ type ScopedEndpoint = EndpointSchema & {
 
 export function contentCliPlugin(options?: ContentCliPluginOptions) {
   return (config: any): any => {
+    // Applying the plugin twice would register the schema endpoint twice.
+    const alreadyRegistered = (config.endpoints ?? []).some(
+      (ep: any) => ep.path === "/content-cli/schema",
+    );
+    if (alreadyRegistered) return config;
+
+    // Payload's API prefix is configurable; default matches Payload's default.
+    const apiPrefix: string = config.routes?.api ?? "/api";
+
     // Capture custom endpoints from the raw user config before Payload
     // merges its built-in CRUD/auth routes into the runtime config.
     const customEndpoints: ScopedEndpoint[] = [];
 
     for (const endpoint of config.endpoints ?? []) {
-      if (endpoint.path === "/content-cli/schema") continue;
       customEndpoints.push({
-        path: `/api${endpoint.path}`,
+        path: `${apiPrefix}${endpoint.path}`,
         method: endpoint.method,
         ...extractEndpointMeta(endpoint.custom),
       });
@@ -105,7 +106,7 @@ export function contentCliPlugin(options?: ContentCliPluginOptions) {
     for (const collection of config.collections ?? []) {
       for (const endpoint of collection.endpoints ?? []) {
         customEndpoints.push({
-          path: `/api/${collection.slug}${endpoint.path}`,
+          path: `${apiPrefix}/${collection.slug}${endpoint.path}`,
           method: endpoint.method,
           ...extractEndpointMeta(endpoint.custom),
           _scope: { type: "collection", slug: collection.slug },
@@ -116,7 +117,7 @@ export function contentCliPlugin(options?: ContentCliPluginOptions) {
     for (const global of config.globals ?? []) {
       for (const endpoint of global.endpoints ?? []) {
         customEndpoints.push({
-          path: `/api/globals/${global.slug}${endpoint.path}`,
+          path: `${apiPrefix}/globals/${global.slug}${endpoint.path}`,
           method: endpoint.method,
           ...extractEndpointMeta(endpoint.custom),
           _scope: { type: "global", slug: global.slug },
@@ -142,10 +143,7 @@ export function contentCliPlugin(options?: ContentCliPluginOptions) {
             const blocksBySlug = buildBlocksBySlug(payload);
 
             const readableCollections = new Set<string>();
-            const collections: Record<
-              string,
-              { slug: string; fields: FieldSchema[]; jsonSchema: JsonSchema }
-            > = {};
+            const collections: Record<string, EntitySchema> = {};
             for (const collectionConfig of payload.config.collections) {
               if (!(await canRead(collectionConfig, req))) continue;
               readableCollections.add(collectionConfig.slug);
@@ -153,10 +151,7 @@ export function contentCliPlugin(options?: ContentCliPluginOptions) {
             }
 
             const readableGlobals = new Set<string>();
-            const globals: Record<
-              string,
-              { slug: string; fields: FieldSchema[]; jsonSchema: JsonSchema }
-            > = {};
+            const globals: Record<string, EntitySchema> = {};
             for (const globalConfig of payload.config.globals ?? []) {
               if (!(await canRead(globalConfig, req))) continue;
               readableGlobals.add(globalConfig.slug);
@@ -175,12 +170,14 @@ export function contentCliPlugin(options?: ContentCliPluginOptions) {
 
             const localization = buildLocalization(payload);
 
-            return Response.json({
+            const body: SchemaResponse = {
+              version: SCHEMA_CONTRACT_VERSION,
               collections,
               globals,
               localization,
               endpoints,
-            });
+            };
+            return Response.json(body);
           },
         },
       ],

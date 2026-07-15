@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { listReadableEntities } from "../index.js";
 
 /** Build a mock PayloadRequest carrying a config and an optional user. */
@@ -91,6 +91,35 @@ describe("listReadableEntities", () => {
 
     const result = await listReadableEntities({ req });
     expect(result.localization).toBeNull();
+  });
+
+  it("warns naming the entity when its access.read throws, and treats it as denied", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const req = mockReq({
+        collections: [
+          { slug: "posts", fields: [], access: { read: () => true } },
+          {
+            slug: "broken-collection",
+            fields: [],
+            access: {
+              read: () => {
+                throw new Error("boom");
+              },
+            },
+          },
+        ],
+      });
+
+      const result = await listReadableEntities({ req });
+      expect(result.collections).toEqual(["posts"]);
+      const messages = warn.mock.calls.map((call) => call.join(" "));
+      expect(messages.some((m) => m.includes("broken-collection") && m.includes("boom"))).toBe(
+        true,
+      );
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it("passes req to the entity's access.read", async () => {

@@ -221,6 +221,127 @@ function normalizeLexicalFeatures(editor: any): NormalizedFeature[] | undefined 
 }
 
 /**
+ * Everything a feature projection may write to. Each projection buckets one
+ * feature key's config into the summary-in-progress.
+ */
+type ProjectionContext = {
+  props: Record<string, unknown>;
+  blocksBySlug: Record<string, any>;
+  textFormats: string[];
+  blockNodes: LexicalFeatureSummary["blockNodes"];
+  inlineNodes: NonNullable<LexicalFeatureSummary["inlineNodes"]>;
+  layoutProps: Array<"align" | "indent">;
+};
+
+type FeatureProjection = (ctx: ProjectionContext) => void;
+
+/**
+ * Feature key → projection into the summary. Adding support for a new lexical
+ * feature key is one entry here. Keys absent from this table (and from
+ * `UI_FEATURE_KEYS`) fall through to the `customNodes` handling.
+ */
+const FEATURE_PROJECTIONS: Record<string, FeatureProjection> = {
+  // Text format marks (bold, italic, …) → `textFormats`.
+  ...Object.fromEntries(
+    Object.entries(TEXT_FORMAT_FEATURE_KEYS).map(([key, format]): [string, FeatureProjection] => [
+      key,
+      (ctx) => {
+        ctx.textFormats.push(format);
+      },
+    ]),
+  ),
+  // List variants → a single `list` node listing the enabled `listType`s.
+  ...Object.fromEntries(
+    Object.entries(LIST_TYPE_BY_FEATURE_KEY).map(([key, listType]): [string, FeatureProjection] => [
+      key,
+      (ctx) => {
+        if (!ctx.blockNodes.list) ctx.blockNodes.list = { types: [] };
+        ctx.blockNodes.list.types.push(listType);
+      },
+    ]),
+  ),
+  align: (ctx) => {
+    ctx.layoutProps.push("align");
+  },
+  indent: (ctx) => {
+    ctx.layoutProps.push("indent");
+  },
+  paragraph: (ctx) => {
+    ctx.blockNodes.paragraph = true;
+  },
+  blockquote: (ctx) => {
+    ctx.blockNodes.quote = true;
+  },
+  horizontalRule: (ctx) => {
+    ctx.blockNodes.horizontalrule = true;
+  },
+  experimental_table: (ctx) => {
+    ctx.blockNodes.table = true;
+  },
+  heading: (ctx) => {
+    const sizes = ctx.props.enabledHeadingSizes;
+    ctx.blockNodes.heading = {
+      sizes:
+        Array.isArray(sizes) && sizes.every((s) => typeof s === "string")
+          ? (sizes as string[])
+          : ["h1", "h2", "h3", "h4", "h5", "h6"],
+    };
+  },
+  blocks: (ctx) => {
+    const slugs = extractBlockSlugs(ctx.props, ctx.blocksBySlug);
+    if (slugs) ctx.blockNodes.block = { slugs };
+  },
+  inlineBlocks: (ctx) => {
+    const slugs = extractBlockSlugs(ctx.props, ctx.blocksBySlug);
+    if (slugs) ctx.inlineNodes.inlineBlock = { slugs };
+  },
+  link: (ctx) => {
+    const linkOpts: NonNullable<LexicalFeatureSummary["inlineNodes"]>["link"] = {};
+    const enabled = toStringArray(ctx.props.enabledCollections);
+    if (enabled) linkOpts.enabledCollections = enabled;
+    const disabled = toStringArray(ctx.props.disabledCollections);
+    if (disabled) linkOpts.disabledCollections = disabled;
+    // Custom link fields are only an array once sanitized; a callback shape is skipped.
+    if (Array.isArray(ctx.props.fields)) {
+      linkOpts.fields = toFieldSchemas(ctx.props.fields, ctx.blocksBySlug);
+    }
+    ctx.inlineNodes.link = linkOpts;
+  },
+  upload: (ctx) => {
+    const uploadOpts: NonNullable<LexicalFeatureSummary["blockNodes"]>["upload"] = {};
+    // Allow-list lives in enabled/disabledCollections — same as relationship.
+    // (The `collections` prop is a per-collection custom-fields map, NOT the
+    // allow-list; reading its keys would mislabel "collections with extra
+    // fields" as "collections you may upload to".)
+    const enabled = toStringArray(ctx.props.enabledCollections);
+    if (enabled) uploadOpts.enabledCollections = enabled;
+    const disabled = toStringArray(ctx.props.disabledCollections);
+    if (disabled) uploadOpts.disabledCollections = disabled;
+    // `collections: { [slug]: { fields } }` adds custom fields to the upload
+    // node when it targets that collection — surface them keyed by slug.
+    const collections = ctx.props.collections;
+    if (collections && typeof collections === "object" && !Array.isArray(collections)) {
+      const fieldsByCollection: Record<string, FieldSchema[]> = {};
+      for (const [slug, cfg] of Object.entries(collections as Record<string, any>)) {
+        if (cfg && typeof cfg === "object" && Array.isArray(cfg.fields) && cfg.fields.length > 0) {
+          fieldsByCollection[slug] = toFieldSchemas(cfg.fields, ctx.blocksBySlug);
+        }
+      }
+      if (Object.keys(fieldsByCollection).length > 0) uploadOpts.fields = fieldsByCollection;
+    }
+    ctx.blockNodes.upload = uploadOpts;
+  },
+  relationship: (ctx) => {
+    const relOpts: NonNullable<LexicalFeatureSummary["blockNodes"]>["relationship"] = {};
+    const enabled = toStringArray(ctx.props.enabledCollections);
+    if (enabled) relOpts.enabledCollections = enabled;
+    const disabled = toStringArray(ctx.props.disabledCollections);
+    if (disabled) relOpts.disabledCollections = disabled;
+    ctx.blockNodes.relationship = relOpts;
+  },
+};
+
+/**
  * Build a `LexicalFeatureSummary` for a richText field.
  *
  * Walks the editor's features and buckets each enabled node into `textFormats`,
@@ -253,116 +374,11 @@ export function extractLexicalSummary(
   for (const [key, { props, nodeTypes }] of keys) {
     if (UI_FEATURE_KEYS.has(key)) continue;
 
-    if (key in TEXT_FORMAT_FEATURE_KEYS) {
-      textFormats.push(TEXT_FORMAT_FEATURE_KEYS[key]);
-      continue;
-    }
-
-    if (key === "align") {
-      layoutProps.push("align");
-      continue;
-    }
-    if (key === "indent") {
-      layoutProps.push("indent");
-      continue;
-    }
-
-    if (key === "paragraph") {
-      blockNodes.paragraph = true;
-      continue;
-    }
-    if (key === "blockquote") {
-      blockNodes.quote = true;
-      continue;
-    }
-    if (key === "horizontalRule") {
-      blockNodes.horizontalrule = true;
-      continue;
-    }
-    if (key === "experimental_table") {
-      blockNodes.table = true;
-      continue;
-    }
-
-    if (key === "heading") {
-      const sizes = props.enabledHeadingSizes;
-      blockNodes.heading = {
-        sizes:
-          Array.isArray(sizes) && sizes.every((s) => typeof s === "string")
-            ? (sizes as string[])
-            : ["h1", "h2", "h3", "h4", "h5", "h6"],
-      };
-      continue;
-    }
-
-    if (key in LIST_TYPE_BY_FEATURE_KEY) {
-      if (!blockNodes.list) blockNodes.list = { types: [] };
-      blockNodes.list.types.push(LIST_TYPE_BY_FEATURE_KEY[key]);
-      continue;
-    }
-
-    if (key === "blocks") {
-      const slugs = extractBlockSlugs(props, blocksBySlug);
-      if (slugs) blockNodes.block = { slugs };
-      continue;
-    }
-
-    if (key === "link") {
-      const linkOpts: NonNullable<LexicalFeatureSummary["inlineNodes"]>["link"] = {};
-      const enabled = toStringArray(props.enabledCollections);
-      if (enabled) linkOpts.enabledCollections = enabled;
-      const disabled = toStringArray(props.disabledCollections);
-      if (disabled) linkOpts.disabledCollections = disabled;
-      // Custom link fields are only an array once sanitized; a callback shape is skipped.
-      if (Array.isArray(props.fields)) linkOpts.fields = toFieldSchemas(props.fields, blocksBySlug);
-      inlineNodes.link = linkOpts;
-      continue;
-    }
-
-    if (key === "upload") {
-      const uploadOpts: NonNullable<LexicalFeatureSummary["blockNodes"]>["upload"] = {};
-      // Allow-list lives in enabled/disabledCollections — same as relationship.
-      // (The `collections` prop is a per-collection custom-fields map, NOT the
-      // allow-list; reading its keys would mislabel "collections with extra
-      // fields" as "collections you may upload to".)
-      const enabled = toStringArray(props.enabledCollections);
-      if (enabled) uploadOpts.enabledCollections = enabled;
-      const disabled = toStringArray(props.disabledCollections);
-      if (disabled) uploadOpts.disabledCollections = disabled;
-      // `collections: { [slug]: { fields } }` adds custom fields to the upload
-      // node when it targets that collection — surface them keyed by slug.
-      const collections = props.collections;
-      if (collections && typeof collections === "object" && !Array.isArray(collections)) {
-        const fieldsByCollection: Record<string, FieldSchema[]> = {};
-        for (const [slug, cfg] of Object.entries(collections as Record<string, any>)) {
-          if (
-            cfg &&
-            typeof cfg === "object" &&
-            Array.isArray(cfg.fields) &&
-            cfg.fields.length > 0
-          ) {
-            fieldsByCollection[slug] = toFieldSchemas(cfg.fields, blocksBySlug);
-          }
-        }
-        if (Object.keys(fieldsByCollection).length > 0) uploadOpts.fields = fieldsByCollection;
-      }
-      blockNodes.upload = uploadOpts;
-      continue;
-    }
-
-    if (key === "relationship") {
-      const relOpts: NonNullable<LexicalFeatureSummary["blockNodes"]>["relationship"] = {};
-      const enabled = toStringArray(props.enabledCollections);
-      if (enabled) relOpts.enabledCollections = enabled;
-      const disabled = toStringArray(props.disabledCollections);
-      if (disabled) relOpts.disabledCollections = disabled;
-      blockNodes.relationship = relOpts;
-      continue;
-    }
-
-    if (key === "inlineBlocks") {
-      const slugs = extractBlockSlugs(props, blocksBySlug);
-      if (slugs) inlineNodes.inlineBlock = { slugs };
+    // hasOwn guard: a hostile/odd feature key like "toString" must not hit
+    // inherited Object.prototype members.
+    const project = Object.hasOwn(FEATURE_PROJECTIONS, key) ? FEATURE_PROJECTIONS[key] : undefined;
+    if (project) {
+      project({ props, blocksBySlug, textFormats, blockNodes, inlineNodes, layoutProps });
       continue;
     }
 

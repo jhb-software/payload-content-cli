@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { contentCliPlugin } from "../index.js";
+import { SCHEMA_CONTRACT_VERSION } from "../../schema-contract.js";
 
 describe("contentCliPlugin endpoint metadata", () => {
   it("resolves full paths and captures custom metadata", async () => {
@@ -94,6 +95,46 @@ describe("contentCliPlugin endpoint metadata", () => {
       path: "/api/globals/settings/refresh",
       method: "post",
     });
+  });
+
+  it("stamps the schema response with the contract version", async () => {
+    const plugin = contentCliPlugin();
+    const result = plugin({ endpoints: [] });
+    const schemaEndpoint = result.endpoints.find((ep: any) => ep.path === "/content-cli/schema");
+
+    const response = await schemaEndpoint.handler({
+      user: { id: 1 },
+      payload: { config: { collections: [], globals: [] } },
+    });
+    const body = await response.json();
+
+    expect(body.version).toBe(SCHEMA_CONTRACT_VERSION);
+  });
+
+  it("resolves endpoint paths against a custom routes.api prefix", async () => {
+    const plugin = contentCliPlugin();
+    const result = plugin({
+      routes: { api: "/custom-api" },
+      endpoints: [{ path: "/stats", method: "get", handler: () => {} }],
+    });
+    const schemaEndpoint = result.endpoints.find((ep: any) => ep.path === "/content-cli/schema");
+
+    const response = await schemaEndpoint.handler({
+      user: { id: 1 },
+      payload: { config: { collections: [], globals: [] } },
+    });
+    const body = await response.json();
+
+    expect(body.endpoints).toContainEqual({ path: "/custom-api/stats", method: "get" });
+  });
+
+  it("does not register the schema endpoint twice when applied twice", () => {
+    const plugin = contentCliPlugin();
+    const once = plugin({ endpoints: [] });
+    const twice = plugin(once);
+
+    const schemaEndpoints = twice.endpoints.filter((ep: any) => ep.path === "/content-cli/schema");
+    expect(schemaEndpoints).toHaveLength(1);
   });
 
   it("returns 401 when the request has no authenticated user", async () => {

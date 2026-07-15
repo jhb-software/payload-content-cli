@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- feat: the plugin's schema response now carries a contract `version`; the CLI warns when the installed plugin and CLI speak different contract versions instead of silently mis-parsing.
+- fix: the plugin resolves custom endpoint paths against `routes.api` instead of hardcoding `/api`, and applying the plugin twice no longer registers the schema endpoint twice.
+- fix: `_jsonschema.json` now emits array types for `hasMany` text and number fields instead of falsely flagging pulled arrays as invalid.
+- fix: `join` fields are marked virtual and excluded from JSON schemas, so pulls strip this read-only data instead of round-tripping it into invalid pushes.
+- fix: a throwing `access.read` function now logs a warning naming the entity instead of silently dropping it from the schema response.
 - fix: `push`/`status` no longer warn `Could not scan content directory` when a content type was intentionally not pulled (e.g. a collections-only pull leaves no `globals/` directory). A missing root directory is treated as "nothing of that type"; only genuine errors (permissions, etc.) are reported.
 
 ## 0.3.0

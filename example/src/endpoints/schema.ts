@@ -1,76 +1,31 @@
 import type { Endpoint } from "payload";
 
-interface FieldSchema {
-  name: string;
-  type: string;
-  required?: boolean;
-  localized?: boolean;
-  virtual?: boolean;
-  hasMany?: boolean;
-  relationTo?: string | string[];
-  fields?: FieldSchema[];
-  blocks?: { slug: string; fields: FieldSchema[] }[];
-  options?: { label: string; value: string }[];
-  defaultValue?: unknown;
-}
+import { toFieldSchemas } from "../../../src/plugin/index";
+import type { FieldSchema } from "../../../src/plugin/index";
 
-function extractFields(fields: any[]): FieldSchema[] {
-  return fields
-    .filter((f: any) => f.name) // skip unnamed fields (like row/collapsible wrappers)
-    .map((field: any) => {
-      const schema: FieldSchema = {
-        name: field.name,
-        type: field.type,
-      };
-
-      if (field.required) schema.required = true;
-      if (field.localized) schema.localized = true;
-      if (field.virtual) schema.virtual = true;
-      if (field.hasMany) schema.hasMany = true;
-      if (field.relationTo) schema.relationTo = field.relationTo;
-      // Skip function defaults — they need runtime context (req, user, locale) we can't supply.
-      if (field.defaultValue !== undefined && typeof field.defaultValue !== "function") {
-        schema.defaultValue = field.defaultValue;
-      }
-
-      // Nested fields (group, array)
-      if (field.fields && Array.isArray(field.fields)) {
-        schema.fields = extractFields(field.fields);
-      }
-
-      // Blocks
-      if (field.blocks && Array.isArray(field.blocks)) {
-        schema.blocks = field.blocks.map((block: any) => ({
-          slug: block.slug,
-          fields: extractFields(block.fields || []),
-        }));
-      }
-
-      // Select options
-      if (field.options && Array.isArray(field.options)) {
-        schema.options = field.options.map((opt: any) =>
-          typeof opt === "string"
-            ? { label: opt, value: opt }
-            : { label: opt.label, value: opt.value },
-        );
-      }
-
-      return schema;
-    });
-}
-
+/**
+ * Minimal example of a custom schema endpoint built on the plugin's field
+ * walker. The plugin's own `/api/content-cli/schema` endpoint supersedes this
+ * (access-aware, JSON schemas, endpoint metadata) — this only shows how to
+ * reuse `toFieldSchemas` in your own endpoint.
+ */
 export const schemaEndpoint: Endpoint = {
   path: "/schema",
   method: "get",
   handler: async (req) => {
     const payload = req.payload;
 
-    const collections: Record<string, { slug: string; fields: FieldSchema[] }> =
-      {};
+    // Top-level block definitions, so `blockReferences` resolve.
+    const blocksBySlug: Record<string, unknown> = {};
+    for (const block of payload.config.blocks ?? []) {
+      blocksBySlug[block.slug] = block;
+    }
+
+    const collections: Record<string, { slug: string; fields: FieldSchema[] }> = {};
     for (const collectionConfig of payload.config.collections) {
       collections[collectionConfig.slug] = {
         slug: collectionConfig.slug,
-        fields: extractFields(collectionConfig.fields),
+        fields: toFieldSchemas(collectionConfig.fields, blocksBySlug),
       };
     }
 
@@ -78,14 +33,14 @@ export const schemaEndpoint: Endpoint = {
     for (const globalConfig of payload.config.globals ?? []) {
       globals[globalConfig.slug] = {
         slug: globalConfig.slug,
-        fields: extractFields(globalConfig.fields),
+        fields: toFieldSchemas(globalConfig.fields, blocksBySlug),
       };
     }
 
     const localization = payload.config.localization
       ? {
-          locales: (payload.config.localization.locales as any[]).map(
-            (l: any) => (typeof l === "string" ? l : l.code),
+          locales: (payload.config.localization.locales as unknown[]).map((l) =>
+            typeof l === "string" ? l : (l as { code: string }).code,
           ),
           defaultLocale: payload.config.localization.defaultLocale,
         }

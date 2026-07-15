@@ -42,6 +42,14 @@ function idReferenceSchema(relationTo: string | string[] | undefined): JsonSchem
 }
 
 function fieldToJsonSchema(field: FieldSchema): JsonSchema | null {
+  const item = fieldItemSchema(field);
+  if (!item) return null;
+  // Payload's `hasMany` turns any scalar-ish field (text, number, select,
+  // relationship, upload, …) into an array of that field's item shape.
+  return field.hasMany ? { type: "array", items: item } : item;
+}
+
+function fieldItemSchema(field: FieldSchema): JsonSchema | null {
   switch (field.type) {
     case "text":
     case "textarea":
@@ -54,21 +62,14 @@ function fieldToJsonSchema(field: FieldSchema): JsonSchema | null {
       return { type: "boolean" };
     case "date":
       return { type: "string", format: "date-time" };
-    case "select": {
-      const enumValues = field.options?.map((o) => o.value) ?? [];
-      const single: JsonSchema =
-        enumValues.length > 0 ? { type: "string", enum: enumValues } : { type: "string" };
-      return field.hasMany ? { type: "array", items: single } : single;
-    }
+    case "select":
     case "radio": {
       const enumValues = field.options?.map((o) => o.value) ?? [];
       return enumValues.length > 0 ? { type: "string", enum: enumValues } : { type: "string" };
     }
     case "relationship":
-    case "upload": {
-      const idSchema = idReferenceSchema(field.relationTo);
-      return field.hasMany ? { type: "array", items: idSchema } : idSchema;
-    }
+    case "upload":
+      return idReferenceSchema(field.relationTo);
     case "group":
     case "tab": {
       const { properties, required } = fieldsToJsonSchema(field.fields ?? []);
@@ -138,9 +139,9 @@ function makeNullable(schema: JsonSchema): JsonSchema {
       ? { ...schema, ...nullableEnum }
       : { ...schema, ...nullableEnum, type: [...schema.type, "null"] };
   }
-  if (schema.oneOf) {
-    return { oneOf: [...schema.oneOf, { type: "null" }] };
-  }
+  // Every schema fieldToJsonSchema produces either has a `type` (handled
+  // above) or is the open `{}` schema (json/unknown), which already admits
+  // null — so nothing else needs wrapping.
   return schema;
 }
 
@@ -149,7 +150,7 @@ function makeNullable(schema: JsonSchema): JsonSchema {
 // `array` is excluded — an empty array satisfies the parent regardless of
 // what its items require.
 function fieldIsRequired(field: FieldSchema): boolean {
-  if (field.virtual) return false;
+  if (field.virtual || field.type === "join") return false;
   if (field.required) return true;
   if (field.type !== "array" && Array.isArray(field.fields)) {
     return field.fields.some(fieldIsRequired);
@@ -165,6 +166,8 @@ function fieldsToJsonSchema(fields: FieldSchema[]): {
   const required: string[] = [];
   for (const field of fields) {
     if (field.virtual) continue;
+    // Join fields are computed/read-only — excluded like virtual fields.
+    if (field.type === "join") continue;
     if (field.type === "ui") continue;
     const schema = fieldToJsonSchema(field);
     if (!schema) continue;

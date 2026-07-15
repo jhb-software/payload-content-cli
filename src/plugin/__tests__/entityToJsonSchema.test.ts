@@ -106,6 +106,38 @@ describe("entityToJsonSchema", () => {
     });
   });
 
+  it("maps hasMany text and number fields to arrays", () => {
+    const schema = entityToJsonSchema("posts", [
+      { name: "keywords", type: "text", required: true, hasMany: true },
+      { name: "scores", type: "number", required: true, hasMany: true },
+    ]);
+    expect(schema.properties!.keywords).toEqual({
+      type: "array",
+      items: { type: "string" },
+    });
+    expect(schema.properties!.scores).toEqual({
+      type: "array",
+      items: { type: "number" },
+    });
+  });
+
+  it("marks optional hasMany fields nullable at the array level", () => {
+    const schema = entityToJsonSchema("posts", [{ name: "keywords", type: "text", hasMany: true }]);
+    expect(schema.properties!.keywords).toEqual({
+      type: ["array", "null"],
+      items: { type: "string" },
+    });
+  });
+
+  it("excludes join fields like virtual fields", () => {
+    const schema = entityToJsonSchema("categories", [
+      { name: "title", type: "text", required: true },
+      { name: "relatedPosts", type: "join", required: true },
+    ]);
+    expect(schema.properties!.relatedPosts).toBeUndefined();
+    expect(schema.required).toEqual(["title"]);
+  });
+
   it("maps monomorphic relationships as nullable id reference", () => {
     const schema = entityToJsonSchema("posts", [
       { name: "author", type: "relationship", relationTo: "users" },

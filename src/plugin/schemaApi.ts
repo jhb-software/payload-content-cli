@@ -16,17 +16,31 @@ import type { FieldSchema } from "./fields.js";
 import { entityToJsonSchema } from "./jsonSchema.js";
 import type { JsonSchema } from "./jsonSchema.js";
 
+// Entities whose access.read already produced a warning — one warning per
+// entity per process keeps repeated schema requests from flooding the log.
+const warnedAccessErrors = new Set<string>();
+
 // Mirrors Payload's read-access evaluation (see auth/getEntityPermissions.ts):
 // a function returning true OR a Where clause counts as "has read access";
 // falsy counts as "denied". With no `access.read` defined, Payload's default
-// is `isLoggedIn`.
+// is `isLoggedIn`. A throwing access function counts as denied, but is
+// surfaced via console.warn so the entity doesn't silently vanish from the
+// schema.
 export async function canRead(entity: any, req: any): Promise<boolean> {
   const fn = entity?.access?.read;
   if (typeof fn !== "function") return !!req.user;
   try {
     const result = await fn({ req });
     return !!result;
-  } catch {
+  } catch (error) {
+    const slug = String(entity?.slug ?? "<unknown>");
+    if (!warnedAccessErrors.has(slug)) {
+      warnedAccessErrors.add(slug);
+      console.warn(
+        `[content-cli] access.read for "${slug}" threw — treating it as denied, ` +
+          `so it is omitted from the schema: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
     return false;
   }
 }

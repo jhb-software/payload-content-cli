@@ -2,14 +2,10 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { type Config, requireRemoteConfig } from "./config.js";
 import { PayloadClient, PayloadApiError } from "./client.js";
-import {
-  loadManifest,
-  saveManifest,
-  contentHash,
-  parseLocaleFilename,
-  type Manifest,
-} from "./manifest.js";
+import { loadManifest, saveManifest, contentHash, type Manifest } from "./manifest.js";
+import { parseContentPath, toManifestKey, type ContentEntry } from "./content-paths.js";
 import { status } from "./status.js";
+import { CliError } from "./errors.js";
 
 export interface PushOptions {
   files?: string[];
@@ -19,40 +15,11 @@ export interface PushOptions {
   allowUrlChange?: boolean;
 }
 
-interface ContentEntry {
-  type: "collection" | "global";
-  collection: string;
-  id?: string;
-  locale?: string;
-  filePath: string;
-}
-
-export function parseContentPath(filePath: string, outputDir: string): ContentEntry | null {
-  const rel = path.relative(outputDir, filePath);
-  const parts = rel.split(path.sep);
-
-  if (parts[0] === "collections" && parts.length === 3 && !parts[2].startsWith("_")) {
-    const collection = parts[1];
-    const { base: id, locale } = parseLocaleFilename(parts[2]);
-    return { type: "collection", collection, id, locale, filePath };
-  }
-
-  // globals/<slug>/<slug>.json or <slug>_<locale>.json (new structure)
-  if (parts[0] === "globals" && parts.length === 3) {
-    const collection = parts[1];
-    const { base, locale } = parseLocaleFilename(parts[2]);
-    if (base === collection) {
-      return { type: "global", collection, locale, filePath };
-    }
-  }
-
-  // globals/<slug>.json (legacy flat structure)
-  if (parts[0] === "globals" && parts.length === 2 && !parts[1].startsWith("_")) {
-    const { base: collection, locale } = parseLocaleFilename(parts[1]);
-    return { type: "global", collection, locale, filePath };
-  }
-
-  return null;
+export interface PushResult {
+  pushed: number;
+  created: number;
+  conflicts: number;
+  errors: number;
 }
 
 async function checkConflict(
@@ -63,7 +30,7 @@ async function checkConflict(
 ): Promise<string | null> {
   if (!manifest) return null;
 
-  const key = path.relative(outputDir, entry.filePath);
+  const key = toManifestKey(outputDir, entry.filePath);
   const manifestEntry = manifest.documents[key];
   if (!manifestEntry?.updatedAt) return null;
 
@@ -85,13 +52,19 @@ async function checkConflict(
     }
   } catch (err) {
     if (err instanceof PayloadApiError && err.isNotFound) return null;
-    // Can't check — skip conflict detection
+    // Can't check — push proceeds, but say so instead of silently skipping
+    // the safety net this command exists to provide.
+    console.warn(
+      `  Warning: could not check ${key} for remote changes (${(err as Error).message}); pushing anyway.`,
+    );
   }
 
   return null;
 }
 
-export async function push(config: Config, options: PushOptions = {}): Promise<void> {
+const EMPTY_RESULT: PushResult = { pushed: 0, created: 0, conflicts: 0, errors: 0 };
+
+export async function push(config: Config, options: PushOptions = {}): Promise<PushResult> {
   requireRemoteConfig(config);
   const client = new PayloadClient(config);
   const outputDir = path.resolve(config.outputDir);
@@ -101,15 +74,15 @@ export async function push(config: Config, options: PushOptions = {}): Promise<v
   // Block push to a different URL than the manifest was pulled from —
   // pushing to the wrong server is hard to recover from.
   if (manifest && manifest.payloadUrl !== config.payloadUrl) {
-    console.warn(
-      `Refusing to push: content was pulled from ${manifest.payloadUrl}, but you are now connected to ${config.payloadUrl}.`,
-    );
     if (!options.allowUrlChange) {
-      console.warn(
-        `Re-pull from the correct server, or re-run with --allow-url-change if you intentionally want to push this content to a different server.`,
+      throw new CliError(
+        `refusing to push: content was pulled from ${manifest.payloadUrl}, but you are now connected to ${config.payloadUrl}.\n` +
+          `Re-pull from the correct server, or re-run with --allow-url-change if you intentionally want to push this content to a different server.`,
       );
-      process.exit(1);
     }
+    console.warn(
+      `Warning: content was pulled from ${manifest.payloadUrl}, but you are now connected to ${config.payloadUrl}.`,
+    );
     console.warn(`Proceeding because --allow-url-change was passed.`);
   }
 
@@ -124,7 +97,7 @@ export async function push(config: Config, options: PushOptions = {}): Promise<v
       console.warn(
         "No content directory found. Run `payload-content pull` to download content first.",
       );
-      return;
+      return EMPTY_RESULT;
     }
     const allRelPaths = [...localStatus.modified, ...localStatus.added];
     filePaths = allRelPaths.map((relPath) => path.join(outputDir, relPath));
@@ -136,7 +109,7 @@ export async function push(config: Config, options: PushOptions = {}): Promise<v
 
   if (entries.length === 0) {
     console.log("No changes to push.");
-    return;
+    return EMPTY_RESULT;
   }
 
   console.log(`Pushing ${entries.length} documents to ${config.payloadUrl}...`);
@@ -180,7 +153,7 @@ export async function push(config: Config, options: PushOptions = {}): Promise<v
         console.log(`  Updated global: ${entry.collection}`);
         pushed++;
         if (manifest) {
-          const key = path.relative(outputDir, entry.filePath);
+          const key = toManifestKey(outputDir, entry.filePath);
           manifest.documents[key] = {
             hash: contentHash(raw),
             updatedAt: (result.updatedAt as string) ?? null,
@@ -223,7 +196,7 @@ export async function push(config: Config, options: PushOptions = {}): Promise<v
           console.log(`  Updated ${entry.collection}/${id}`);
           pushed++;
           if (manifest) {
-            const key = path.relative(outputDir, entry.filePath);
+            const key = toManifestKey(outputDir, entry.filePath);
             manifest.documents[key] = {
               hash: contentHash(raw),
               updatedAt: (result.updatedAt as string) ?? null,
@@ -258,10 +231,5 @@ export async function push(config: Config, options: PushOptions = {}): Promise<v
   if (errors > 0) parts.push(`${errors} errors`);
   console.log(`\nDone. ${parts.join(", ")}.`);
 
-  if (skipped > 0) {
-    process.exit(2);
-  }
-  if (errors > 0) {
-    process.exit(1);
-  }
+  return { pushed, created, conflicts: skipped, errors };
 }

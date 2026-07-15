@@ -1,7 +1,9 @@
 import * as path from "node:path";
 import { type Config, requireRemoteConfig } from "./config.js";
 import { PayloadClient } from "./client.js";
-import { loadManifest, parseLocaleFilename } from "./manifest.js";
+import { loadManifest } from "./manifest.js";
+import { parseContentKey } from "./content-paths.js";
+import { status } from "./status.js";
 
 export interface DiffResult {
   localOnly: string[];
@@ -31,39 +33,22 @@ export async function diff(config: Config): Promise<DiffResult> {
     unchanged: [],
   };
 
-  // Import status to get local changes
-  const { status } = await import("./status.js");
   const localStatus = await status(config);
   const localModifiedSet = new Set(localStatus?.modified ?? []);
 
   // Check each tracked document against remote
   for (const [key, entry] of Object.entries(manifest.documents)) {
-    const parts = key.split(path.sep);
-    let type: "collection" | "global";
-    let collection: string;
-    let id: string | undefined;
-    let locale: string | undefined;
-
-    if (parts[0] === "collections" && parts.length === 3) {
-      type = "collection";
-      collection = parts[1];
-      const parsed = parseLocaleFilename(parts[2]);
-      id = parsed.base;
-      locale = parsed.locale;
-    } else if (parts[0] === "globals" && parts.length === 3) {
-      type = "global";
-      collection = parts[1];
-      locale = parseLocaleFilename(parts[2]).locale;
-    } else {
-      continue;
-    }
+    const parsed = parseContentKey(key);
+    if (!parsed) continue;
 
     try {
       let remoteDoc: Record<string, unknown>;
-      if (type === "global") {
-        remoteDoc = await client.getGlobal(collection, { locale });
+      if (parsed.type === "global") {
+        remoteDoc = await client.getGlobal(parsed.collection, { locale: parsed.locale });
       } else {
-        remoteDoc = await client.getDoc(collection, id!, { locale });
+        remoteDoc = await client.getDoc(parsed.collection, parsed.id!, {
+          locale: parsed.locale,
+        });
       }
 
       const remoteUpdatedAt = remoteDoc.updatedAt as string | undefined;

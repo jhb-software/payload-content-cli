@@ -2,11 +2,50 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { Config } from "./config.js";
 import type { SelectType } from "./select.js";
+import { CliError } from "./errors.js";
+
+export interface LocalCondition {
+  op: "equals" | "contains";
+  value: string;
+}
 
 export interface FindOptions {
   collection?: string;
   select?: SelectType;
-  where?: Record<string, string>;
+  where?: Record<string, LocalCondition>;
+}
+
+const LOCAL_OPERATORS: Record<string, LocalCondition["op"]> = {
+  equals: "equals",
+  like: "contains",
+  contains: "contains",
+};
+
+/**
+ * Convert a Payload-style --where filter to local matching conditions.
+ * Local search only supports equals/like/contains — anything else (not_equals,
+ * greater_than, in, …) throws instead of silently matching the wrong documents.
+ */
+export function toLocalWhere(where: Record<string, unknown>): Record<string, LocalCondition> {
+  const result: Record<string, LocalCondition> = {};
+  for (const [field, condition] of Object.entries(where)) {
+    if (typeof condition === "object" && condition !== null) {
+      const entries = Object.entries(condition as Record<string, unknown>);
+      for (const [op, value] of entries) {
+        const mapped = LOCAL_OPERATORS[op];
+        if (!mapped) {
+          throw new CliError(
+            `--local supports only equals/like/contains in --where (got "${op}" on "${field}"). ` +
+              `Drop --local to query the API with full operator support.`,
+          );
+        }
+        result[field] = { op: mapped, value: String(value) };
+      }
+    } else {
+      result[field] = { op: "contains", value: String(condition) };
+    }
+  }
+  return result;
 }
 
 export interface FindResult {
@@ -23,11 +62,18 @@ function getByDotPath(obj: unknown, dotPath: string): unknown {
   return current;
 }
 
-function matchesWhere(doc: Record<string, unknown>, where: Record<string, string>): boolean {
-  for (const [field, value] of Object.entries(where)) {
+function matchesWhere(
+  doc: Record<string, unknown>,
+  where: Record<string, LocalCondition>,
+): boolean {
+  for (const [field, condition] of Object.entries(where)) {
     const docVal = getByDotPath(doc, field);
     if (docVal === undefined || docVal === null) return false;
-    if (!String(docVal).toLowerCase().includes(value.toLowerCase())) return false;
+    if (condition.op === "equals") {
+      if (String(docVal) !== condition.value) return false;
+    } else if (!String(docVal).toLowerCase().includes(condition.value.toLowerCase())) {
+      return false;
+    }
   }
   return true;
 }

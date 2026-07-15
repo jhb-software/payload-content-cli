@@ -11,14 +11,10 @@ import {
   type DocumentEntry,
 } from "./manifest.js";
 import { safeJoinPath } from "./path-safety.js";
-
-interface FieldSchema {
-  name: string;
-  type: string;
-  virtual?: boolean;
-  fields?: FieldSchema[];
-  blocks?: { slug: string; fields: FieldSchema[] }[];
-}
+import { toManifestKey } from "./content-paths.js";
+import { pooled } from "./pooled.js";
+import { CliError } from "./errors.js";
+import type { FieldSchema } from "./plugin/fields.js";
 
 function stripVirtualFields(doc: Record<string, unknown>, fields: FieldSchema[]): void {
   for (const field of fields) {
@@ -53,21 +49,6 @@ export interface PullOptions {
   globals?: string[];
   where?: Record<string, unknown>;
   allowUrlChange?: boolean;
-}
-
-async function pooled<T>(tasks: (() => Promise<T>)[], concurrency: number): Promise<T[]> {
-  const results: T[] = [];
-  let index = 0;
-
-  async function worker() {
-    while (index < tasks.length) {
-      const i = index++;
-      results[i] = await tasks[i]();
-    }
-  }
-
-  await Promise.all(Array.from({ length: Math.min(concurrency, tasks.length) }, () => worker()));
-  return results;
 }
 
 async function pullCollection(
@@ -107,7 +88,7 @@ async function pullCollection(
       const content = JSON.stringify(finalDoc, null, 2) + "\n";
       await fs.writeFile(filePath, content);
 
-      entries[path.relative(outputDir, filePath)] = {
+      entries[toManifestKey(outputDir, filePath)] = {
         hash: contentHash(content),
         updatedAt: (doc.updatedAt as string) ?? null,
       };
@@ -150,7 +131,7 @@ async function pullGlobal(
 
     console.log(`  ${slug}: global${locale ? ` (${locale})` : ""}`);
 
-    entries[path.relative(outputDir, filePath)] = {
+    entries[toManifestKey(outputDir, filePath)] = {
       hash: contentHash(content),
       updatedAt: (doc.updatedAt as string) ?? null,
     };
@@ -164,18 +145,18 @@ export async function pull(config: Config, options: PullOptions = {}): Promise<v
   const client = new PayloadClient(config);
   const outputDir = path.resolve(config.outputDir);
 
-  // Warn if the existing manifest was pulled from a different server
+  // Refuse if the existing manifest was pulled from a different server
   const existingManifest = await loadManifest(outputDir);
   if (existingManifest && existingManifest.payloadUrl !== config.payloadUrl) {
+    if (!options.allowUrlChange) {
+      throw new CliError(
+        `existing content was pulled from ${existingManifest.payloadUrl}, but you are now pulling from ${config.payloadUrl}.\n` +
+          `Re-run with --allow-url-change to repoint the manifest at the new server, or 'payload-content clean' to start fresh.`,
+      );
+    }
     console.warn(
       `Warning: existing content was pulled from ${existingManifest.payloadUrl}, but you are now pulling from ${config.payloadUrl}.`,
     );
-    if (!options.allowUrlChange) {
-      console.warn(
-        `Re-run with --allow-url-change to repoint the manifest at the new server, or 'payload-content clean' to start fresh.`,
-      );
-      process.exit(1);
-    }
     console.warn(`Proceeding because --allow-url-change was passed.`);
   }
 
@@ -186,26 +167,8 @@ export async function pull(config: Config, options: PullOptions = {}): Promise<v
 
   // Schema is optional — provides field metadata for virtual field stripping and _schema.json
   const schema = await client.getSchema();
-  const schemaCollections = schema
-    ? ((schema.collections ?? {}) as Record<
-        string,
-        {
-          slug: string;
-          fields: FieldSchema[];
-          jsonSchema?: Record<string, unknown>;
-        }
-      >)
-    : {};
-  const schemaGlobals = schema
-    ? ((schema.globals ?? {}) as Record<
-        string,
-        {
-          slug: string;
-          fields: FieldSchema[];
-          jsonSchema?: Record<string, unknown>;
-        }
-      >)
-    : {};
+  const schemaCollections = schema?.collections ?? {};
+  const schemaGlobals = schema?.globals ?? {};
 
   if (!schema) {
     console.log(

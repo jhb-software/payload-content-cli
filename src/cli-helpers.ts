@@ -1,6 +1,7 @@
 import * as fs from "node:fs/promises";
 import { parseSelect } from "./select.js";
 import type { SelectType } from "./select.js";
+import { CliError } from "./errors.js";
 
 // ── Option parsing helpers ──────────────────────────────────────────
 
@@ -75,8 +76,7 @@ export function parseJson(raw: string, label: string): Record<string, unknown> {
   try {
     return JSON.parse(raw);
   } catch {
-    console.error(`Error: ${label} must be valid JSON.`);
-    process.exit(1);
+    throw new CliError(`${label} must be valid JSON.`);
   }
 }
 
@@ -85,27 +85,26 @@ export async function readDataFile(filePath: string): Promise<Record<string, unk
     const raw = await fs.readFile(filePath, "utf-8");
     return JSON.parse(raw);
   } catch {
-    console.error(`Error: could not read or parse ${filePath}`);
-    process.exit(1);
+    throw new CliError(`could not read or parse ${filePath}`);
   }
 }
 
 /**
  * Resolve document data from --data or --file flags.
- * Exits with an error if neither is provided.
+ * Throws if neither is provided.
  */
 export async function resolveData(opts: Record<string, unknown>): Promise<Record<string, unknown>> {
   if (opts.file) return readDataFile(opts.file as string);
   if (opts.data) return parseJson(opts.data as string, "--data");
-  console.error("Error: provide --data or --file.");
-  process.exit(1);
+  throw new CliError("provide --data or --file.");
 }
 
 // ── Action wrapper ──────────────────────────────────────────────────
 
 /**
  * Wraps a command action handler with consistent error handling.
- * Catches errors, prints the message, and exits with code 1.
+ * The single place that maps thrown errors to stderr output and an exit
+ * code (CliError carries its own; everything else exits 1).
  */
 export function wrapAction<A extends unknown[]>(
   fn: (...args: A) => Promise<void>,
@@ -115,7 +114,7 @@ export function wrapAction<A extends unknown[]>(
       await fn(...args);
     } catch (error) {
       console.error("Error:", (error as Error).message);
-      process.exit(1);
+      process.exit(error instanceof CliError ? error.exitCode : 1);
     }
   };
 }

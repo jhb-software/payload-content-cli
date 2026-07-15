@@ -1,3 +1,5 @@
+import { CliError } from "./errors.js";
+
 export type SelectIncludeType = {
   [k: string]: SelectIncludeType | true;
 };
@@ -16,10 +18,9 @@ function validateSelect(obj: unknown, path: string): void {
     }
     return;
   }
-  console.error(
-    `Error: --select values must be booleans or nested objects, got ${typeof obj} at "${path}".`,
+  throw new CliError(
+    `--select values must be booleans or nested objects, got ${typeof obj} at "${path}".`,
   );
-  process.exit(1);
 }
 
 export function parseSelect(raw: string): SelectType {
@@ -27,12 +28,10 @@ export function parseSelect(raw: string): SelectType {
   try {
     parsed = JSON.parse(raw.trim());
   } catch {
-    console.error("Error: --select must be a valid JSON object.");
-    process.exit(1);
+    throw new CliError("--select must be a valid JSON object.");
   }
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    console.error("Error: --select must be a valid JSON object.");
-    process.exit(1);
+    throw new CliError("--select must be a valid JSON object.");
   }
   validateSelect(parsed, "");
   return parsed as SelectType;

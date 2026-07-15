@@ -143,9 +143,9 @@ payload-content find posts --local                                        # sear
 payload-content find posts --local --where '{"slug":{"equals":"hello"}}' --select '{"title":true,"slug":true}'
 ```
 
-Flags: `--where`, `--select`, `--limit`, `--sort`, `--depth`, `--locale`, `--fallback-locale`, `--draft`, `--trash`, `--joins`, `--populate`, `--pagination` / `--no-pagination`, `--local`.
+Flags: `--where`, `--select`, `--limit`, `--page`, `--sort`, `--depth`, `--locale`, `--fallback-locale`, `--draft`, `--trash`, `--joins`, `--populate`, `--pagination` / `--no-pagination`, `--local`.
 
-In `--local` mode only `--where` and `--select` are applied; other flags are ignored because the search runs against pulled JSON files, not the API.
+In `--local` mode only `--where` and `--select` are applied; other flags are ignored because the search runs against pulled JSON files, not the API. Local `--where` supports only the `equals` (exact match), `like`, and `contains` (case-insensitive substring) operators — any other operator is rejected with an error. Drop `--local` for full operator support.
 
 ### create — create a document
 

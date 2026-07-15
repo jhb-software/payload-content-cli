@@ -1,5 +1,6 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { parseSelect } from "../select.js";
+import { CliError } from "../errors.js";
 
 describe("parseSelect", () => {
   describe("flat booleans", () => {
@@ -47,44 +48,17 @@ describe("parseSelect", () => {
   });
 
   describe("errors", () => {
-    it("exits on invalid JSON", () => {
-      const mockExit = vi.spyOn(process, "exit").mockImplementation(() => {
-        throw new Error("process.exit");
-      });
-      const mockError = vi.spyOn(console, "error").mockImplementation(() => {});
-
-      expect(() => parseSelect("{invalid}")).toThrow("process.exit");
-      expect(mockExit).toHaveBeenCalledWith(1);
-      expect(mockError).toHaveBeenCalledWith("Error: --select must be a valid JSON object.");
-
-      mockExit.mockRestore();
-      mockError.mockRestore();
+    it("throws a CliError on invalid JSON", () => {
+      expect(() => parseSelect("{invalid}")).toThrow(CliError);
+      expect(() => parseSelect("{invalid}")).toThrow("--select must be a valid JSON object.");
     });
 
-    it("exits on non-boolean/non-object values", () => {
-      const mockExit = vi.spyOn(process, "exit").mockImplementation(() => {
-        throw new Error("process.exit");
-      });
-      const mockError = vi.spyOn(console, "error").mockImplementation(() => {});
-
-      expect(() => parseSelect('{"title":"yes"}')).toThrow("process.exit");
-      expect(mockExit).toHaveBeenCalledWith(1);
-
-      mockExit.mockRestore();
-      mockError.mockRestore();
+    it("throws a CliError on non-boolean/non-object values", () => {
+      expect(() => parseSelect('{"title":"yes"}')).toThrow(CliError);
     });
 
-    it("exits on comma-separated input", () => {
-      const mockExit = vi.spyOn(process, "exit").mockImplementation(() => {
-        throw new Error("process.exit");
-      });
-      const mockError = vi.spyOn(console, "error").mockImplementation(() => {});
-
-      expect(() => parseSelect("title,slug")).toThrow("process.exit");
-      expect(mockExit).toHaveBeenCalledWith(1);
-
-      mockExit.mockRestore();
-      mockError.mockRestore();
+    it("throws a CliError on comma-separated input", () => {
+      expect(() => parseSelect("title,slug")).toThrow(CliError);
     });
   });
 });

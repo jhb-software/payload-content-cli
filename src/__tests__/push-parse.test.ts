@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseContentPath } from "../push.js";
+import { parseContentPath, parseContentKey, toManifestKey } from "../content-paths.js";
 
 describe("parseContentPath", () => {
   const outputDir = "/content";
@@ -103,5 +103,45 @@ describe("parseContentPath", () => {
     it("returns null for deeply nested unknown paths", () => {
       expect(parseContentPath("/content/a/b/c/d.json", outputDir)).toBeNull();
     });
+  });
+});
+
+describe("parseContentKey", () => {
+  it("parses collection keys with a locale suffix", () => {
+    expect(parseContentKey("collections/posts/abc123_de.json")).toEqual({
+      type: "collection",
+      collection: "posts",
+      id: "abc123",
+      locale: "de",
+    });
+  });
+
+  it("parses legacy flat global keys (globals/<slug>.json)", () => {
+    expect(parseContentKey("globals/site-settings.json")).toEqual({
+      type: "global",
+      collection: "site-settings",
+      locale: undefined,
+    });
+  });
+
+  it("parses folder-style global keys", () => {
+    expect(parseContentKey("globals/site-settings/site-settings_en.json")).toEqual({
+      type: "global",
+      collection: "site-settings",
+      locale: "en",
+    });
+  });
+
+  it("returns null for schema files", () => {
+    expect(parseContentKey("collections/posts/_schema.json")).toBeNull();
+    expect(parseContentKey("globals/_localization.json")).toBeNull();
+  });
+});
+
+describe("toManifestKey", () => {
+  it("produces POSIX-separated keys", () => {
+    const key = toManifestKey("/content", "/content/collections/posts/abc.json");
+    expect(key).toBe("collections/posts/abc.json");
+    expect(key).not.toContain("\\");
   });
 });

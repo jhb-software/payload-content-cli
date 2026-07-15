@@ -16,13 +16,22 @@ export type Config = z.infer<typeof configSchema>;
 // AWS/Stripe CLI behavior where ambient cwd config does not silently shadow
 // an explicit profile selection. Real env vars (set in the shell) still
 // override profile values, and we warn when that happens.
-const dotenvBag: Record<string, string> = {};
-dotenv.config({ processEnv: dotenvBag, quiet: true });
+// Loaded lazily so importing this module (e.g. via the library entry point)
+// does not touch the filesystem.
+let dotenvBag: Record<string, string> | undefined;
+
+function getDotenvBag(): Record<string, string> {
+  if (!dotenvBag) {
+    dotenvBag = {};
+    dotenv.config({ processEnv: dotenvBag, quiet: true });
+  }
+  return dotenvBag;
+}
 
 const warnedKeys = new Set<string>();
 
 function resolveEnv(key: string, hasProfile: boolean): string | undefined {
-  return process.env[key] ?? (hasProfile ? undefined : dotenvBag[key]);
+  return process.env[key] ?? (hasProfile ? undefined : getDotenvBag()[key]);
 }
 
 function warnIfShadowed(
@@ -73,7 +82,7 @@ export function loadConfig(overrides?: Partial<Config>, profile?: Profile): Conf
 }
 
 export function resolvePayloadProfile(): string | undefined {
-  return process.env.PAYLOAD_PROFILE ?? dotenvBag.PAYLOAD_PROFILE;
+  return process.env.PAYLOAD_PROFILE ?? getDotenvBag().PAYLOAD_PROFILE;
 }
 
 export function requireRemoteConfig(

@@ -21,7 +21,7 @@ import { pull } from "./pull.js";
 import { push } from "./push.js";
 import { status, printStatus } from "./status.js";
 import { diff, printDiff } from "./diff.js";
-import { find as findLocal, printFindResults, type FindOptions } from "./find.js";
+import { find as findLocal, printFindResults, toLocalWhere, type FindOptions } from "./find.js";
 import { PayloadClient } from "./client.js";
 import { parseSelect } from "./select.js";
 import { registerLexicalCommands } from "./lexical/index.js";
@@ -45,6 +45,8 @@ import {
   resolveData,
   wrapAction,
 } from "./cli-helpers.js";
+import { CliError } from "./errors.js";
+import { pooled } from "./pooled.js";
 
 const program = new Command();
 
@@ -122,21 +124,6 @@ program.option(
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
-async function pooled<T>(tasks: (() => Promise<T>)[], concurrency: number): Promise<T[]> {
-  const results: T[] = [];
-  let index = 0;
-
-  async function worker() {
-    while (index < tasks.length) {
-      const i = index++;
-      results[i] = await tasks[i]();
-    }
-  }
-
-  await Promise.all(Array.from({ length: Math.min(concurrency, tasks.length) }, () => worker()));
-  return results;
-}
-
 async function getConfig(overrides?: Parameters<typeof loadConfig>[0]) {
   const profileName = program.opts().profile ?? resolvePayloadProfile();
   const raw = profileName ? await resolveProfile(profileName) : undefined;
@@ -170,6 +157,7 @@ program
   .option("--where <json>", 'Payload query filter as JSON (e.g. \'{"slug":{"equals":"hello"}}\')')
   .option("--select <json>", "Fields to include/exclude as JSON")
   .option("--limit <n>", "Max documents to return")
+  .option("--page <n>", "Page number for pagination")
   .option("--sort <field>", "Sort field (prefix - for desc)")
   .option("--depth <n>", "Relationship population depth")
   .option("--locale <code>", "Locale for localized fields")
@@ -185,27 +173,15 @@ program
         // Local mode: search pulled files
         const config = await getConfig();
         const { slug: resolvedSlug } = parseSlug(slug);
-        const localWhere: Record<string, string> = {};
-        if (opts.where) {
-          const parsed = parseWhere(opts.where as string);
-          for (const [k, v] of Object.entries(parsed)) {
-            if (typeof v === "object" && v !== null) {
-              const inner = v as Record<string, unknown>;
-              const val = inner.equals ?? inner.like ?? Object.values(inner)[0];
-              if (val !== undefined) localWhere[k] = String(val);
-            } else {
-              localWhere[k] = String(v);
-            }
-          }
-        }
+        const localWhere = opts.where ? toLocalWhere(parseWhere(opts.where as string)) : undefined;
         const localOpts: FindOptions = {
           collection: resolvedSlug,
           select: opts.select ? parseSelect(opts.select as string) : undefined,
-          where: Object.keys(localWhere).length > 0 ? localWhere : undefined,
+          where: localWhere && Object.keys(localWhere).length > 0 ? localWhere : undefined,
         };
         const results = await findLocal(config, localOpts);
         printFindResults(results);
-        if (results.length === 0) process.exit(1);
+        if (results.length === 0) process.exitCode = 1;
         return;
       }
 
@@ -328,8 +304,7 @@ program
           data,
         );
       } else {
-        console.error("Error: provide a document ID or --where for bulk update.");
-        process.exit(1);
+        throw new CliError("provide a document ID or --where for bulk update.");
       }
 
       console.log(JSON.stringify(result, null, 2));
@@ -369,8 +344,7 @@ program
         const where = parseWhere(opts.where as string);
         result = await client.deleteDocs(slug, where, deleteOpts);
       } else {
-        console.error("Error: provide a document ID or --where.");
-        process.exit(1);
+        throw new CliError("provide a document ID or --where.");
       }
 
       console.log(JSON.stringify(result, null, 2));
@@ -539,12 +513,10 @@ program
       // Bulk upload path
       if (opts.dir || opts.glob) {
         if (opts.dir && opts.glob) {
-          console.error("Error: --dir and --glob are mutually exclusive.");
-          process.exit(1);
+          throw new CliError("--dir and --glob are mutually exclusive.");
         }
         if (opts.file || opts.url) {
-          console.error("Error: --dir/--glob cannot be combined with --file or --url.");
-          process.exit(1);
+          throw new CliError("--dir/--glob cannot be combined with --file or --url.");
         }
 
         let files: string[];
@@ -601,7 +573,7 @@ program
         await pooled(tasks, concurrency);
 
         console.log(`\nDone. ${uploaded} uploaded, ${errors} error${errors === 1 ? "" : "s"}.`);
-        if (errors > 0) process.exit(1);
+        if (errors > 0) process.exitCode = 1;
         return;
       }
 
@@ -612,7 +584,11 @@ program
         const urlPath = new URL(opts.url as string).pathname;
         const filename =
           (opts.filename as string | undefined) ?? (path.basename(urlPath) || "download");
-        result = await client.createDoc(slug, { ...docData, url: opts.url, filename }, uploadOpts);
+        result = await client.createDoc(
+          slug,
+          { ...docData, url: opts.url, filename },
+          { ...uploadOpts, uploadFromUrl: true },
+        );
       } else {
         let fileData: Uint8Array;
         let filename: string;
@@ -628,8 +604,7 @@ program
           fileData = new Uint8Array(Buffer.concat(chunks));
           filename = (opts.filename as string | undefined) ?? "upload";
         } else {
-          console.error("Error: provide --file, --url, or pipe data to stdin.");
-          process.exit(1);
+          throw new CliError("provide --file, --url, or pipe data to stdin.");
         }
 
         result = await client.uploadDoc(slug, { data: fileData, filename }, docData, uploadOpts);
@@ -670,8 +645,7 @@ program
       } else if (upperMethod === "DELETE") {
         result = await client.rawDelete(apiPath);
       } else {
-        console.error(`Error: unsupported method "${method}". Use GET, POST, PATCH, or DELETE.`);
-        process.exit(1);
+        throw new CliError(`unsupported method "${method}". Use GET, POST, PATCH, or DELETE.`);
       }
 
       console.log(JSON.stringify(result, null, 2));
@@ -692,10 +666,9 @@ program
   .action(
     wrapAction(async (opts: Record<string, unknown>) => {
       if ((opts.locale as string[] | undefined)?.includes("all")) {
-        console.error(
-          'Error: --locale "all" is not supported. Specify individual locales (e.g. --locale en de).',
+        throw new CliError(
+          '--locale "all" is not supported. Specify individual locales (e.g. --locale en de).',
         );
-        process.exit(1);
       }
 
       const where = opts.where ? parseWhere(opts.where as string) : undefined;
@@ -726,13 +699,15 @@ program
   .action(
     wrapAction(async (files: string[], opts: Record<string, unknown>) => {
       const config = await getConfig();
-      await push(config, {
+      const result = await push(config, {
         files: files.length ? files : undefined,
         dryRun: opts.dryRun as boolean | undefined,
         force: opts.force as boolean | undefined,
         draft: opts.draft as boolean | undefined,
         allowUrlChange: opts.allowUrlChange as boolean | undefined,
       });
+      if (result.conflicts > 0) process.exitCode = 2;
+      else if (result.errors > 0) process.exitCode = 1;
     }),
   );
 
@@ -771,11 +746,10 @@ program
 
       const user = await client.getMe(config.authCollection);
       if (!user) {
-        console.error(
+        throw new CliError(
           `Authentication failed: no user returned from /${config.authCollection}/me.\n\n` +
             `Check that PAYLOAD_API_KEY is valid and belongs to a user in the "${config.authCollection}" collection.`,
         );
-        process.exit(1);
       }
 
       console.log(`Authenticated as: ${config.authCollection}/${user.email ?? user.id}`);
@@ -804,18 +778,7 @@ program
         console.log(
           "Plugin: installed — schema metadata, virtual-field stripping, and custom endpoint metadata enabled",
         );
-        const endpoints = schema.endpoints as
-          | {
-              path: string;
-              method: string;
-              description?: string;
-              schema?: {
-                query?: Record<string, unknown>;
-                body?: Record<string, unknown>;
-                response?: Record<string, unknown>;
-              };
-            }[]
-          | undefined;
+        const endpoints = schema.endpoints;
         if (endpoints?.length) {
           console.log("Custom endpoints:");
           for (const ep of endpoints) {
@@ -952,27 +915,23 @@ profileCmd
         opts.authCollection ||
         opts.outputDir;
       if (!hasAnything) {
-        console.error(
-          "Error: provide at least one of --url, --api-key, --credential-command, --auth-collection, --output-dir.",
+        throw new CliError(
+          "provide at least one of --url, --api-key, --credential-command, --auth-collection, --output-dir.",
         );
-        process.exit(1);
       }
 
       if (opts.apiKey && opts.credentialCommand) {
-        console.error("Error: --api-key and --credential-command are mutually exclusive.");
-        process.exit(1);
+        throw new CliError("--api-key and --credential-command are mutually exclusive.");
       }
 
       if (opts.keychain && opts.credentialCommand) {
-        console.error(
-          "Error: --keychain and --credential-command are mutually exclusive (--keychain writes its own credentialCommand).",
+        throw new CliError(
+          "--keychain and --credential-command are mutually exclusive (--keychain writes its own credentialCommand).",
         );
-        process.exit(1);
       }
 
       if (opts.keychainPrompt && !opts.keychain) {
-        console.error("Error: --keychain-prompt requires --keychain.");
-        process.exit(1);
+        throw new CliError("--keychain-prompt requires --keychain.");
       }
 
       const profile: Profile = {};
@@ -982,12 +941,10 @@ profileCmd
 
       if (opts.keychain) {
         if (process.platform !== "darwin") {
-          console.error("Error: --keychain is only supported on macOS.");
-          process.exit(1);
+          throw new CliError("--keychain is only supported on macOS.");
         }
         if (!opts.apiKey) {
-          console.error("Error: --keychain requires --api-key to seed the Keychain entry.");
-          process.exit(1);
+          throw new CliError("--keychain requires --api-key to seed the Keychain entry.");
         }
         const { service, account } = keychainEntryFor(name);
         const promptOnAccess = Boolean(opts.keychainPrompt);
@@ -1033,8 +990,7 @@ profileCmd
 
       const removed = await removeProfile(name);
       if (!removed) {
-        console.error(`Profile "${name}" not found.`);
-        process.exit(1);
+        throw new CliError(`Profile "${name}" not found.`);
       }
 
       if (ownsKeychainEntry) {

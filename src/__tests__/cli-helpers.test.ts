@@ -6,6 +6,7 @@ import {
   parseJson,
   wrapAction,
 } from "../cli-helpers.js";
+import { CliError } from "../errors.js";
 
 describe("parseCommonOpts", () => {
   it("parses depth as a number", () => {
@@ -125,18 +126,9 @@ describe("parseJson", () => {
     expect(parseJson('{"a": 1}', "--test")).toEqual({ a: 1 });
   });
 
-  it("exits on invalid JSON", () => {
-    const mockExit = vi.spyOn(process, "exit").mockImplementation(() => {
-      throw new Error("process.exit");
-    });
-    const mockError = vi.spyOn(console, "error").mockImplementation(() => {});
-
-    expect(() => parseJson("not json", "--where")).toThrow("process.exit");
-    expect(mockError).toHaveBeenCalledWith("Error: --where must be valid JSON.");
-    expect(mockExit).toHaveBeenCalledWith(1);
-
-    mockExit.mockRestore();
-    mockError.mockRestore();
+  it("throws a CliError on invalid JSON instead of exiting the process", () => {
+    expect(() => parseJson("not json", "--where")).toThrow(CliError);
+    expect(() => parseJson("not json", "--where")).toThrow("--where must be valid JSON.");
   });
 });
 
@@ -164,5 +156,19 @@ describe("wrapAction", () => {
     await expect(wrapped()).rejects.toThrow("process.exit");
     expect(mockError).toHaveBeenCalledWith("Error:", "boom");
     expect(mockExit).toHaveBeenCalledWith(1);
+  });
+
+  it("exits with the exit code carried by a CliError", async () => {
+    const mockExit = vi.spyOn(process, "exit").mockImplementation(() => {
+      throw new Error("process.exit");
+    });
+    const mockError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const fn = vi.fn().mockRejectedValue(new CliError("conflicts", { exitCode: 2 }));
+    const wrapped = wrapAction(fn);
+
+    await expect(wrapped()).rejects.toThrow("process.exit");
+    expect(mockError).toHaveBeenCalledWith("Error:", "conflicts");
+    expect(mockExit).toHaveBeenCalledWith(2);
   });
 });

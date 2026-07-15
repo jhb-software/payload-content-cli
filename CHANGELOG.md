@@ -3,8 +3,13 @@
 ## Unreleased
 
 - feat: the plugin's schema response now carries a contract `version`; the CLI warns when the installed plugin and CLI speak different contract versions instead of silently mis-parsing.
+- feat: `find` gained `--page` for paging through large collections.
 - fix: the plugin resolves custom endpoint paths against `routes.api` instead of hardcoding `/api`, and applying the plugin twice no longer registers the schema endpoint twice.
 - fix: mutating requests (create/update/upload/push) are no longer retried after mid-flight network errors or 5xx responses — a flaky connection can no longer create duplicate documents. Reads retry as before; rate-limited (429) and never-sent requests still retry.
+- fix: `find --local --where` rejects unsupported operators (e.g. `not_equals`) with a clear error instead of silently matching the wrong documents, and `equals` now matches exactly instead of by substring.
+- fix: manifest keys are always written with `/` separators, making pulled content directories portable between Windows and macOS/Linux.
+- fix: `diff` now checks legacy flat `globals/<slug>.json` files instead of silently skipping them.
+- fix: `push` prints a warning when a conflict check fails (e.g. server error) instead of silently skipping conflict detection for that document.
 - fix: `_jsonschema.json` now emits array types for `hasMany` text and number fields instead of falsely flagging pulled arrays as invalid.
 - fix: `join` fields are marked virtual and excluded from JSON schemas, so pulls strip this read-only data instead of round-tripping it into invalid pushes.
 - fix: a throwing `access.read` function now logs a warning naming the entity instead of silently dropping it from the schema response.

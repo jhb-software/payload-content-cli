@@ -2,6 +2,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { Config } from "./config.js";
 import { contentHash, loadManifest } from "./manifest.js";
+import { toManifestKey } from "./content-paths.js";
 
 export interface StatusResult {
   modified: string[];
@@ -62,10 +63,9 @@ export async function status(config: Config): Promise<StatusResult | null> {
         !entry.name.startsWith(".") &&
         !entry.name.startsWith("_")
       ) {
-        const relPath = path.relative(outputDir, fullPath);
-        if (!trackedPaths.has(relPath)) {
-          // Derive the key from the path
-          result.added.push(relPath);
+        const key = toManifestKey(outputDir, fullPath);
+        if (!trackedPaths.has(key)) {
+          result.added.push(key);
         }
       }
     }

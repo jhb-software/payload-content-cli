@@ -25,6 +25,19 @@ jobs:
     permissions:
       contents: write
       id-token: write
+    services:
+      mongodb:
+        image: mongo:8
+        ports:
+          - 27017:27017
+    env:
+      DATABASE_URL: mongodb://localhost:27017/payload-content-cli
+      PAYLOAD_SECRET: ci-test-secret
+      PAYLOAD_URL: http://localhost:3939
+      PAYLOAD_API_KEY: test-api-key-for-development
+      # Make the prepublishOnly test run fail loudly if the integration env
+      # is broken — a release must never ship with the remote suites skipped.
+      CI_REQUIRE_INTEGRATION: "1"
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -55,18 +68,35 @@ jobs:
           echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
           echo "package_name=$PACKAGE_NAME" >> "$GITHUB_OUTPUT"
 
-      - name: Verify changelog
+      - name: Finalize changelog
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           CHANGELOG="CHANGELOG.md"
           FIRST_H2=$(grep -m 1 "^## " "$CHANGELOG" | sed 's/^## //')
-          if [ "$FIRST_H2" != "$VERSION" ]; then
-            echo "::error::CHANGELOG.md first heading is '## ${FIRST_H2}' but expected '## ${VERSION}'. Please update the changelog before releasing."
+          if [ "$FIRST_H2" = "Unreleased" ]; then
+            # Stamp the pending section with the version being released.
+            sed -i "0,/^## Unreleased$/s//## ${VERSION}/" "$CHANGELOG"
+          elif [ "$FIRST_H2" != "$VERSION" ]; then
+            echo "::error::CHANGELOG.md first heading is '## ${FIRST_H2}' but expected '## Unreleased' or '## ${VERSION}'. Please update the changelog before releasing."
             exit 1
           fi
 
       - name: Build
         run: pnpm build
+
+      # Run the full suite against a real Payload instance before anything is
+      # published — without this env the integration suites would silently skip.
+      - name: Start Payload dev server
+        run: pnpm example:dev &
+
+      - name: Wait for Payload to be ready
+        run: timeout 120 bash -c 'until curl -sf http://localhost:3939/api/access; do sleep 2; done'
+
+      - name: Seed test data
+        run: pnpm example:seed
+
+      - name: Test
+        run: pnpm test
 
       # Commit and push BEFORE npm publish so that if push fails,
       # we haven't published an irreversible npm release yet.
@@ -75,7 +105,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add package.json
+          git add package.json CHANGELOG.md
           git commit -m "release: v${{ steps.version.outputs.version }}"
           # Pull with rebase in case main advanced (e.g. from a merge) since checkout
           git pull --rebase origin main

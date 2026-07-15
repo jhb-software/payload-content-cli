@@ -6,6 +6,14 @@ import * as path from "node:path";
 
 const hasRemoteEnv = Boolean(process.env.PAYLOAD_URL && process.env.PAYLOAD_API_KEY);
 
+// In CI the integration env must be present — a broken env wiring must fail
+// the build, not silently skip the whole remote suite.
+if (process.env.CI_REQUIRE_INTEGRATION === "1" && !hasRemoteEnv) {
+  throw new Error(
+    "CI_REQUIRE_INTEGRATION=1 is set but PAYLOAD_URL/PAYLOAD_API_KEY are missing — remote CLI tests would be silently skipped.",
+  );
+}
+
 const CONTENT_DIR = path.resolve("content-cli-process-test");
 const CLI_ENTRY = path.resolve("src/cli.ts");
 const TSX_BIN = path.resolve("node_modules/.bin/tsx");

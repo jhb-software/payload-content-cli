@@ -50,8 +50,13 @@ jobs:
       - run: pnpm typecheck
 
   test:
-    name: Test
+    name: Test (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 22 is the minimum supported version (package.json engines), 24 is current.
+        node-version: [22, 24]
     services:
       mongodb:
         image: mongo:8
@@ -62,15 +67,25 @@ jobs:
       PAYLOAD_SECRET: ci-test-secret
       PAYLOAD_URL: http://localhost:3939
       PAYLOAD_API_KEY: test-api-key-for-development
+      # Fail the build if the integration env wiring breaks, instead of
+      # letting the remote suites skip silently.
+      CI_REQUIRE_INTEGRATION: "1"
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version: ${{ matrix.node-version }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+      - name: Smoke test packed artifact
+        run: |
+          PKG=$(pnpm pack --pack-destination /tmp | tail -1)
+          npm install --prefix /tmp/pack-smoke "$PKG"
+          /tmp/pack-smoke/node_modules/.bin/payload-content --version
+          /tmp/pack-smoke/node_modules/.bin/payload-content skill --output /tmp/pack-smoke/SKILL.md
+          test -s /tmp/pack-smoke/SKILL.md
       - name: Start Payload dev server
         run: pnpm example:dev &
       - name: Wait for Payload to be ready

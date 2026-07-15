@@ -10,6 +10,14 @@ import { loadManifest } from "../manifest.js";
 
 const hasRemoteEnv = Boolean(process.env.PAYLOAD_URL && process.env.PAYLOAD_API_KEY);
 
+// In CI the integration env must be present — a broken env wiring must fail
+// the build, not silently skip the whole integration suite.
+if (process.env.CI_REQUIRE_INTEGRATION === "1" && !hasRemoteEnv) {
+  throw new Error(
+    "CI_REQUIRE_INTEGRATION=1 is set but PAYLOAD_URL/PAYLOAD_API_KEY are missing — integration tests would be silently skipped.",
+  );
+}
+
 const CONTENT_DIR = path.resolve("content-integration-test");
 
 function getConfig() {

@@ -4,7 +4,6 @@
   "description": "A CLI for managing Payload CMS content, built for AI agents.",
   "type": "module",
   "exports": {
-    ".": "./dist/cli.js",
     "./plugin": "./dist/plugin/index.js"
   },
   "bin": {

@@ -186,7 +186,7 @@ describe("createDoc for URL-based uploads", () => {
     await client.createDoc(
       "media",
       { url: "https://example.com/a.png", filename: "a.png" },
-      { select: { id: true } },
+      { select: { id: true }, uploadFromUrl: true },
     );
 
     const url = lastFetchCall!.url;

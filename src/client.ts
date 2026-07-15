@@ -1,6 +1,7 @@
 import { extname } from "node:path";
 import type { Config } from "./config.js";
 import type { SelectExcludeType, SelectIncludeType, SelectType } from "./select.js";
+import { SCHEMA_CONTRACT_VERSION, type SchemaResponse } from "./schema-contract.js";
 
 const MIME_TYPES: Record<string, string> = {
   ".jpg": "image/jpeg",
@@ -114,6 +115,15 @@ async function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Network error codes where the request never reached the server, so
+// retrying can't duplicate a mutation.
+const NEVER_SENT_CODES = new Set(["ECONNREFUSED", "ENOTFOUND", "EAI_AGAIN"]);
+
+function requestNeverSent(err: unknown): boolean {
+  const cause = (err as { cause?: { code?: string } }).cause;
+  return typeof cause?.code === "string" && NEVER_SENT_CODES.has(cause.code);
+}
+
 export class PayloadClient {
   private baseUrl: string;
   private headers: Record<string, string>;
@@ -143,6 +153,10 @@ export class PayloadClient {
     }
 
     const method = options?.method ?? "GET";
+    // Mutations are only retried when we know they were not applied: the
+    // connection was never established, or the server rejected with 429
+    // before executing. A GET can always be retried.
+    const isIdempotent = method === "GET";
     let lastError: PayloadApiError | Error | undefined;
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -171,7 +185,8 @@ export class PayloadClient {
           const body = await response.text();
           const apiError = new PayloadApiError(response.status, path, body);
 
-          if (apiError.isRetryable && attempt < MAX_RETRIES) {
+          const retryStatus = isIdempotent ? apiError.isRetryable : apiError.status === 429;
+          if (retryStatus && attempt < MAX_RETRIES) {
             lastError = apiError;
             continue;
           }
@@ -183,8 +198,9 @@ export class PayloadClient {
       } catch (err) {
         if (err instanceof PayloadApiError) throw err;
 
-        // Network errors (ECONNREFUSED, timeout, etc.) — retry
-        if (attempt < MAX_RETRIES) {
+        // Network errors — retry, unless a mutation may already have been
+        // applied (the request could have reached the server).
+        if (attempt < MAX_RETRIES && (isIdempotent || requestNeverSent(err))) {
           lastError = err as Error;
           continue;
         }
@@ -355,7 +371,7 @@ export class PayloadClient {
       if (err instanceof PayloadApiError && err.isNotFound) {
         throw new Error(
           `Auth collection "${authCollection}" not found at ${this.baseUrl}/${authCollection}/me.\n\n` +
-            `Set PAYLOAD_AUTH_COLLECTION to the slug of your auth-enabled collection (default: "users").`,
+            `Set PAYLOAD_AUTH_COLLECTION to the slug of your auth-enabled collection (default: "api-keys").`,
         );
       }
       throw err;
@@ -391,9 +407,17 @@ export class PayloadClient {
     return { collections, globals };
   }
 
-  async getSchema(): Promise<Record<string, unknown> | null> {
+  async getSchema(): Promise<SchemaResponse | null> {
     try {
-      return await this.request<Record<string, unknown>>("/content-cli/schema");
+      const schema = await this.request<SchemaResponse>("/content-cli/schema");
+      if (schema.version !== SCHEMA_CONTRACT_VERSION) {
+        console.warn(
+          `Warning: the installed content-cli plugin speaks schema contract version ${schema.version ?? "<none>"}, ` +
+            `but this CLI expects version ${SCHEMA_CONTRACT_VERSION}. ` +
+            `Update ${schema.version === undefined || (schema.version ?? 0) < SCHEMA_CONTRACT_VERSION ? "the plugin" : "the CLI"} to the matching release — schema metadata may be incomplete.`,
+        );
+      }
+      return schema;
     } catch (err) {
       if (err instanceof PayloadApiError && err.isNotFound) {
         return null;
@@ -517,13 +541,17 @@ export class PayloadClient {
       autosave?: boolean;
       publishSpecificLocale?: string;
       publishAllLocales?: boolean;
+      /** Set when `data` triggers a server-side file fetch (url + filename) so
+       *  upload-required keys are preserved in `select`. */
+      uploadFromUrl?: boolean;
     },
   ): Promise<Record<string, unknown>> {
     const params: Record<string, string> = {};
-    const isUpload = typeof data?.url === "string" && typeof data?.filename === "string";
     this.addCommonParams(params, {
       ...options,
-      select: isUpload ? preserveUploadFieldsInSelect(options?.select) : options?.select,
+      select: options?.uploadFromUrl
+        ? preserveUploadFieldsInSelect(options?.select)
+        : options?.select,
     });
     this.addPublishParams(params, options);
     const body = options?.draft ? { ...data, _status: "draft" } : data;

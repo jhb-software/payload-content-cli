@@ -92,16 +92,15 @@ The Lexical toolkit behind the `lexical` commands is exported separately, for to
 
 ```ts
 import {
+  readRichText,
   editRichText,
-  listNodes,
-  resolveFieldPath,
   buildParagraph,
 } from "@jhb.software/payload-content-cli/lexical";
 
 const doc = await payload.findByID({ collection: "posts", id, depth: 0, req });
 
 // What's in the field? Each entry carries the address the edits take.
-listNodes(resolveFieldPath(doc, "content"), { depth: 1 });
+readRichText(doc, "content", { depth: 1 });
 // → [{ address: "0", type: "heading", tag: "h2", preview: '"Intro"' },
 //    { address: "1", type: "block", blockType: "cta", preview: "(cta)" }, ...]
 
@@ -122,11 +121,12 @@ editRichText(doc, "content", [
 ]);
 ```
 
-- **Addresses, not indexes.** `"3"` is the fourth top-level node, `"3.1"` its second child — so nested nodes are reachable. `listNodes` returns each node's address, type, and text preview, plus the one property that identifies it: `tag` for headings, `listType`/`itemCount` for lists, `blockType` for blocks. `{ depth: 1 }` keeps the summary to the top level.
+- **One level of abstraction.** Every function takes the document and a field path — never a bare tree — so nothing in your code has to know that a richtext value is `{ root: { children } }`. Reads hand back copies; `editRichText` is the only way to change a field.
+- **Addresses, not indexes.** `"3"` is the fourth top-level node, `"3.1"` its second child — so nested nodes are reachable. `readRichText` returns each node's address, type, and text preview, plus the one property that identifies it: `tag` for headings, `listType`/`itemCount` for lists, `blockType` for blocks. `{ depth: 1 }` keeps the summary to the top level.
 - **Errors you can branch on.** Failures throw `LexicalError` with a `code`: `FIELD_NOT_FOUND`, `INVALID_ADDRESS`, `ADDRESS_OUT_OF_BOUNDS`, `NOT_A_CONTAINER`, `INVALID_TREE`, `INVALID_NODE`. All of them mean the input was wrong, so a tool can relay the message to whoever sent it instead of reporting a fault.
 - **Node builders.** `buildParagraph`, `buildHeading`, `buildList`, `buildText`, `buildHorizontalRule`, `buildBlock`, `buildInternalLink`, and `buildElement` for any other node type. The element builders take plain text or ready-made inline nodes — `buildParagraph([buildText("see "), link])` — and every built node passes validation as-is.
-- **Field paths resolve through blocks.** `resolveFieldPath` walks plain properties and array indexes, and descends into a lexical block by its `blockType` (`"content.TwoColumnRichText.firstColumn"`). `autoDetectLexicalField(doc)` finds the field when there's exactly one.
-- **Reads.** `resolveFieldPath` and `listNodes` for the map, `getNode` for one node, `searchText` for unlinked text matches, `extractLinks`/`extractBlocks` for inventories, `diffLexicalDocs` for comparing locale variants, and `validateTree` for a tree you assembled yourself. Plus the `LexicalNode` types and their guards (`isTextNode`, `isLinkNode`, `hasChildren`).
+- **Field paths resolve through blocks.** A path walks plain properties and array indexes, and descends into a lexical block by its `blockType` — `"content.TwoColumnRichText.firstColumn"` reaches the richtext field inside a block nested in `content`.
+- **Reads.** `readRichText` for the map, `getRichTextNode` for one node, `searchRichText` for text not already inside a link, `extractRichTextLinks`/`extractRichTextBlocks` for inventories, and `diffRichText(source, target, field)` for comparing locale variants. Plus the `LexicalNode` types and their guards (`isTextNode`, `isLinkNode`, `hasChildren`).
 
 Fetching and saving stay yours, and with them the decisions the CLI can't make for you: access control (`overrideAccess: false`), which locale, and whether the write is a draft.
 

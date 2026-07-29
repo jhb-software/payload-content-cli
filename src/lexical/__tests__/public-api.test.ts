@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildParagraph, editRichText, listNodes, resolveFieldPath } from "../index.js";
+import { buildParagraph, editRichText, readRichText } from "../index.js";
 
 /**
  * The `./lexical` entry point exists so a server-side tool (e.g. an MCP
@@ -28,7 +28,7 @@ describe("lexical entry point", () => {
   it("reads a field's nodes, edits one, and leaves the document ready to save", () => {
     const document = doc();
 
-    const before = listNodes(resolveFieldPath(document, "content"), { depth: 1 });
+    const before = readRichText(document, "content", { depth: 1 });
     expect(before.map((entry) => entry.address)).toEqual(["0", "1"]);
 
     editRichText(document, "content", {
@@ -37,7 +37,7 @@ describe("lexical entry point", () => {
       node: buildParagraph("inserted"),
     });
 
-    const after = listNodes(resolveFieldPath(document, "content"), { depth: 1 });
+    const after = readRichText(document, "content", { depth: 1 });
     expect(after.map((entry) => entry.preview)).toEqual(['"first"', '"inserted"', '"second"']);
     // The rest of the document is untouched, so the caller can send the field back whole.
     expect(document.title).toBe("A post");

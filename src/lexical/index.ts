@@ -1,22 +1,18 @@
 /**
  * Public entry point for the Lexical toolkit (`@jhb.software/payload-content-cli/lexical`).
  *
- * Pure functions over a Lexical tree — the same ones the `lexical` CLI commands
- * are built from, minus anything that touches the filesystem or parses CLI
- * flags. They let a server-side tool (an MCP `updateRichText`, a migration
- * script, a seed) edit one node of a richtext field instead of rewriting the
- * whole document.
+ * Everything here works on a document you fetched and will save yourself — a
+ * plain object and a field path, never a bare tree. It lets a server-side tool
+ * (an MCP `updateRichText`, a migration script, a seed) change one node of a
+ * richtext field instead of rewriting the whole document:
  *
- * Start with `editRichText`, which reads the field, applies the edit, validates
- * the result, and writes it back:
- *
- *   const nodes = listNodes(resolveFieldPath(doc, "content")); // what's there
+ *   readRichText(doc, "content", { depth: 1 }); // what's there, with addresses
  *   editRichText(doc, "content", { op: "append", node: buildParagraph("New") });
  *
- * The primitives it composes (`addNode`, `replaceNode`, `removeNode`,
- * `setNodeProp`, `linkText`) are exported too, for edits it doesn't cover.
- * Every one is immutable: it clones the tree and returns new children, leaving
- * the input untouched.
+ * `readRichText` returns copies and `editRichText` is the only way to change a
+ * field: it resolves the path, applies one edit or a batch, validates the
+ * result, and writes it back — all or nothing, so a rejected edit leaves the
+ * document exactly as it was.
  *
  * Nodes are addressed by their path through the tree — `"3"` is the fourth
  * top-level node, `"3.1"` its second child — so nesting is reachable, not just
@@ -38,20 +34,18 @@ export type { RichTextEdit } from "./edit.js";
 export { LexicalError } from "./errors.js";
 export type { LexicalErrorCode } from "./errors.js";
 
-// Reading a field and its tree.
-export { resolveFieldPath } from "./field-path.js";
-export { extractBlocks, extractLinks, getNode, listNodes, searchText } from "./operations.js";
-export type {
-  ExtractedBlock,
-  ExtractedLink,
-  ListEntry,
-  ListOptions,
-  SearchMatch,
-} from "./operations.js";
-
-// Checking a tree you assembled yourself. Returns the problems; `editRichText`
-// applies this itself and refuses to write when it finds any.
-export { validateTree } from "./validate.js";
+// Reading. Each takes the document and a field path, and returns copies.
+export {
+  diffRichText,
+  extractRichTextBlocks,
+  extractRichTextLinks,
+  getRichTextNode,
+  readRichText,
+  searchRichText,
+} from "./read.js";
+export type { ReadOptions } from "./read.js";
+export type { ExtractedBlock, ExtractedLink, ListEntry, SearchMatch } from "./operations.js";
+export type { LexicalDiffResult, SourceLinkDiff } from "./diff.js";
 
 // Building nodes to insert. Element builders take plain text or ready-made
 // inline nodes (formatted text, links).
@@ -66,7 +60,3 @@ export {
   buildText,
 } from "./nodes.js";
 export type { InlineContent } from "./nodes.js";
-
-// Comparing two trees (e.g. locale variants of one document).
-export { diffLexicalDocs } from "./diff.js";
-export type { LexicalDiffResult, SourceLinkDiff } from "./diff.js";

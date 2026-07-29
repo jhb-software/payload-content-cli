@@ -84,6 +84,24 @@ The manifest tracks what was synced, so `status` shows local changes offline and
 
 For small, targeted changes (update a title, toggle a status field), the CRUD commands hit the API directly without any local files.
 
+## Schema API for custom tools
+
+The optional plugin also exports its schema introspection as plain functions, so you can build your own tools — an MCP server, a code generator, a CLI of your own — against the same projection the CLI uses. Each takes a Payload `req` and runs in-process, no HTTP round-trip:
+
+```ts
+import { listReadableEntities, getEntitySchema, getBlockSchema } from "@jhb.software/payload-content-cli/plugin";
+
+const { collections, globals } = await listReadableEntities({ req });
+const { fields } = await getEntitySchema({ req, type: "collection", slug: "pages" });
+// → [{ name: "layout", type: "blocks", blockSlugs: ["hero", "cta"] }, ...]
+
+const [hero] = await getBlockSchema({ req, slugs: ["hero"] });
+```
+
+Entity schemas name the blocks a field accepts rather than inlining them, so an agent can ask for just the ones it needs — the schema stays small, and detail unfolds one call at a time. Access control is respected throughout: entities the request can't read are omitted or throw, matching Payload's own rules. Fields carry what an agent needs to write valid content — required, localized, virtual, `filterOptions`, and a per-field summary of the richtext nodes a Lexical editor accepts.
+
+See [USAGE.md](USAGE.md#build-custom-tools-with-the-schema-api) for the full API.
+
 ## Getting started
 
 See [USAGE.md](USAGE.md) for setup instructions and the full command reference.

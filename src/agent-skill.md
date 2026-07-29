@@ -25,7 +25,7 @@ Run `payload-content --help` to discover all commands and options.
 - Plugin is optional — needed only for `_schema.json` / `_jsonschema.json` files, virtual-field stripping, and custom endpoint metadata in `discover`. Run `payload-content discover` to check whether it is installed. To install it, add to `payload.config.ts`:
 
   ```ts
-  import { contentCliPlugin } from "payload-content-cli/plugin";
+  import { contentCliPlugin } from "@jhb.software/payload-content-cli/plugin";
 
   export default buildConfig({
     plugins: [contentCliPlugin()],

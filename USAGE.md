@@ -121,7 +121,7 @@ editRichText(doc, "content", [
 ]);
 ```
 
-- **One level of abstraction.** Every function takes the document and a field path — never a bare tree — so nothing in your code has to know that a richtext value is `{ root: { children } }`. Reads hand back copies; `editRichText` is the only way to change a field.
+- **One level of abstraction.** Every function takes the document and a field path, so nothing in your code has to know that a richtext value is `{ root: { children } }`. Reads hand back copies; `editRichText` is the only way to change a field.
 - **Addresses, not indexes.** `"3"` is the fourth top-level node, `"3.1"` its second child — so nested nodes are reachable. `readRichText` returns each node's address, type, and text preview, plus the one property that identifies it: `tag` for headings, `listType`/`itemCount` for lists, `blockType` for blocks. `{ depth: 1 }` keeps the summary to the top level.
 - **Errors you can branch on.** Failures throw `LexicalError` with a `code`: `FIELD_NOT_FOUND`, `INVALID_ADDRESS`, `ADDRESS_OUT_OF_BOUNDS`, `NOT_A_CONTAINER`, `INVALID_TREE`, `INVALID_NODE`. All of them mean the input was wrong, so a tool can relay the message to whoever sent it instead of reporting a fault.
 - **Node builders.** `buildParagraph`, `buildHeading`, `buildList`, `buildText`, `buildHorizontalRule`, `buildBlock`, `buildInternalLink`, and `buildElement` for any other node type. The element builders take plain text or ready-made inline nodes — `buildParagraph([buildText("see "), link])` — and every built node passes validation as-is.

@@ -1,13 +1,10 @@
 /**
  * Reading a richtext field on a document.
  *
- * The counterpart to `editRichText`: same level of abstraction (a document and
- * a field path, never a bare tree), so a caller never has to know that a
- * richtext value is `{ root: { children } }` or how a field path resolves.
- *
- * Everything here returns copies. The tree lives inside the document, and
- * handing out live references would let a caller change content by mutating a
- * "read" result — skipping validation and the single write path.
+ * Each function takes the document and a field path, and returns copies: the
+ * tree lives inside the document, so handing out live references would let a
+ * caller change content by mutating a "read" result, skipping validation and
+ * the single write path in `editRichText`.
  */
 
 import { diffLexicalDocs } from "./diff.js";

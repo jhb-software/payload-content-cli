@@ -1,12 +1,11 @@
 /**
- * The one-call entry point for editing a richtext field on a document.
+ * Editing a richtext field on a document.
  *
- * Every consumer of the primitives ends up writing the same four steps —
- * resolve the field, apply an operation, validate the result, write it back —
- * and the interesting failure modes live in the seams between them (an empty
- * field has no node to append after; a rejected tree must not reach the
- * document). `editRichText` owns that sequence so callers state the edit and
- * nothing else.
+ * A caller states the change; `editRichText` owns everything it takes to land
+ * it: resolving the field path, applying the edit to a copy of the tree,
+ * validating the result, and writing it back. That includes the awkward cases —
+ * appending to a field with no nodes to anchor to, or keeping a rejected tree
+ * out of the document.
  *
  * It stays pure: the document is a plain object the caller fetched and will
  * save itself. Nothing here talks to Payload, the filesystem, or the network.

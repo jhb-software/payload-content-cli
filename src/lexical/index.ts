@@ -1,10 +1,10 @@
 /**
  * Public entry point for the Lexical toolkit (`@jhb.software/payload-content-cli/lexical`).
  *
- * Everything here works on a document you fetched and will save yourself — a
- * plain object and a field path, never a bare tree. It lets a server-side tool
- * (an MCP `updateRichText`, a migration script, a seed) change one node of a
- * richtext field instead of rewriting the whole document:
+ * Everything here works on a document you fetched and will save yourself: a
+ * plain object and a field path. It lets a server-side tool (an MCP
+ * `updateRichText`, a migration script, a seed) change one node of a richtext
+ * field instead of rewriting the whole document:
  *
  *   readRichText(doc, "content", { depth: 1 }); // what's there, with addresses
  *   editRichText(doc, "content", { op: "append", node: buildParagraph("New") });

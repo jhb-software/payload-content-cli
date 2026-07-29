@@ -131,11 +131,11 @@ export function entityToSchema(
 /**
  * Resolve a single collection's or global's schema for the given request.
  *
- * Building block for custom tools (e.g. a schema MCP tool) that need the exact
- * `{ slug, fields, jsonSchema }` the `/content-cli/schema` endpoint produces,
- * without going through HTTP. The same access check the endpoint applies runs
- * here: a denied `req.user` throws, mirroring (and reusing) `canRead`'s lenient
- * rule where an `access.read` Where-clause still counts as readable.
+ * Building block for custom tools (e.g. a schema MCP tool) that need one
+ * entity's field schema without going through HTTP. The same access check the
+ * endpoint applies runs here: a denied `req.user` throws, mirroring (and
+ * reusing) `canRead`'s lenient rule where an `access.read` Where-clause still
+ * counts as readable.
  *
  * Collections and globals are looked up in separate namespaces — pass `type` to
  * pick which (a slug may exist in both). Throws on an unknown slug or denied

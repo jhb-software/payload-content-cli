@@ -5,9 +5,6 @@
  * documented subset of it (see `EndpointCustom`) so `discover` can describe
  * custom endpoints. Everything else is ignored, and a `custom` of the wrong
  * shape degrades to no metadata rather than breaking the schema response.
- *
- * Internal: consumers describe endpoints by writing `custom`, not by calling
- * this.
  */
 
 /* eslint-disable @typescript-eslint/no-explicit-any */

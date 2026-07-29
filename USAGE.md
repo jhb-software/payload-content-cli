@@ -86,6 +86,50 @@ The lower-level pure transforms — `toFieldSchemas` (config → agent-friendly 
 
 Each `FieldSchema` carries `system: true` for fields Payload injects rather than the author declaring them (`createdAt`, `updatedAt`, `_status`, `blockName`, and generated array/block row `id`s — but not a collection's custom ID field), `hasCondition: true` when the field is gated by an `admin.condition`, and `filterOptions` when a static filter constrains which related documents may be assigned. `system` marks bookkeeping, not a write ban: `_status` is the publish control and `createdAt` is accepted on create.
 
+### Edit richtext from your own code
+
+The Lexical toolkit behind the `lexical` commands is exported separately, for tools that fetch and save documents themselves — an MCP `updateRichText`, a migration script, a seed. It is pure: no filesystem, no network, no Payload import.
+
+```ts
+import {
+  editRichText,
+  listNodes,
+  resolveFieldPath,
+  buildParagraph,
+} from "@jhb.software/payload-content-cli/lexical";
+
+const doc = await payload.findByID({ collection: "posts", id, depth: 0, req });
+
+// What's in the field? Each entry carries the address the edits take.
+listNodes(resolveFieldPath(doc, "content"), { depth: 1 });
+// → [{ address: "0", type: "heading", tag: "h2", preview: '"Intro"' },
+//    { address: "1", type: "block", blockType: "cta", preview: "(cta)" }, ...]
+
+editRichText(doc, "content", { op: "insertAfter", address: "0", node: buildParagraph("New") });
+
+await payload.update({ collection: "posts", id, data: { content: doc.content }, req });
+```
+
+`editRichText` is the only way to change a field: it resolves the field, applies the edit, validates the result, and writes it back into `doc` — mutating only the field's children, so you can send the top-level field back as a whole. If anything fails, `doc` is left exactly as it was.
+
+Edits are `{ op, … }`: `append` and `prepend` (no address needed — they work on an empty field), `insertBefore`, `insertAfter`, `insertInside`, `replace`, `remove`, `setProp`, and `linkText`. Pass an array to apply several in one go — resolved once, validated once, written once, and all-or-nothing if one of them fails:
+
+```ts
+editRichText(doc, "content", [
+  { op: "replace", address: "0", node: buildHeading("New title") },
+  { op: "setProp", address: "2", key: "format", value: "center" },
+  { op: "linkText", search: "our docs", node: buildInternalLink("our docs", "pages", pageId) },
+]);
+```
+
+- **Addresses, not indexes.** `"3"` is the fourth top-level node, `"3.1"` its second child — so nested nodes are reachable. `listNodes` returns each node's address, type, and text preview, plus the one property that identifies it: `tag` for headings, `listType`/`itemCount` for lists, `blockType` for blocks. `{ depth: 1 }` keeps the summary to the top level.
+- **Errors you can branch on.** Failures throw `LexicalError` with a `code`: `FIELD_NOT_FOUND`, `INVALID_ADDRESS`, `ADDRESS_OUT_OF_BOUNDS`, `NOT_A_CONTAINER`, `INVALID_TREE`, `INVALID_NODE`. All of them mean the input was wrong, so a tool can relay the message to whoever sent it instead of reporting a fault.
+- **Node builders.** `buildParagraph`, `buildHeading`, `buildList`, `buildText`, `buildHorizontalRule`, `buildBlock`, `buildInternalLink`, and `buildElement` for any other node type. The element builders take plain text or ready-made inline nodes — `buildParagraph([buildText("see "), link])` — and every built node passes validation as-is.
+- **Field paths resolve through blocks.** `resolveFieldPath` walks plain properties and array indexes, and descends into a lexical block by its `blockType` (`"content.TwoColumnRichText.firstColumn"`). `autoDetectLexicalField(doc)` finds the field when there's exactly one.
+- **Reads.** `resolveFieldPath` and `listNodes` for the map, `getNode` for one node, `searchText` for unlinked text matches, `extractLinks`/`extractBlocks` for inventories, `diffLexicalDocs` for comparing locale variants, and `validateTree` for a tree you assembled yourself. Plus the `LexicalNode` types and their guards (`isTextNode`, `isLinkNode`, `hasChildren`).
+
+Fetching and saving stay yours, and with them the decisions the CLI can't make for you: access control (`overrideAccess: false`), which locale, and whether the write is a draft.
+
 ### Enable API key auth
 
 The CLI authenticates via Payload's API key feature. We recommend creating a dedicated `api-keys` collection rather than adding API keys to your `users` collection — this keeps machine credentials separate from user accounts. Example:

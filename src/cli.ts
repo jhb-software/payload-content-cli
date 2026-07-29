@@ -24,7 +24,7 @@ import { diff, printDiff } from "./diff.js";
 import { find as findLocal, printFindResults, toLocalWhere, type FindOptions } from "./find.js";
 import { PayloadClient } from "./client.js";
 import { parseSelect } from "./select.js";
-import { registerLexicalCommands } from "./lexical/index.js";
+import { registerLexicalCommands } from "./lexical/commands.js";
 import {
   resolveProfile,
   setProfile,

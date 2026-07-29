@@ -1,5 +1,6 @@
 import type { LexicalNode, LexicalRoot } from "./types.js";
 import { isBlockNode } from "./types.js";
+import { LexicalError } from "./errors.js";
 
 function isLexicalRoot(value: unknown): value is LexicalRoot {
   return (
@@ -52,7 +53,7 @@ function resolvePathValue(doc: Record<string, unknown>, fieldPath: string): unkn
 
   for (const seg of segments) {
     if (current === null || current === undefined || typeof current !== "object") {
-      throw new Error(`Field "${fieldPath}" not found in document`);
+      throw new LexicalError("FIELD_NOT_FOUND", `Field "${fieldPath}" not found in document`);
     }
 
     // Try direct property access first
@@ -73,13 +74,14 @@ function resolvePathValue(doc: Record<string, unknown>, fieldPath: string): unkn
       }
     }
 
-    throw new Error(
+    throw new LexicalError(
+      "FIELD_NOT_FOUND",
       `Field "${fieldPath}" — segment "${seg}" not found (checked both properties and block types)`,
     );
   }
 
   if (current === null || current === undefined) {
-    throw new Error(`Field "${fieldPath}" resolved to null/undefined`);
+    throw new LexicalError("FIELD_NOT_FOUND", `Field "${fieldPath}" resolved to null/undefined`);
   }
 
   return current;
@@ -96,7 +98,8 @@ export function resolveFieldPath(doc: Record<string, unknown>, fieldPath: string
     return (value as LexicalRoot).children;
   }
 
-  throw new Error(
+  throw new LexicalError(
+    "FIELD_NOT_FOUND",
     `Field "${fieldPath}" does not contain a Lexical richtext structure (expected {root: {type: "root", children: [...]}})`,
   );
 }
@@ -117,12 +120,13 @@ export function autoDetectLexicalField(doc: Record<string, unknown>): {
   }
 
   if (candidates.length === 0) {
-    throw new Error("No Lexical richtext fields found in document");
+    throw new LexicalError("FIELD_NOT_FOUND", "No Lexical richtext fields found in document");
   }
 
   if (candidates.length > 1) {
     const names = candidates.map((c) => c.path).join(", ");
-    throw new Error(
+    throw new LexicalError(
+      "FIELD_NOT_FOUND",
       `Multiple Lexical richtext fields found: ${names}. Use --field to specify which one.`,
     );
   }
@@ -138,7 +142,10 @@ export function setByPath(
   const value = resolvePathValue(obj, fieldPath);
 
   if (typeof value !== "object") {
-    throw new Error(`Field "${fieldPath}" does not contain a Lexical richtext structure`);
+    throw new LexicalError(
+      "FIELD_NOT_FOUND",
+      `Field "${fieldPath}" does not contain a Lexical richtext structure`,
+    );
   }
 
   const maybeRoot = (value as Record<string, unknown>).root;
@@ -152,5 +159,8 @@ export function setByPath(
     return;
   }
 
-  throw new Error(`Field "${fieldPath}" does not contain a Lexical richtext structure`);
+  throw new LexicalError(
+    "FIELD_NOT_FOUND",
+    `Field "${fieldPath}" does not contain a Lexical richtext structure`,
+  );
 }

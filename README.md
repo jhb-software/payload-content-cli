@@ -102,6 +102,8 @@ Entity schemas name the blocks a field accepts rather than inlining them, so an 
 
 See [USAGE.md](USAGE.md#build-custom-tools-with-the-schema-api) for the full API.
 
+The Lexical toolkit behind the `lexical` commands ships the same way, under `@jhb.software/payload-content-cli/lexical` — one `editRichText(doc, field, edit)` call addresses a node, edits it, validates the result, and writes the field back, without rewriting the document. Pure functions, no filesystem or network, so fetching and saving (and the access, locale, and draft decisions that come with them) stay in your code. See [USAGE.md](USAGE.md#edit-richtext-from-your-own-code).
+
 ## Getting started
 
 See [USAGE.md](USAGE.md) for setup instructions and the full command reference.

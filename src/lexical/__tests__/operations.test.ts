@@ -36,6 +36,7 @@ describe("listNodes", () => {
     expect(entries[0]).toEqual({
       address: "0",
       type: "heading",
+      tag: "h1",
       preview: '"Title"',
     });
     expect(entries[1]).toEqual({
@@ -43,6 +44,33 @@ describe("listNodes", () => {
       type: "text",
       preview: '"Title"',
     });
+  });
+
+  it("carries the identifying property of headings, lists, and blocks", () => {
+    // A tool reading this summary needs the block's slug and the list's kind as
+    // data — digging them out of a text preview isn't something a caller can do.
+    const [heading, list, block] = listNodes(
+      [
+        { type: "heading", tag: "h3", children: [], version: 1 },
+        {
+          type: "list",
+          listType: "number",
+          children: [{ type: "listitem", version: 1 }],
+          version: 1,
+        },
+        { type: "block", fields: { blockType: "cta" }, version: 2 },
+      ],
+      { depth: 1 },
+    );
+
+    expect(heading.tag).toBe("h3");
+    expect(list).toMatchObject({ type: "list", listType: "number", itemCount: 1 });
+    expect(block.blockType).toBe("cta");
+  });
+
+  it("lists only top-level nodes when depth is 1", () => {
+    const entries = listNodes(makeChildren(), { depth: 1 });
+    expect(entries.map((entry) => entry.address)).toEqual(["0", "1"]);
   });
 });
 

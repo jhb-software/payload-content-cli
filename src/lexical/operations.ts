@@ -1,11 +1,46 @@
 import type { LexicalNode } from "./types.js";
 import { hasChildren, isBlockNode, isLinkNode, isTextNode } from "./types.js";
 import { parseAddress, resolveNode, resolveParentAndIndex } from "./address.js";
+import { LexicalError } from "./errors.js";
 
 export interface ListEntry {
   address: string;
   type: string;
   preview: string;
+  /** Heading level, for `heading` nodes. */
+  tag?: string;
+  /** List variant, for `list` nodes. */
+  listType?: string;
+  /** Number of items, for `list` nodes. */
+  itemCount?: number;
+  /** Block slug, for `block` and `inlineBlock` nodes. */
+  blockType?: string;
+}
+
+export interface ListOptions {
+  /** How many levels to descend. `1` lists only top-level nodes. Default: unlimited. */
+  depth?: number;
+}
+
+/**
+ * The one identifying property of a node, beside its type — what a caller needs
+ * to tell two headings or two blocks apart without parsing the text preview.
+ */
+function identifyingProps(node: LexicalNode): Partial<ListEntry> {
+  if (node.type === "heading" && typeof node.tag === "string") {
+    return { tag: node.tag };
+  }
+  if (node.type === "list") {
+    return {
+      ...(typeof node.listType === "string" ? { listType: node.listType } : {}),
+      itemCount: hasChildren(node) ? node.children.length : 0,
+    };
+  }
+  const fields = node.fields as Record<string, unknown> | undefined;
+  if ((isBlockNode(node) || node.type === "inlineBlock") && typeof fields?.blockType === "string") {
+    return { blockType: fields.blockType };
+  }
+  return {};
 }
 
 function textPreview(node: LexicalNode): string {
@@ -36,7 +71,12 @@ function textPreview(node: LexicalNode): string {
   return "";
 }
 
-function collectNodes(children: LexicalNode[], prefix: string, entries: ListEntry[]): void {
+function collectNodes(
+  children: LexicalNode[],
+  prefix: string,
+  entries: ListEntry[],
+  remainingDepth: number,
+): void {
   for (let i = 0; i < children.length; i++) {
     const addr = prefix ? `${prefix}.${i}` : `${i}`;
     const node = children[i];
@@ -44,16 +84,22 @@ function collectNodes(children: LexicalNode[], prefix: string, entries: ListEntr
       address: addr,
       type: node.type ?? "unknown",
       preview: textPreview(node),
+      ...identifyingProps(node),
     });
-    if (hasChildren(node)) {
-      collectNodes(node.children, addr, entries);
+    if (hasChildren(node) && remainingDepth > 1) {
+      collectNodes(node.children, addr, entries, remainingDepth - 1);
     }
   }
 }
 
-export function listNodes(children: LexicalNode[]): ListEntry[] {
+/**
+ * Flatten a tree into one entry per node, each carrying the address the edit
+ * operations take. This is the map an agent reads before deciding what to
+ * change — `depth: 1` keeps it to the top-level nodes.
+ */
+export function listNodes(children: LexicalNode[], options: ListOptions = {}): ListEntry[] {
   const entries: ListEntry[] = [];
-  collectNodes(children, "", entries);
+  collectNodes(children, "", entries, options.depth ?? Number.POSITIVE_INFINITY);
   return entries;
 }
 
@@ -62,6 +108,12 @@ export function getNode(children: LexicalNode[], addressStr: string): LexicalNod
   return resolveNode(children, addr);
 }
 
+/**
+ * Insert a node relative to an address. The empty address `""` targets the tree
+ * itself, so `""` + `start`/`end` prepends/appends at the top level — the one
+ * insertion that has no existing node to anchor to, and the only way to add to
+ * an empty field.
+ */
 export function addNode(
   children: LexicalNode[],
   addressStr: string,
@@ -69,12 +121,25 @@ export function addNode(
   node: LexicalNode,
 ): LexicalNode[] {
   const result = structuredClone(children);
+
+  if (addressStr.trim() === "") {
+    if (position === "start") return [node, ...result];
+    if (position === "end") return [...result, node];
+    throw new LexicalError(
+      "INVALID_ADDRESS",
+      `The root address "" has no siblings — use "start" or "end", not "${position}"`,
+    );
+  }
+
   const addr = parseAddress(addressStr);
 
   if (position === "start") {
     const target = resolveNode(result, addr);
     if (!Array.isArray((target as Record<string, unknown>).children)) {
-      throw new Error(`Node at "${addressStr}" has no children — cannot insert at start`);
+      throw new LexicalError(
+        "NOT_A_CONTAINER",
+        `Node at "${addressStr}" has no children — cannot insert at start`,
+      );
     }
     (target as Record<string, unknown[]>).children.unshift(node);
     return result;
@@ -83,7 +148,10 @@ export function addNode(
   if (position === "end") {
     const target = resolveNode(result, addr);
     if (!Array.isArray((target as Record<string, unknown>).children)) {
-      throw new Error(`Node at "${addressStr}" has no children — cannot insert at end`);
+      throw new LexicalError(
+        "NOT_A_CONTAINER",
+        `Node at "${addressStr}" has no children — cannot insert at end`,
+      );
     }
     (target as Record<string, unknown[]>).children.push(node);
     return result;
@@ -91,7 +159,10 @@ export function addNode(
 
   const { parent, index } = resolveParentAndIndex(result, addr);
   if (index < 0 || index >= parent.length) {
-    throw new Error(`Address "${addressStr}" is out of bounds (length ${parent.length})`);
+    throw new LexicalError(
+      "ADDRESS_OUT_OF_BOUNDS",
+      `Address "${addressStr}" is out of bounds (length ${parent.length})`,
+    );
   }
 
   if (position === "before") {
@@ -113,7 +184,10 @@ export function replaceNode(
   const { parent, index } = resolveParentAndIndex(result, addr);
 
   if (index < 0 || index >= parent.length) {
-    throw new Error(`Address "${addressStr}" is out of bounds (length ${parent.length})`);
+    throw new LexicalError(
+      "ADDRESS_OUT_OF_BOUNDS",
+      `Address "${addressStr}" is out of bounds (length ${parent.length})`,
+    );
   }
 
   parent[index] = node;
@@ -126,7 +200,10 @@ export function removeNode(children: LexicalNode[], addressStr: string): Lexical
   const { parent, index } = resolveParentAndIndex(result, addr);
 
   if (index < 0 || index >= parent.length) {
-    throw new Error(`Address "${addressStr}" is out of bounds (length ${parent.length})`);
+    throw new LexicalError(
+      "ADDRESS_OUT_OF_BOUNDS",
+      `Address "${addressStr}" is out of bounds (length ${parent.length})`,
+    );
   }
 
   parent.splice(index, 1);
@@ -185,7 +262,7 @@ export function linkText(
   }
 
   if (!findAndLink(result)) {
-    throw new Error(`Text "${search}" not found in the document`);
+    throw new LexicalError("TEXT_NOT_FOUND", `Text "${search}" not found in the document`);
   }
 
   return result;
@@ -246,14 +323,18 @@ export function setNodeProp(
   for (let i = 0; i < segments.length - 1; i++) {
     const seg = segments[i];
     if (target[seg] === undefined || target[seg] === null || typeof target[seg] !== "object") {
-      throw new Error(`Property path "${key}" — segment "${seg}" is not an object`);
+      throw new LexicalError(
+        "INVALID_NODE",
+        `Property path "${key}" — segment "${seg}" is not an object`,
+      );
     }
     target = target[seg] as Record<string, unknown>;
   }
   const leaf = segments[segments.length - 1];
   if (!(leaf in target) && !options.create) {
     const available = Object.keys(target).join(", ") || "(none)";
-    throw new Error(
+    throw new LexicalError(
+      "INVALID_NODE",
       `Property "${key}" does not exist on node at "${addressStr}" (type: ${(node as { type?: string }).type ?? "unknown"}). Existing props: ${available}. Use --create to add a new property.`,
     );
   }

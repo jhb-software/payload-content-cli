@@ -4,6 +4,10 @@
   "description": "A CLI for managing Payload CMS content, built for AI agents.",
   "type": "module",
   "exports": {
+    "./lexical": {
+      "types": "./dist/lexical/index.d.ts",
+      "default": "./dist/lexical/index.js"
+    },
     "./plugin": {
       "types": "./dist/plugin/index.d.ts",
       "default": "./dist/plugin/index.js"

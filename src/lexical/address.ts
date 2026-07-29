@@ -1,16 +1,20 @@
 import type { Address, LexicalNode, LexicalElementNode } from "./types.js";
+import { LexicalError } from "./errors.js";
 
 export function parseAddress(str: string): Address {
   const trimmed = str.trim();
   if (trimmed === "") {
-    throw new Error("Address cannot be empty");
+    throw new LexicalError("INVALID_ADDRESS", "Address cannot be empty");
   }
   const parts = trimmed.split(".");
   const address: Address = [];
   for (const part of parts) {
     const n = Number(part);
     if (!Number.isInteger(n) || n < 0) {
-      throw new Error(`Invalid address segment "${part}" — must be a non-negative integer`);
+      throw new LexicalError(
+        "INVALID_ADDRESS",
+        `Invalid address segment "${part}" — must be a non-negative integer`,
+      );
     }
     address.push(n);
   }
@@ -19,7 +23,7 @@ export function parseAddress(str: string): Address {
 
 export function resolveNode(children: LexicalNode[], address: Address): LexicalNode {
   if (address.length === 0) {
-    throw new Error("Address must have at least one segment");
+    throw new LexicalError("INVALID_ADDRESS", "Address must have at least one segment");
   }
 
   let current: LexicalNode[] = children;
@@ -27,13 +31,16 @@ export function resolveNode(children: LexicalNode[], address: Address): LexicalN
     const idx = address[i];
     if (idx < 0 || idx >= current.length) {
       const partial = address.slice(0, i + 1).join(".");
-      throw new Error(`Address "${partial}" is out of bounds (length ${current.length})`);
+      throw new LexicalError(
+        "ADDRESS_OUT_OF_BOUNDS",
+        `Address "${partial}" is out of bounds (length ${current.length})`,
+      );
     }
     if (i < address.length - 1) {
       const node = current[idx] as LexicalElementNode;
       if (!Array.isArray(node.children)) {
         const partial = address.slice(0, i + 1).join(".");
-        throw new Error(`Node at "${partial}" has no children array`);
+        throw new LexicalError("NOT_A_CONTAINER", `Node at "${partial}" has no children array`);
       }
       current = node.children;
     }
@@ -46,7 +53,7 @@ export function resolveParentAndIndex(
   address: Address,
 ): { parent: LexicalNode[]; index: number } {
   if (address.length === 0) {
-    throw new Error("Address must have at least one segment");
+    throw new LexicalError("INVALID_ADDRESS", "Address must have at least one segment");
   }
 
   let current: LexicalNode[] = children;
@@ -54,12 +61,15 @@ export function resolveParentAndIndex(
     const idx = address[i];
     if (idx < 0 || idx >= current.length) {
       const partial = address.slice(0, i + 1).join(".");
-      throw new Error(`Address "${partial}" is out of bounds (length ${current.length})`);
+      throw new LexicalError(
+        "ADDRESS_OUT_OF_BOUNDS",
+        `Address "${partial}" is out of bounds (length ${current.length})`,
+      );
     }
     const node = current[idx] as LexicalElementNode;
     if (!Array.isArray(node.children)) {
       const partial = address.slice(0, i + 1).join(".");
-      throw new Error(`Node at "${partial}" has no children array`);
+      throw new LexicalError("NOT_A_CONTAINER", `Node at "${partial}" has no children array`);
     }
     current = node.children;
   }

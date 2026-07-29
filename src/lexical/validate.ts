@@ -1,5 +1,6 @@
 import type { LexicalNode } from "./types.js";
 import { hasChildren, isTextNode } from "./types.js";
+import { LexicalError } from "./errors.js";
 
 function walkTree(children: LexicalNode[], prefix: string, warnings: string[]): void {
   for (let i = 0; i < children.length; i++) {
@@ -41,7 +42,8 @@ export function validateTree(children: LexicalNode[]): string[] {
 export function assertValidTree(children: LexicalNode[]): void {
   const errors = validateTree(children);
   if (errors.length > 0) {
-    throw new Error(
+    throw new LexicalError(
+      "INVALID_TREE",
       `Validation failed — document not written:\n${errors.map((e) => `  ${e}`).join("\n")}`,
     );
   }

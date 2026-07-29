@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { toFieldSchemas } from "../index.js";
+import { extractLexicalSummary, toFieldSchemas } from "../index.js";
 
 /**
  * A lexical editor as it appears on a sanitized Payload config: an object with
@@ -351,6 +351,34 @@ describe("toFieldSchemas lexical summary", () => {
       },
     ]);
     expect(field.lexicalFeatures).toEqual({ textFormats: ["bold"], blockNodes: {} });
+  });
+
+  it("is available standalone for consumers that build their own field schemas", () => {
+    // Consumers with their own field walker need the summary without routing a
+    // whole field through toFieldSchemas just to read one key off the result.
+    const blocksBySlug: Record<string, any> = {};
+    const summary = extractLexicalSummary(
+      {
+        name: "content",
+        type: "richText",
+        editor: editor([
+          { key: "bold" },
+          {
+            key: "blocks",
+            serverFeatureProps: {
+              blocks: [{ slug: "callout", fields: [{ name: "text", type: "text" }] }],
+            },
+          },
+        ]),
+      },
+      blocksBySlug,
+    );
+    expect(summary).toEqual({
+      textFormats: ["bold"],
+      blockNodes: { block: { slugs: ["callout"] } },
+    });
+    // Inline BlocksFeature definitions land in the shared map, as via toFieldSchemas.
+    expect(blocksBySlug.callout?.slug).toBe("callout");
   });
 
   it("omits the lexicalFeatures key when no recognizable editor is present", () => {

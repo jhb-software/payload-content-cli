@@ -54,7 +54,7 @@ export interface LexicalFeatureSummary {
       /** Custom fields added to the upload node, keyed by target collection slug. */
       fields?: Record<string, FieldSchema[]>;
     };
-    /** Relationship nodes. `type: "relationship"`, set `fields.relationTo` and `fields.value`. */
+    /** Relationship nodes. `type: "relationship"`, set `relationTo` and `value` on the node itself. */
     relationship?: { enabledCollections?: string[]; disabledCollections?: string[] };
     /** Payload block decorator nodes. `type: "block"`, set `fields.blockType` to a slug. */
     block?: { slugs: string[] };
@@ -354,7 +354,7 @@ const FEATURE_PROJECTIONS: Record<string, FeatureProjection> = {
  */
 export function extractLexicalSummary(
   field: any,
-  blocksBySlug: Record<string, any>,
+  blocksBySlug: Record<string, any> = {},
 ): LexicalFeatureSummary | undefined {
   const normalized = normalizeLexicalFeatures(field.editor);
   if (!normalized || normalized.length === 0) return undefined;

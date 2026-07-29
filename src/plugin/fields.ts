@@ -27,7 +27,40 @@ export interface FieldSchema {
   blocks?: { slug: string; fields: FieldSchema[] }[];
   options?: { label: string; value: string }[];
   defaultValue?: unknown;
+  /**
+   * Field Payload injects into the config rather than the author declaring it:
+   * `createdAt`, `updatedAt`, `_status`, `blockName`, and generated array/block
+   * row `id`s. Not a write ban — `_status` is the publish control and
+   * `createdAt` is accepted on create — but these are bookkeeping rather than
+   * content, so consumers typically hide them by default.
+   */
+  system?: boolean;
+  /** Field is gated by an `admin.condition`; it only applies for some sibling values. */
+  hasCondition?: boolean;
+  /** Static `filterOptions` query constraining which related docs can be assigned. */
+  filterOptions?: unknown;
   lexicalFeatures?: LexicalFeatureSummary;
+}
+
+/**
+ * Names Payload injects itself: timestamps (collection sanitize), `_status`
+ * (versions/drafts) and `blockName` (baseBlockFields). Flagged rather than
+ * dropped so the projection stays lossless — consumers decide whether to hide
+ * them. Matched wherever they appear; these names are Payload-reserved, so
+ * collision with an author-defined field is negligible.
+ */
+const SYSTEM_FIELD_NAMES = new Set(["createdAt", "updatedAt", "_status", "blockName"]);
+
+/**
+ * `id` is the ambiguous case. Array and block rows carry Payload's
+ * `baseIDField` — hidden and self-populating, so it's system. A collection with
+ * a custom ID field declares its own `id`, which an agent *must* supply on
+ * create; flagging that one would hide the only field a create can't omit.
+ * `admin.hidden` is the marker Payload sets on the generated one.
+ */
+function isSystemField(field: any): boolean {
+  if (field.name === "id") return field.admin?.hidden === true;
+  return SYSTEM_FIELD_NAMES.has(field.name);
 }
 
 // Alternative: import { flattenTopLevelFields } from 'payload/utilities/flattenTopLevelFields'
@@ -86,6 +119,20 @@ export function toFieldSchemas(
     if (field.virtual || field.type === "join") schema.virtual = true;
     if (field.hasMany) schema.hasMany = true;
     if (field.relationTo) schema.relationTo = field.relationTo;
+    if (isSystemField(field)) schema.system = true;
+    // admin.condition is a function (can't be serialized) — flag that the field
+    // is gated so agents know it only applies for certain sibling values.
+    if (typeof field.admin?.condition === "function") schema.hasCondition = true;
+    // filterOptions constrains which related docs may be assigned (e.g. a favicon
+    // that accepts only `image/svg+xml` media). Skip function forms — like function
+    // defaults below, they need runtime context (siblingData, user) we can't supply.
+    if (
+      field.filterOptions &&
+      typeof field.filterOptions === "object" &&
+      !Array.isArray(field.filterOptions)
+    ) {
+      schema.filterOptions = field.filterOptions;
+    }
     // Skip function defaults — they need runtime context (req, user, locale) we can't supply.
     if (field.defaultValue !== undefined && typeof field.defaultValue !== "function") {
       schema.defaultValue = field.defaultValue;

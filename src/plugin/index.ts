@@ -24,6 +24,7 @@ import { SCHEMA_CONTRACT_VERSION } from "../schema-contract.js";
 import type { EndpointSchema, EntitySchema, SchemaResponse } from "../schema-contract.js";
 
 export { toFieldSchemas } from "./fields.js";
+export { extractLexicalSummary } from "./lexical.js";
 export { entityToJsonSchema } from "./jsonSchema.js";
 export { getBlockSchema, getEntitySchema, listReadableEntities } from "./schemaApi.js";
 export type { FieldSchema } from "./fields.js";

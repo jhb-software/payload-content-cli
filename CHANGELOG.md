@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- feat: field schemas now flag Payload-injected bookkeeping fields (`system`), fields gated by an `admin.condition` (`hasCondition`), and static `filterOptions` on relationship/upload fields, so agents can hide bookkeeping and see which related documents a field accepts.
+- feat: the plugin exports `extractLexicalSummary`, so consumers with their own field walker can build a richText field's `LexicalFeatureSummary` directly instead of routing the field through `toFieldSchemas`.
+- fix: corrected the `relationship` lexical node docs — `relationTo`/`value` live on the node itself, not under `fields`.
+
 - feat: the plugin's schema response now carries a contract `version`; the CLI warns when the installed plugin and CLI speak different contract versions instead of silently mis-parsing.
 - feat: `find` gained `--page` for paging through large collections.
 - fix: the plugin resolves custom endpoint paths against `routes.api` instead of hardcoding `/api`, and applying the plugin twice no longer registers the schema endpoint twice.

@@ -300,12 +300,12 @@ describe("toFieldSchemas", () => {
     const fields = [
       { name: "title", type: "text", defaultValue: "Untitled" },
       { name: "tags", type: "array", defaultValue: [{ tag: "draft" }] },
-      { name: "createdAt", type: "date", defaultValue: () => new Date() },
+      { name: "publishedAt", type: "date", defaultValue: () => new Date() },
     ];
     expect(toFieldSchemas(fields)).toEqual([
       { name: "title", type: "text", defaultValue: "Untitled" },
       { name: "tags", type: "array", defaultValue: [{ tag: "draft" }] },
-      { name: "createdAt", type: "date" },
+      { name: "publishedAt", type: "date" },
     ]);
   });
 
@@ -317,6 +317,91 @@ describe("toFieldSchemas", () => {
     expect(toFieldSchemas(fields)).toEqual([
       { name: "title", type: "text" },
       { name: "relatedPosts", type: "join", virtual: true },
+    ]);
+  });
+
+  it("marks fields Payload injects as system", () => {
+    const fields = [
+      { name: "title", type: "text" },
+      { name: "createdAt", type: "date" },
+      { name: "updatedAt", type: "date" },
+      { name: "_status", type: "select", options: ["draft", "published"] },
+      { name: "blockName", type: "text" },
+    ];
+    expect(toFieldSchemas(fields)).toEqual([
+      { name: "title", type: "text" },
+      { name: "createdAt", type: "date", system: true },
+      { name: "updatedAt", type: "date", system: true },
+      {
+        name: "_status",
+        type: "select",
+        system: true,
+        options: [
+          { label: "draft", value: "draft" },
+          { label: "published", value: "published" },
+        ],
+      },
+      { name: "blockName", type: "text", system: true },
+    ]);
+  });
+
+  it("marks generated row ids as system but keeps a custom collection ID field", () => {
+    // Payload's baseIDField (array/block rows) is hidden and self-populating;
+    // a custom collection ID field is author-declared and must be set on create,
+    // so hiding it would hide the one field a create can't omit.
+    const [customId, rows] = toFieldSchemas([
+      { name: "id", type: "text", required: true },
+      {
+        name: "rows",
+        type: "array",
+        fields: [
+          // as Payload's baseIDField appears on a sanitized config
+          { name: "id", type: "text", admin: { hidden: true }, defaultValue: () => "generated" },
+          { name: "label", type: "text" },
+        ],
+      },
+    ]);
+    expect(customId).toEqual({ name: "id", type: "text", required: true });
+    expect(rows?.fields).toEqual([
+      { name: "id", type: "text", system: true },
+      { name: "label", type: "text" },
+    ]);
+  });
+
+  it("flags fields gated by an admin condition", () => {
+    const fields = [
+      { name: "type", type: "select", options: ["internal"] },
+      { name: "url", type: "text", admin: { condition: () => true } },
+      { name: "label", type: "text", admin: { description: "no condition" } },
+    ];
+    const [, url, label] = toFieldSchemas(fields);
+    expect(url?.hasCondition).toBe(true);
+    expect(label?.hasCondition).toBeUndefined();
+  });
+
+  it("includes static filterOptions but skips function forms", () => {
+    const fields = [
+      {
+        name: "favicon",
+        type: "upload",
+        relationTo: "media",
+        filterOptions: { mimeType: { equals: "image/svg+xml" } },
+      },
+      {
+        name: "related",
+        type: "relationship",
+        relationTo: "posts",
+        filterOptions: () => ({ status: { equals: "published" } }),
+      },
+    ];
+    expect(toFieldSchemas(fields)).toEqual([
+      {
+        name: "favicon",
+        type: "upload",
+        relationTo: "media",
+        filterOptions: { mimeType: { equals: "image/svg+xml" } },
+      },
+      { name: "related", type: "relationship", relationTo: "posts" },
     ]);
   });
 

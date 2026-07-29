@@ -68,7 +68,9 @@ const blocks = await getBlockSchema({ req, slugs: ["cta", "quoteBlock"] });
 - **Explicit type.** Collections and globals live in separate namespaces and a slug may exist in both, so `getEntitySchema` takes a `type` rather than guessing.
 - **Bare slugs, no policy baked in.** `listReadableEntities` returns plain slugs filtered by access alone — apply your own addressing convention (e.g. a `globals/<slug>` prefix) or "internal collection" exclusions in your own handler.
 
-The lower-level pure transforms — `toFieldSchemas` (config → agent-friendly `FieldSchema[]`) and `entityToJsonSchema` (→ draft-07 validation doc) — are exported too, along with the `FieldSchema`, `JsonSchema`, and `LexicalFeatureSummary` types.
+The lower-level pure transforms — `toFieldSchemas` (config → agent-friendly `FieldSchema[]`), `extractLexicalSummary` (a single richText field config → its `LexicalFeatureSummary`, for consumers with their own field walker) and `entityToJsonSchema` (→ draft-07 validation doc) — are exported too, along with the `FieldSchema`, `JsonSchema`, and `LexicalFeatureSummary` types.
+
+Each `FieldSchema` carries `system: true` for fields Payload injects rather than the author declaring them (`createdAt`, `updatedAt`, `_status`, `blockName`, and generated array/block row `id`s — but not a collection's custom ID field), `hasCondition: true` when the field is gated by an `admin.condition`, and `filterOptions` when a static filter constrains which related documents may be assigned. `system` marks bookkeeping, not a write ban: `_status` is the publish control and `createdAt` is accepted on create.
 
 ### Enable API key auth
 

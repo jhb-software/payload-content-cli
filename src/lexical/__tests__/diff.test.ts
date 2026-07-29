@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { diffLexicalDocs, DIFF_STOP_WORDS } from "../diff.js";
+import { diffLexicalDocs } from "../diff.js";
 import type { LexicalNode } from "../types.js";
 
 function paragraph(text: string): LexicalNode {
@@ -131,12 +131,5 @@ describe("diffLexicalDocs", () => {
       const result = diffLexicalDocs(source, target);
       expect(result.linksOnlyInSource[0].match).toBeUndefined();
     });
-  });
-});
-
-describe("DIFF_STOP_WORDS", () => {
-  it("contains common English and German stop words", () => {
-    expect(DIFF_STOP_WORDS.has("the")).toBe(true);
-    expect(DIFF_STOP_WORDS.has("und")).toBe(true);
   });
 });

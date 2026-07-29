@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractEndpointMeta } from "../index.js";
+import { extractEndpointMeta } from "../endpoints.js";
 
 describe("extractEndpointMeta", () => {
   it("returns empty object when custom is undefined", () => {

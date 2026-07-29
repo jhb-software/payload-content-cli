@@ -19,6 +19,7 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import { extractEndpointMeta } from "./endpoints.js";
 import { buildBlocksBySlug, buildLocalization, canRead, entityToSchema } from "./schemaApi.js";
 import { SCHEMA_CONTRACT_VERSION } from "../schema-contract.js";
 import type { EndpointSchema, EntitySchema, SchemaResponse } from "../schema-contract.js";
@@ -51,24 +52,6 @@ export interface EndpointCustom {
     /** Response shape */
     response?: Record<string, unknown>;
   };
-}
-
-/** Extract optional CLI metadata from an endpoint's `custom` property. */
-export function extractEndpointMeta(custom: any): Pick<EndpointSchema, "description" | "schema"> {
-  if (!custom || typeof custom !== "object") return {};
-  const meta: Pick<EndpointSchema, "description" | "schema"> = {};
-  if (typeof custom.description === "string") meta.description = custom.description;
-  if (custom.schema && typeof custom.schema === "object") {
-    const schema: NonNullable<EndpointSchema["schema"]> = {};
-    if (custom.schema.query && typeof custom.schema.query === "object")
-      schema.query = custom.schema.query;
-    if (custom.schema.body && typeof custom.schema.body === "object")
-      schema.body = custom.schema.body;
-    if (custom.schema.response && typeof custom.schema.response === "object")
-      schema.response = custom.schema.response;
-    if (Object.keys(schema).length > 0) meta.schema = schema;
-  }
-  return meta;
 }
 
 export interface ContentCliPluginOptions {

@@ -79,7 +79,7 @@ const blockRegistryCache = new WeakMap<object, Record<string, any>>();
  * collected by re-projecting newly-found definitions until the map stops
  * growing. Definitions on `config.blocks` win a slug collision.
  */
-export function buildBlockRegistry(payload: any): Record<string, any> {
+function buildBlockRegistry(payload: any): Record<string, any> {
   const config = payload.config;
   const cached = blockRegistryCache.get(config);
   if (cached) return cached;

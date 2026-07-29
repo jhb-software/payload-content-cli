@@ -3,7 +3,7 @@ import { extractLinks, extractBlocks, searchText } from "./operations.js";
 import type { ExtractedLink, ExtractedBlock } from "./operations.js";
 
 /** Common English/German stop words excluded from the fuzzy word-match heuristic. */
-export const DIFF_STOP_WORDS: ReadonlySet<string> = new Set([
+const DIFF_STOP_WORDS: ReadonlySet<string> = new Set([
   "the",
   "and",
   "for",

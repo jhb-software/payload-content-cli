@@ -3,7 +3,7 @@ import { getBlockSchema } from "../index.js";
 
 /** Build a mock PayloadRequest carrying top-level block definitions. */
 function mockReq(blocks: any[], user: any = { id: 1 }) {
-  return { user, payload: { config: { blocks } } };
+  return { user, payload: { config: { blocks, collections: [], globals: [] } } };
 }
 
 describe("getBlockSchema", () => {
@@ -31,7 +31,7 @@ describe("getBlockSchema", () => {
     expect(result.map((r) => r.slug)).toEqual(["b", "a"]);
   });
 
-  it("resolves nested blockReferences within a block via the shared map", async () => {
+  it("references a nested block by slug so detail unfolds one call at a time", async () => {
     const req = mockReq([
       {
         slug: "section",
@@ -41,6 +41,22 @@ describe("getBlockSchema", () => {
     ]);
 
     const result = await getBlockSchema({ req, slugs: ["section"] });
+
+    expect(result).toEqual([
+      { slug: "section", fields: [{ name: "items", type: "blocks", blockSlugs: ["cta"] }] },
+    ]);
+  });
+
+  it("resolves nested blockReferences within a block in inline mode", async () => {
+    const req = mockReq([
+      {
+        slug: "section",
+        fields: [{ name: "items", type: "blocks", blocks: [], blockReferences: ["cta"] }],
+      },
+      { slug: "cta", fields: [{ name: "label", type: "text" }] },
+    ]);
+
+    const result = await getBlockSchema({ req, slugs: ["section"], blocks: "inline" });
 
     expect(result).toEqual([
       {
@@ -54,6 +70,75 @@ describe("getBlockSchema", () => {
         ],
       },
     ]);
+  });
+
+  it("resolves a block declared inline on a field, not just those on config.blocks", async () => {
+    // Payload projects commonly declare blocks inline on the field. A slug the
+    // entity schema hands out must resolve here, however it was declared.
+    const req = {
+      user: { id: 1 },
+      payload: {
+        config: {
+          blocks: [],
+          collections: [
+            {
+              slug: "pages",
+              fields: [
+                {
+                  name: "layout",
+                  type: "blocks",
+                  blocks: [{ slug: "hero", fields: [{ name: "heading", type: "text" }] }],
+                },
+              ],
+            },
+          ],
+          globals: [],
+        },
+      },
+    };
+
+    const result = await getBlockSchema({ req, slugs: ["hero"] });
+
+    expect(result).toEqual([{ slug: "hero", fields: [{ name: "heading", type: "text" }] }]);
+  });
+
+  it("resolves a block nested inside another inline block", async () => {
+    const req = {
+      user: { id: 1 },
+      payload: {
+        config: {
+          blocks: [],
+          globals: [
+            {
+              slug: "settings",
+              fields: [
+                {
+                  name: "layout",
+                  type: "blocks",
+                  blocks: [
+                    {
+                      slug: "section",
+                      fields: [
+                        {
+                          name: "items",
+                          type: "blocks",
+                          blocks: [{ slug: "cta", fields: [{ name: "label", type: "text" }] }],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+          collections: [],
+        },
+      },
+    };
+
+    const result = await getBlockSchema({ req, slugs: ["cta"] });
+
+    expect(result).toEqual([{ slug: "cta", fields: [{ name: "label", type: "text" }] }]);
   });
 
   it("returns an empty array for an empty slug list", async () => {

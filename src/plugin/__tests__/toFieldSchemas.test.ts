@@ -296,6 +296,65 @@ describe("toFieldSchemas", () => {
     ]);
   });
 
+  it("emits block slugs instead of inlining fields in reference mode", () => {
+    const blocksBySlug: Record<string, any> = {
+      cta: { slug: "cta", fields: [{ name: "buttonText", type: "text" }] },
+    };
+    const fields = [
+      {
+        name: "layout",
+        type: "blocks",
+        blocks: [{ slug: "hero", fields: [{ name: "heading", type: "text" }] }],
+        blockReferences: ["cta"],
+      },
+    ];
+    expect(toFieldSchemas(fields, blocksBySlug, { blocks: "reference" })).toEqual([
+      { name: "layout", type: "blocks", blockSlugs: ["hero", "cta"] },
+    ]);
+  });
+
+  it("registers inline block definitions so a later lookup can resolve the slugs", () => {
+    // Blocks declared inline on the field exist nowhere in config.blocks, so
+    // referencing them is only safe if the projection registers them.
+    const blocksBySlug: Record<string, any> = {};
+    toFieldSchemas(
+      [
+        {
+          name: "layout",
+          type: "blocks",
+          blocks: [{ slug: "hero", fields: [{ name: "heading", type: "text" }] }],
+        },
+      ],
+      blocksBySlug,
+      { blocks: "reference" },
+    );
+    expect(blocksBySlug.hero?.fields).toEqual([{ name: "heading", type: "text" }]);
+  });
+
+  it("references blocks nested inside groups and arrays too", () => {
+    const blocksBySlug: Record<string, any> = {};
+    const fields = [
+      {
+        name: "sections",
+        type: "array",
+        fields: [
+          {
+            name: "layout",
+            type: "blocks",
+            blocks: [{ slug: "hero", fields: [] }],
+          },
+        ],
+      },
+    ];
+    expect(toFieldSchemas(fields, blocksBySlug, { blocks: "reference" })).toEqual([
+      {
+        name: "sections",
+        type: "array",
+        fields: [{ name: "layout", type: "blocks", blockSlugs: ["hero"] }],
+      },
+    ]);
+  });
+
   it("includes static defaultValues but skips function defaults", () => {
     const fields = [
       { name: "title", type: "text", defaultValue: "Untitled" },

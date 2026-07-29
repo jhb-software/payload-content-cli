@@ -111,6 +111,44 @@ describe("contentCliPlugin endpoint metadata", () => {
     expect(body.version).toBe(SCHEMA_CONTRACT_VERSION);
   });
 
+  it("still inlines block fields in the schema response", async () => {
+    // The CLI resolves blocks offline (virtual-field stripping, _jsonschema.json),
+    // so the endpoint keeps inlining even though the exported helpers reference.
+    const plugin = contentCliPlugin();
+    const result = plugin({ endpoints: [] });
+    const schemaEndpoint = result.endpoints.find((ep: any) => ep.path === "/content-cli/schema");
+
+    const response = await schemaEndpoint.handler({
+      user: { id: 1 },
+      payload: {
+        config: {
+          collections: [
+            {
+              slug: "pages",
+              fields: [
+                {
+                  name: "layout",
+                  type: "blocks",
+                  blocks: [{ slug: "hero", fields: [{ name: "heading", type: "text" }] }],
+                },
+              ],
+            },
+          ],
+          globals: [],
+        },
+      },
+    });
+    const body = await response.json();
+
+    expect(body.collections.pages.fields).toEqual([
+      {
+        name: "layout",
+        type: "blocks",
+        blocks: [{ slug: "hero", fields: [{ name: "heading", type: "text" }] }],
+      },
+    ]);
+  });
+
   it("resolves endpoint paths against a custom routes.api prefix", async () => {
     const plugin = contentCliPlugin();
     const result = plugin({

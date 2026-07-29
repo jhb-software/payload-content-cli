@@ -27,7 +27,7 @@ export { toFieldSchemas } from "./fields.js";
 export { extractLexicalSummary } from "./lexical.js";
 export { entityToJsonSchema } from "./jsonSchema.js";
 export { getBlockSchema, getEntitySchema, listReadableEntities } from "./schemaApi.js";
-export type { FieldSchema } from "./fields.js";
+export type { FieldSchema, ProjectionOptions } from "./fields.js";
 export type { JsonSchema } from "./jsonSchema.js";
 export type { LexicalFeatureSummary } from "./lexical.js";
 export { SCHEMA_CONTRACT_VERSION } from "../schema-contract.js";

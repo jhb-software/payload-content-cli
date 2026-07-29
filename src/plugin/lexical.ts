@@ -11,7 +11,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { toFieldSchemas } from "./fields.js";
-import type { FieldSchema } from "./fields.js";
+import type { FieldSchema, ProjectionOptions } from "./fields.js";
 
 /**
  * Per-`richText`-field summary of the lexical editor's enabled nodes.
@@ -227,6 +227,7 @@ function normalizeLexicalFeatures(editor: any): NormalizedFeature[] | undefined 
 type ProjectionContext = {
   props: Record<string, unknown>;
   blocksBySlug: Record<string, any>;
+  options: ProjectionOptions;
   textFormats: string[];
   blockNodes: LexicalFeatureSummary["blockNodes"];
   inlineNodes: NonNullable<LexicalFeatureSummary["inlineNodes"]>;
@@ -303,7 +304,7 @@ const FEATURE_PROJECTIONS: Record<string, FeatureProjection> = {
     if (disabled) linkOpts.disabledCollections = disabled;
     // Custom link fields are only an array once sanitized; a callback shape is skipped.
     if (Array.isArray(ctx.props.fields)) {
-      linkOpts.fields = toFieldSchemas(ctx.props.fields, ctx.blocksBySlug);
+      linkOpts.fields = toFieldSchemas(ctx.props.fields, ctx.blocksBySlug, ctx.options);
     }
     ctx.inlineNodes.link = linkOpts;
   },
@@ -324,7 +325,7 @@ const FEATURE_PROJECTIONS: Record<string, FeatureProjection> = {
       const fieldsByCollection: Record<string, FieldSchema[]> = {};
       for (const [slug, cfg] of Object.entries(collections as Record<string, any>)) {
         if (cfg && typeof cfg === "object" && Array.isArray(cfg.fields) && cfg.fields.length > 0) {
-          fieldsByCollection[slug] = toFieldSchemas(cfg.fields, ctx.blocksBySlug);
+          fieldsByCollection[slug] = toFieldSchemas(cfg.fields, ctx.blocksBySlug, ctx.options);
         }
       }
       if (Object.keys(fieldsByCollection).length > 0) uploadOpts.fields = fieldsByCollection;
@@ -355,6 +356,7 @@ const FEATURE_PROJECTIONS: Record<string, FeatureProjection> = {
 export function extractLexicalSummary(
   field: any,
   blocksBySlug: Record<string, any> = {},
+  options: ProjectionOptions = {},
 ): LexicalFeatureSummary | undefined {
   const normalized = normalizeLexicalFeatures(field.editor);
   if (!normalized || normalized.length === 0) return undefined;
@@ -378,7 +380,7 @@ export function extractLexicalSummary(
     // inherited Object.prototype members.
     const project = Object.hasOwn(FEATURE_PROJECTIONS, key) ? FEATURE_PROJECTIONS[key] : undefined;
     if (project) {
-      project({ props, blocksBySlug, textFormats, blockNodes, inlineNodes, layoutProps });
+      project({ props, blocksBySlug, options, textFormats, blockNodes, inlineNodes, layoutProps });
       continue;
     }
 

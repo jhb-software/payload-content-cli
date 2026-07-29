@@ -45,30 +45,44 @@ const { collections, globals, localization } = await listReadableEntities({
 //     localization: { locales: ["en", "de"], defaultLocale: "en" } }
 ```
 
-`getEntitySchema` is the describe half — it resolves one collection or global to `{ slug, fields, jsonSchema }` (the exact per-entity shape the endpoint returns):
+`getEntitySchema` is the describe half — it resolves one collection or global to `{ slug, fields }`:
 
 ```ts
-const { slug, fields, jsonSchema } = await getEntitySchema({
+const { slug, fields } = await getEntitySchema({
   req,
   type: "collection", // or "global"
-  slug: "posts",
+  slug: "pages",
 });
+// fields → [{ name: "layout", type: "blocks", blockSlugs: ["hero", "cta"] }, ...]
 ```
 
-`getBlockSchema` resolves richText block slugs — the ones `getEntitySchema` surfaces under `lexicalFeatures.blockNodes.block.slugs` without their fields — to `{ slug, fields }`:
+Block fields come back as slugs, not definitions, so an entity schema stays small enough to hand to an agent: it sees which blocks a field accepts and asks for the ones it needs. `getBlockSchema` resolves those slugs — and the ones a richText field lists under `lexicalFeatures.blockNodes.block.slugs` — to `{ slug, fields }`:
 
 ```ts
 import { getBlockSchema } from "@jhb.software/payload-content-cli/plugin";
 
-const blocks = await getBlockSchema({ req, slugs: ["cta", "quoteBlock"] });
-// → [{ slug: "cta", fields: [...] }, { slug: "quoteBlock", fields: [...] }]
+const blocks = await getBlockSchema({ req, slugs: ["hero"] });
+// → [{ slug: "hero", fields: [...] }]
+// A block nested inside "hero" is itself referenced by slug, so detail
+// unfolds one call at a time.
 ```
 
-- **Consistent and access-aware.** `listReadableEntities` and `getEntitySchema` evaluate the entity's `access.read` against `req` with the same lenient rule the endpoint uses (a `read` returning a `Where` clause still counts as readable), so everything `listReadableEntities` returns is resolvable by `getEntitySchema`. `getEntitySchema` **throws** on denied access; `listReadableEntities` simply omits what you can't read. `getBlockSchema` has no read check — blocks are config fragments, not access-controlled entities. Blocks must be defined globally on `config.blocks`; blocks declared inline in a lexical editor config are not supported (Payload v4 drops inline blocks, and defining blocks globally is more performant regardless).
+Pass `blocks: "inline"` to either helper for the self-contained shape instead — every block's fields embedded, and for `getEntitySchema` a `jsonSchema` (the draft-07 validation document) alongside. That's what the `/schema` endpoint serves, since the CLI resolves blocks offline. In the default reference mode `getEntitySchema` omits `jsonSchema`, because that document inlines every block and would undo the saving; call `entityToJsonSchema` yourself if you want one.
+
+```ts
+const { fields, jsonSchema } = await getEntitySchema({
+  req,
+  type: "collection",
+  slug: "pages",
+  blocks: "inline",
+});
+```
+
+- **Consistent and access-aware.** `listReadableEntities` and `getEntitySchema` evaluate the entity's `access.read` against `req` with the same lenient rule the endpoint uses (a `read` returning a `Where` clause still counts as readable), so everything `listReadableEntities` returns is resolvable by `getEntitySchema`. `getEntitySchema` **throws** on denied access; `listReadableEntities` simply omits what you can't read. `getBlockSchema` has no read check — blocks are config fragments, not access-controlled entities. Any block the config can reach resolves, whether it's defined on `config.blocks`, inline on a field, or in a lexical `BlocksFeature`; defining blocks globally on `config.blocks` is still the better default (Payload v4 drops inline blocks, and shared definitions are more performant).
 - **Explicit type.** Collections and globals live in separate namespaces and a slug may exist in both, so `getEntitySchema` takes a `type` rather than guessing.
 - **Bare slugs, no policy baked in.** `listReadableEntities` returns plain slugs filtered by access alone — apply your own addressing convention (e.g. a `globals/<slug>` prefix) or "internal collection" exclusions in your own handler.
 
-The lower-level pure transforms — `toFieldSchemas` (config → agent-friendly `FieldSchema[]`), `extractLexicalSummary` (a single richText field config → its `LexicalFeatureSummary`, for consumers with their own field walker) and `entityToJsonSchema` (→ draft-07 validation doc) — are exported too, along with the `FieldSchema`, `JsonSchema`, and `LexicalFeatureSummary` types.
+The lower-level pure transforms — `toFieldSchemas` (config → agent-friendly `FieldSchema[]`, taking the same `{ blocks }` projection option), `extractLexicalSummary` (a single richText field config → its `LexicalFeatureSummary`, for consumers with their own field walker) and `entityToJsonSchema` (→ draft-07 validation doc) — are exported too, along with the `FieldSchema`, `JsonSchema`, and `LexicalFeatureSummary` types.
 
 Each `FieldSchema` carries `system: true` for fields Payload injects rather than the author declaring them (`createdAt`, `updatedAt`, `_status`, `blockName`, and generated array/block row `id`s — but not a collection's custom ID field), `hasCondition: true` when the field is gated by an `admin.condition`, and `filterOptions` when a static filter constrains which related documents may be assigned. `system` marks bookkeeping, not a write ban: `_status` is the publish control and `createdAt` is accepted on create.
 

@@ -7,6 +7,10 @@
  * and `blockReferences` are resolved against the shared block map. Each
  * `richText` field carries a `lexicalFeatures` summary (see `./lexical.ts`).
  *
+ * `blocks` fields project either way: inlined (the default, what the CLI's
+ * schema endpoint serves) or as bare slugs the caller resolves on demand via
+ * `getBlockSchema` — see `ProjectionOptions`.
+ *
  * Types are kept inline to avoid a hard dependency on `payload`.
  */
 
@@ -24,7 +28,13 @@ export interface FieldSchema {
   hasMany?: boolean;
   relationTo?: string | string[];
   fields?: FieldSchema[];
+  /** Inline block definitions (`blocks: "inline"`, the default). */
   blocks?: { slug: string; fields: FieldSchema[] }[];
+  /**
+   * The slugs a `blocks` field accepts, in place of their definitions
+   * (`blocks: "reference"`). Resolve them with `getBlockSchema`.
+   */
+  blockSlugs?: string[];
   options?: { label: string; value: string }[];
   defaultValue?: unknown;
   /**
@@ -63,11 +73,28 @@ function isSystemField(field: any): boolean {
   return SYSTEM_FIELD_NAMES.has(field.name);
 }
 
+export interface ProjectionOptions {
+  /**
+   * How `blocks` fields are projected.
+   *
+   * `"inline"` (default) embeds each block's own `FieldSchema[]`, giving one
+   * self-contained document — what the `/content-cli/schema` endpoint serves,
+   * because the CLI resolves blocks offline.
+   *
+   * `"reference"` emits `blockSlugs` instead and registers each block
+   * definition into the shared `blocksBySlug` map, so a caller can resolve the
+   * slugs it actually needs via `getBlockSchema`. Keeps an entity schema small
+   * enough to hand to an agent — progressive disclosure.
+   */
+  blocks?: "inline" | "reference";
+}
+
 // Alternative: import { flattenTopLevelFields } from 'payload/utilities/flattenTopLevelFields'
 // with moveSubFieldsToTop: true — but that adds a hard dependency on `payload`.
 export function toFieldSchemas(
   fields: any[],
   blocksBySlug: Record<string, any> = {},
+  options: ProjectionOptions = {},
 ): FieldSchema[] {
   const result: FieldSchema[] = [];
 
@@ -83,11 +110,11 @@ export function toFieldSchemas(
           result.push({
             name: tab.name,
             type: "tab",
-            fields: toFieldSchemas(tab.fields || [], blocksBySlug),
+            fields: toFieldSchemas(tab.fields || [], blocksBySlug, options),
           });
         } else {
           // Unnamed tab — hoist fields to parent level
-          result.push(...toFieldSchemas(tab.fields || [], blocksBySlug));
+          result.push(...toFieldSchemas(tab.fields || [], blocksBySlug, options));
         }
       }
       continue;
@@ -100,7 +127,7 @@ export function toFieldSchemas(
       !field.name &&
       Array.isArray(field.fields)
     ) {
-      result.push(...toFieldSchemas(field.fields, blocksBySlug));
+      result.push(...toFieldSchemas(field.fields, blocksBySlug, options));
       continue;
     }
 
@@ -139,7 +166,7 @@ export function toFieldSchemas(
     }
 
     if (field.fields && Array.isArray(field.fields)) {
-      schema.fields = toFieldSchemas(field.fields, blocksBySlug);
+      schema.fields = toFieldSchemas(field.fields, blocksBySlug, options);
     }
 
     // Resolve inline blocks + blockReferences (slugs pointing to config.blocks)
@@ -155,10 +182,20 @@ export function toFieldSchemas(
     const allBlocks = [...inlineBlocks, ...refBlocks];
 
     if (allBlocks.length > 0) {
-      schema.blocks = allBlocks.map((block: any) => ({
-        slug: block.slug,
-        fields: toFieldSchemas(block.fields || [], blocksBySlug),
-      }));
+      if (options.blocks === "reference") {
+        // Register before referencing: a block declared inline on this field
+        // exists nowhere else, so the slug would be unresolvable otherwise.
+        // First definition wins, matching how `blockReferences` resolve.
+        for (const block of allBlocks) {
+          if (!(block.slug in blocksBySlug)) blocksBySlug[block.slug] = block;
+        }
+        schema.blockSlugs = allBlocks.map((block: any) => block.slug);
+      } else {
+        schema.blocks = allBlocks.map((block: any) => ({
+          slug: block.slug,
+          fields: toFieldSchemas(block.fields || [], blocksBySlug, options),
+        }));
+      }
     }
 
     if (field.options && Array.isArray(field.options)) {
@@ -170,7 +207,7 @@ export function toFieldSchemas(
     }
 
     if (field.type === "richText") {
-      const lexicalFeatures = extractLexicalSummary(field, blocksBySlug);
+      const lexicalFeatures = extractLexicalSummary(field, blocksBySlug, options);
       if (lexicalFeatures) schema.lexicalFeatures = lexicalFeatures;
     }
 

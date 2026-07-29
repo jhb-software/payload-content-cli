@@ -19,7 +19,7 @@ function mockReq(
 }
 
 describe("getEntitySchema", () => {
-  it("returns slug, fields, and jsonSchema for a collection", async () => {
+  it("returns slug and fields for a collection", async () => {
     const req = mockReq({
       collections: [
         {
@@ -39,10 +39,61 @@ describe("getEntitySchema", () => {
       { name: "title", type: "text", required: true },
       { name: "body", type: "richText" },
     ]);
+  });
+
+  it("returns slug, fields, and jsonSchema in inline mode", async () => {
+    const req = mockReq({
+      collections: [
+        {
+          slug: "posts",
+          fields: [
+            { name: "title", type: "text", required: true },
+            { name: "body", type: "richText" },
+          ],
+        },
+      ],
+    });
+
+    const result = await getEntitySchema({
+      req,
+      type: "collection",
+      slug: "posts",
+      blocks: "inline",
+    });
+
     // jsonSchema is the draft-07 validation doc, with required fields surfaced.
     expect(result.jsonSchema.title).toBe("posts");
     expect(result.jsonSchema.required).toContain("title");
     expect(result.jsonSchema.required).not.toContain("body");
+  });
+
+  it("references blocks by slug and omits jsonSchema by default", async () => {
+    // Progressive disclosure: the entity schema names the blocks it accepts,
+    // and the caller unfolds the ones it cares about via getBlockSchema. The
+    // jsonSchema would re-inline every block, so it is left out of this mode.
+    const req = mockReq({
+      collections: [
+        {
+          slug: "pages",
+          fields: [
+            {
+              name: "layout",
+              type: "blocks",
+              blocks: [{ slug: "hero", fields: [{ name: "heading", type: "text" }] }],
+              blockReferences: ["cta"],
+            },
+          ],
+        },
+      ],
+      blocks: [{ slug: "cta", fields: [{ name: "label", type: "text" }] }],
+    });
+
+    const result = await getEntitySchema({ req, type: "collection", slug: "pages" });
+
+    expect(result).toEqual({
+      slug: "pages",
+      fields: [{ name: "layout", type: "blocks", blockSlugs: ["hero", "cta"] }],
+    });
   });
 
   it("returns the schema for a global", async () => {
@@ -69,7 +120,7 @@ describe("getEntitySchema", () => {
     expect(asGlobal.fields).toEqual([{ name: "globalField", type: "text" }]);
   });
 
-  it("resolves blockReferences from payload.config.blocks", async () => {
+  it("resolves blockReferences from payload.config.blocks in inline mode", async () => {
     const req = mockReq({
       collections: [
         {
@@ -80,7 +131,12 @@ describe("getEntitySchema", () => {
       blocks: [{ slug: "cta", fields: [{ name: "label", type: "text" }] }],
     });
 
-    const result = await getEntitySchema({ req, type: "collection", slug: "pages" });
+    const result = await getEntitySchema({
+      req,
+      type: "collection",
+      slug: "pages",
+      blocks: "inline",
+    });
 
     expect(result.fields).toEqual([
       {

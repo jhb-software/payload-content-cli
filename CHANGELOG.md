@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- feat: the exported schema helpers follow progressive disclosure — `getEntitySchema` now returns a `blocks` field's `blockSlugs` instead of inlining every block definition (and omits `jsonSchema`, which would re-inline them), and `getBlockSchema` resolves those slugs on demand, itself referencing nested blocks. Pass `blocks: "inline"` for the previous self-contained shape. The `/content-cli/schema` endpoint and the CLI are unchanged.
+- feat: `getBlockSchema` resolves blocks declared inline on a field or in a lexical `BlocksFeature`, not just those registered on `config.blocks`.
+
 - feat: field schemas now flag Payload-injected bookkeeping fields (`system`), fields gated by an `admin.condition` (`hasCondition`), and static `filterOptions` on relationship/upload fields, so agents can hide bookkeeping and see which related documents a field accepts.
 - feat: the plugin exports `extractLexicalSummary`, so consumers with their own field walker can build a richText field's `LexicalFeatureSummary` directly instead of routing the field through `toFieldSchemas`.
 - fix: corrected the `relationship` lexical node docs — `relationTo`/`value` live on the node itself, not under `fields`.

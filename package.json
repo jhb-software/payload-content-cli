@@ -77,12 +77,14 @@
   "devDependencies": {
     "@commitlint/cli": "^20.5.0",
     "@commitlint/config-conventional": "^20.5.0",
+    "@payloadcms/richtext-lexical": "3.84.1",
     "@tsconfig/node22": "^22.0.5",
     "@types/node": "^25.8.0",
     "husky": "^9.1.7",
     "lint-staged": "^17.0.5",
     "oxfmt": "^0.50.0",
     "oxlint": "^1.65.0",
+    "payload": "3.84.1",
     "tsx": "^4.22.0",
     "typescript": "^6.0.3",
     "vitest": "4.1.6"

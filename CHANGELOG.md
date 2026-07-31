@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0
 
 - **breaking:** the package root (`"."`) is no longer exported. It mapped to `dist/cli.js`, so importing it ran dotenv loading, argv parsing and possibly `process.exit` as a side effect rather than exposing an API. Use the `payload-content` binary for the CLI, and `./plugin` or `./lexical` for programmatic use.
 - **breaking:** the exported `getEntitySchema` follows progressive disclosure — a `blocks` field now returns its `blockSlugs` instead of inlining every block definition, and `jsonSchema` is omitted (it would re-inline them). Pass `blocks: "inline"` for the previous self-contained shape. The `/content-cli/schema` endpoint and the CLI are unchanged.

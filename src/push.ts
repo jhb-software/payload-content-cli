@@ -6,6 +6,7 @@ import { loadManifest, saveManifest, contentHash, type Manifest } from "./manife
 import { parseContentPath, toManifestKey, type ContentEntry } from "./content-paths.js";
 import { status } from "./status.js";
 import { CliError } from "./errors.js";
+import { progress } from "./output.js";
 
 export interface PushOptions {
   files?: string[];
@@ -108,11 +109,11 @@ export async function push(config: Config, options: PushOptions = {}): Promise<P
     .filter((e): e is ContentEntry => e !== null);
 
   if (entries.length === 0) {
-    console.log("No changes to push.");
+    progress("No changes to push.");
     return EMPTY_RESULT;
   }
 
-  console.log(`Pushing ${entries.length} documents to ${config.payloadUrl}...`);
+  progress(`Pushing ${entries.length} documents to ${config.payloadUrl}...`);
 
   let pushed = 0;
   let created = 0;
@@ -141,7 +142,7 @@ export async function push(config: Config, options: PushOptions = {}): Promise<P
       }
 
       if (options.dryRun) {
-        console.log(`  [dry-run] Would update global: ${entry.collection}`);
+        progress(`  [dry-run] Would update global: ${entry.collection}`);
         continue;
       }
 
@@ -150,7 +151,7 @@ export async function push(config: Config, options: PushOptions = {}): Promise<P
           locale: entry.locale,
           draft: options.draft,
         });
-        console.log(`  Updated global: ${entry.collection}`);
+        progress(`  Updated global: ${entry.collection}`);
         pushed++;
         if (manifest) {
           const key = toManifestKey(outputDir, entry.filePath);
@@ -183,7 +184,7 @@ export async function push(config: Config, options: PushOptions = {}): Promise<P
 
       if (options.dryRun) {
         const isNew = !doc.id && !doc.createdAt;
-        console.log(`  [dry-run] Would ${isNew ? "create" : "update"} ${entry.collection}/${id}`);
+        progress(`  [dry-run] Would ${isNew ? "create" : "update"} ${entry.collection}/${id}`);
         continue;
       }
 
@@ -193,7 +194,7 @@ export async function push(config: Config, options: PushOptions = {}): Promise<P
             locale: entry.locale,
             draft: options.draft,
           });
-          console.log(`  Updated ${entry.collection}/${id}`);
+          progress(`  Updated ${entry.collection}/${id}`);
           pushed++;
           if (manifest) {
             const key = toManifestKey(outputDir, entry.filePath);
@@ -208,7 +209,7 @@ export async function push(config: Config, options: PushOptions = {}): Promise<P
               locale: entry.locale,
               draft: options.draft,
             });
-            console.log(`  Created ${entry.collection}/${createdDoc.id} (from ${id})`);
+            progress(`  Created ${entry.collection}/${createdDoc.id} (from ${id})`);
             created++;
           } else {
             throw err;
@@ -229,7 +230,7 @@ export async function push(config: Config, options: PushOptions = {}): Promise<P
   const parts = [`${pushed} updated`, `${created} created`];
   if (skipped > 0) parts.push(`${skipped} conflicts`);
   if (errors > 0) parts.push(`${errors} errors`);
-  console.log(`\nDone. ${parts.join(", ")}.`);
+  progress(`\nDone. ${parts.join(", ")}.`);
 
   return { pushed, created, conflicts: skipped, errors };
 }

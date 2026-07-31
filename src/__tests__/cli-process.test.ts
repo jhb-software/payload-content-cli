@@ -127,6 +127,76 @@ describe.skipIf(!hasRemoteEnv)("cli (remote)", () => {
 
     await fs.rm(orphan, { force: true });
   });
+
+  // `--json` exists so an agent can consume these commands without scraping
+  // human prose. That only holds if stdout is *nothing but* the payload, so
+  // every assertion below parses stdout whole rather than matching a substring.
+  describe("--json", () => {
+    it("status emits the change sets as JSON", () => {
+      const result = runCLI(["status", "--json"]);
+      expect(result.status).toBe(0);
+
+      const parsed = JSON.parse(result.stdout);
+      expect(parsed).toMatchObject({
+        modified: expect.any(Array),
+        added: expect.any(Array),
+        deleted: expect.any(Array),
+      });
+    });
+
+    it("diff emits the comparison as JSON", () => {
+      const result = runCLI(["diff", "--json"]);
+      expect(result.status).toBe(0);
+
+      const parsed = JSON.parse(result.stdout);
+      expect(parsed).toMatchObject({
+        localOnly: expect.any(Array),
+        remoteModified: expect.any(Array),
+        localModified: expect.any(Array),
+        bothModified: expect.any(Array),
+      });
+    });
+
+    it("pull keeps progress off stdout so the summary stays parseable", () => {
+      const result = runCLI(["pull", "--collections", "posts", "--json"]);
+      expect(result.status, result.stderr).toBe(0);
+
+      const parsed = JSON.parse(result.stdout);
+      expect(parsed.documents).toBeGreaterThan(0);
+      expect(parsed.collections).toContain("posts");
+
+      // The human progress lines still have to go somewhere — stderr — or the
+      // command becomes unobservable when scripted.
+      expect(result.stderr).toMatch(/Connecting to/);
+      expect(result.stdout).not.toMatch(/Connecting to/);
+    });
+
+    it("push reports counts as JSON and still signals conflicts via exit code", async () => {
+      const dir = path.join(CONTENT_DIR, "collections", "posts");
+      const files = (await fs.readdir(dir)).filter(
+        (f) => f.endsWith(".json") && !f.startsWith("_"),
+      );
+      const target = path.join(dir, files[0]);
+
+      const raw = await fs.readFile(target, "utf-8");
+      const doc = JSON.parse(raw);
+      doc.title = `Local edit ${Date.now()}`;
+      await fs.writeFile(target, JSON.stringify(doc, null, 2));
+
+      const manifestPath = path.join(CONTENT_DIR, ".manifest.json");
+      const manifest = JSON.parse(await fs.readFile(manifestPath, "utf-8"));
+      const key = path.relative(CONTENT_DIR, target);
+      manifest.documents[key].updatedAt = "1970-01-01T00:00:00.000Z";
+      await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2));
+
+      const result = runCLI(["push", target, "--json"]);
+      expect(result.status).toBe(2);
+
+      const parsed = JSON.parse(result.stdout);
+      expect(parsed.conflicts).toBe(1);
+      expect(parsed.pushed).toBe(0);
+    });
+  });
 });
 
 describe("cli (local-only)", () => {

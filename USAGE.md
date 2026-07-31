@@ -203,7 +203,7 @@ payload-content find posts --local                                        # sear
 payload-content find posts --local --where '{"slug":{"equals":"hello"}}' --select '{"title":true,"slug":true}'
 ```
 
-Flags: `--where`, `--select`, `--limit`, `--page`, `--sort`, `--depth`, `--locale`, `--fallback-locale`, `--draft`, `--trash`, `--joins`, `--populate`, `--pagination` / `--no-pagination`, `--local`.
+Flags: `--where`, `--select`, `--limit`, `--page`, `--sort`, `--depth`, `--locale`, `--fallback-locale`, `--draft`, `--trash`, `--joins`, `--populate`, `--pagination` / `--no-pagination`, `--local`, `--json` (with `--local`).
 
 In `--local` mode only `--where` and `--select` are applied; other flags are ignored because the search runs against pulled JSON files, not the API. Local `--where` supports only the `equals` (exact match), `like`, and `contains` (case-insensitive substring) operators — any other operator is rejected with an error. Drop `--local` for full operator support.
 
@@ -340,6 +340,7 @@ payload-content pull --locale de                              # single locale ({
 payload-content pull --locale en de                           # multiple locales side by side
 payload-content pull --draft                                  # draft versions
 payload-content pull --collections posts --where '{"tenant":{"equals":"acme"}}'
+payload-content pull --json                                   # summary as JSON
 ```
 
 `--where` accepts [Payload query syntax](https://payloadcms.com/docs/queries/overview) as JSON. When used, only matched documents are pulled and existing manifest entries are preserved.
@@ -354,6 +355,7 @@ payload-content push content/collections/posts/<id>.json      # specific file(s)
 payload-content push --dry-run                                # preview without changes
 payload-content push --force                                  # overwrite even with conflicts
 payload-content push --draft                                  # push as drafts
+payload-content push --json                                   # summary as JSON
 ```
 
 Without arguments, pushes files that changed since last pull. Detects conflicts (remote modified after your last pull) and exits with code 2 unless `--force` is set.
@@ -364,6 +366,7 @@ Without arguments, pushes files that changed since last pull. Detects conflicts 
 
 ```bash
 payload-content status
+payload-content status --json
 ```
 
 Shows modified (M), added (A), and deleted (D) documents. No API call needed.
@@ -372,9 +375,41 @@ Shows modified (M), added (A), and deleted (D) documents. No API call needed.
 
 ```bash
 payload-content diff
+payload-content diff --json
 ```
 
 Shows which documents have local changes, remote changes, or both (conflicts).
+
+### JSON output
+
+`pull`, `push`, `status`, `diff`, and `find --local` accept `--json`, which puts the result on stdout as a single JSON document and nothing else. (Remote `find` already prints JSON.) Progress narration moves to stderr, so a scripted run stays readable in a terminal while the output still parses:
+
+```bash
+payload-content status --json | jq '.modified'
+payload-content pull --json > result.json      # progress still shown on stderr
+```
+
+Shapes:
+
+| Command | stdout |
+|---|---|
+| `pull` | `{ outputDir, documents, collections, globals, pruned, preserved }` |
+| `push` | `{ pushed, created, conflicts, errors }` |
+| `status` | `{ modified, added, deleted }` — or `null` when nothing has been pulled yet |
+| `diff` | `{ localOnly, remoteOnly, remoteModified, localModified, bothModified, unchanged }` |
+| `find --local` | array of `{ filePath, fields }` |
+
+`status --json` returns `null` rather than empty arrays when there is no manifest, so "never pulled" stays distinguishable from "no changes".
+
+### Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | Success |
+| `1` | Error — bad arguments, network/API failure, or a document that failed to push. Also `find` (local or remote) when nothing matched |
+| `2` | `push` only: one or more documents were skipped as conflicts. Nothing was written for those; re-run with `--force` to overwrite, or `pull` to take the remote version |
+
+Code `2` is distinct from `1` so automation can tell "your content is stale" from "the command broke". A `push` that hits both conflicts and errors exits `2`.
 
 ---
 

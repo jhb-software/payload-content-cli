@@ -20,6 +20,7 @@ import { loadConfig, requireRemoteConfig, resolvePayloadProfile } from "./config
 import { pull } from "./pull.js";
 import { push } from "./push.js";
 import { status, printStatus } from "./status.js";
+import { setJsonOutput, emitJson } from "./output.js";
 import { diff, printDiff } from "./diff.js";
 import { find as findLocal, printFindResults, toLocalWhere, type FindOptions } from "./find.js";
 import { PayloadClient } from "./client.js";
@@ -167,6 +168,7 @@ program
   .option("--joins <json>", "Join field options as JSON")
   .option("--populate <json>", "Populate options as JSON")
   .option("--pagination", "Include pagination metadata (use --no-pagination to exclude)")
+  .option("--json", "Emit results as JSON (--local only; remote results are already JSON)")
   .action(
     wrapAction(async (slug: string, id: string | undefined, opts: Record<string, unknown>) => {
       if (opts.local) {
@@ -180,7 +182,8 @@ program
           where: localWhere && Object.keys(localWhere).length > 0 ? localWhere : undefined,
         };
         const results = await findLocal(config, localOpts);
-        printFindResults(results);
+        if (opts.json) emitJson(results);
+        else printFindResults(results);
         if (results.length === 0) process.exitCode = 1;
         return;
       }
@@ -663,6 +666,7 @@ program
   .option("--globals <slugs...>", "Only pull specific globals")
   .option("--where <json>", 'Payload query filter as JSON (e.g. \'{"tenant":{"equals":"acme"}}\')')
   .option("--allow-url-change", "Repoint the manifest at a different server URL (use with care)")
+  .option("--json", "Emit the result summary as JSON (progress moves to stderr)")
   .action(
     wrapAction(async (opts: Record<string, unknown>) => {
       if ((opts.locale as string[] | undefined)?.includes("all")) {
@@ -671,10 +675,11 @@ program
         );
       }
 
+      setJsonOutput(Boolean(opts.json));
       const where = opts.where ? parseWhere(opts.where as string) : undefined;
       const config = await getConfig();
 
-      await pull(config, {
+      const result = await pull(config, {
         locales: opts.locale as string[] | undefined,
         draft: opts.draft as boolean | undefined,
         collections: opts.collections as string[] | undefined,
@@ -682,6 +687,7 @@ program
         where,
         allowUrlChange: opts.allowUrlChange as boolean | undefined,
       });
+      if (opts.json) emitJson(result);
     }),
   );
 
@@ -695,9 +701,11 @@ program
     "--allow-url-change",
     "Push to a different server than the manifest was pulled from (use with care)",
   )
+  .option("--json", "Emit the result summary as JSON (progress moves to stderr)")
   .argument("[files...]", "Specific files to push (default: modified + added)")
   .action(
     wrapAction(async (files: string[], opts: Record<string, unknown>) => {
+      setJsonOutput(Boolean(opts.json));
       const config = await getConfig();
       const result = await push(config, {
         files: files.length ? files : undefined,
@@ -706,6 +714,7 @@ program
         draft: opts.draft as boolean | undefined,
         allowUrlChange: opts.allowUrlChange as boolean | undefined,
       });
+      if (opts.json) emitJson(result);
       if (result.conflicts > 0) process.exitCode = 2;
       else if (result.errors > 0) process.exitCode = 1;
     }),
@@ -714,22 +723,28 @@ program
 program
   .command("status")
   .description("Show local changes since last pull")
+  .option("--json", "Emit the change sets as JSON")
   .action(
-    wrapAction(async () => {
+    wrapAction(async (opts: Record<string, unknown>) => {
       const config = await getConfig();
       const result = await status(config);
-      printStatus(result);
+      // `null` means no manifest at all. As JSON that stays distinguishable
+      // from "no changes" (empty arrays), so callers can tell the two apart.
+      if (opts.json) emitJson(result);
+      else printStatus(result);
     }),
   );
 
 program
   .command("diff")
   .description("Compare local content against the remote Payload instance")
+  .option("--json", "Emit the comparison as JSON")
   .action(
-    wrapAction(async () => {
+    wrapAction(async (opts: Record<string, unknown>) => {
       const config = await getConfig();
       const result = await diff(config);
-      printDiff(result);
+      if (opts.json) emitJson(result);
+      else printDiff(result);
     }),
   );
 

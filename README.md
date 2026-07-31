@@ -82,6 +82,8 @@ payload-content push        →  changes sent to CMS
 
 The manifest tracks what was synced, so `status` shows local changes offline and `push` detects conflicts against the remote. Use `push --dry-run` to preview before committing.
 
+`pull`, `push`, `status`, `diff`, and `find --local` take `--json` for scripted use — stdout carries only the result document, progress goes to stderr. Exit codes are part of the contract (`2` means push conflicts, distinct from `1` for errors); both are documented in [USAGE.md](USAGE.md#exit-codes).
+
 For small, targeted changes (update a title, toggle a status field), the CRUD commands hit the API directly without any local files.
 
 ## Schema API for custom tools

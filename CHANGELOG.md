@@ -9,6 +9,7 @@
 - feat: the plugin exports `extractLexicalSummary`, so consumers with their own field walker can build a richText field's `LexicalFeatureSummary` directly instead of routing the field through `toFieldSchemas`.
 - feat: the plugin's schema response now carries a contract `version`; the CLI warns when the installed plugin and CLI speak different contract versions instead of silently mis-parsing.
 - feat: `find` gained `--page` for paging through large collections.
+- feat: `pull`, `push`, `status`, `diff`, and `find --local` accept `--json`, putting the result on stdout as a single JSON document and moving progress narration to stderr, so a scripted run stays both parseable and observable. Exit codes are now documented as part of the contract (`2` = push conflicts, distinct from `1` = error).
 - feat: mutating `lexical` commands validate the resulting tree before writing and refuse to write invalid documents (previously they wrote first and warned after).
 - fix: mutating requests (create/update/upload/push) are no longer retried after mid-flight network errors or 5xx responses — a flaky connection can no longer create duplicate documents. Reads retry as before; rate-limited (429) and never-sent requests still retry.
 - fix: the plugin resolves custom endpoint paths against `routes.api` instead of hardcoding `/api`, and applying the plugin twice no longer registers the schema endpoint twice.

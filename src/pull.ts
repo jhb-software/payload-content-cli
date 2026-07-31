@@ -2,6 +2,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { type Config, requireRemoteConfig } from "./config.js";
 import { PayloadClient } from "./client.js";
+import { progress } from "./output.js";
 import {
   contentHash,
   localeFilename,
@@ -76,7 +77,7 @@ async function pullCollection(
       draft: options.draft,
       where: options.where,
     });
-    console.log(`  ${slug}: ${docs.length} documents${locale ? ` (${locale})` : ""}`);
+    progress(`  ${slug}: ${docs.length} documents${locale ? ` (${locale})` : ""}`);
 
     for (const doc of docs) {
       const id = doc.id as string;
@@ -129,7 +130,7 @@ async function pullGlobal(
     const content = JSON.stringify(finalDoc, null, 2) + "\n";
     await fs.writeFile(filePath, content);
 
-    console.log(`  ${slug}: global${locale ? ` (${locale})` : ""}`);
+    progress(`  ${slug}: global${locale ? ` (${locale})` : ""}`);
 
     entries[toManifestKey(outputDir, filePath)] = {
       hash: contentHash(content),
@@ -140,7 +141,20 @@ async function pullGlobal(
   return entries;
 }
 
-export async function pull(config: Config, options: PullOptions = {}): Promise<void> {
+export interface PullResult {
+  /** Absolute path content was written to. */
+  outputDir: string;
+  /** Number of documents written across all collections and globals. */
+  documents: number;
+  collections: string[];
+  globals: string[];
+  /** Orphan files from a previous pull that were deleted (content unchanged). */
+  pruned: number;
+  /** Orphan files kept because they carry local edits — surface as Added in `status`. */
+  preserved: number;
+}
+
+export async function pull(config: Config, options: PullOptions = {}): Promise<PullResult> {
   requireRemoteConfig(config);
   const client = new PayloadClient(config);
   const outputDir = path.resolve(config.outputDir);
@@ -160,7 +174,7 @@ export async function pull(config: Config, options: PullOptions = {}): Promise<v
     console.warn(`Proceeding because --allow-url-change was passed.`);
   }
 
-  console.log(`Connecting to ${config.payloadUrl}...`);
+  progress(`Connecting to ${config.payloadUrl}...`);
 
   // Use access endpoint for discovery (built into Payload, no plugin needed)
   const access = await client.getAccess();
@@ -171,7 +185,7 @@ export async function pull(config: Config, options: PullOptions = {}): Promise<v
   const schemaGlobals = schema?.globals ?? {};
 
   if (!schema) {
-    console.log(
+    progress(
       "Plugin not installed — pulling without schema metadata (no virtual field stripping).",
     );
   }
@@ -186,17 +200,17 @@ export async function pull(config: Config, options: PullOptions = {}): Promise<v
     targetCollections = access.collections;
     targetGlobals = access.globals;
 
-    console.log(`Found ${targetCollections.length} collections, ${targetGlobals.length} globals`);
+    progress(`Found ${targetCollections.length} collections, ${targetGlobals.length} globals`);
   }
 
   if (options.draft) {
-    console.log("Mode: drafts");
+    progress("Mode: drafts");
   }
   if (options.where) {
-    console.log(`Filter: ${JSON.stringify(options.where)}`);
+    progress(`Filter: ${JSON.stringify(options.where)}`);
   }
   if (options.locales?.length) {
-    console.log(`Locales: ${options.locales.join(", ")}`);
+    progress(`Locales: ${options.locales.join(", ")}`);
   }
 
   const collectionsDir = path.join(outputDir, "collections");
@@ -298,7 +312,7 @@ export async function pull(config: Config, options: PullOptions = {}): Promise<v
         JSON.stringify(schema.localization, null, 2) + "\n",
       );
     }
-    console.log("Schema files written.");
+    progress("Schema files written.");
   }
 
   await saveManifest(outputDir, manifest);
@@ -325,11 +339,20 @@ export async function pull(config: Config, options: PullOptions = {}): Promise<v
     }
   }
   if (pruned > 0) {
-    console.log(`Removed ${pruned} orphan file(s) from previous pull.`);
+    progress(`Removed ${pruned} orphan file(s) from previous pull.`);
   }
   if (preserved > 0) {
-    console.log(`Kept ${preserved} orphan file(s) with local edits — review with \`status\`.`);
+    progress(`Kept ${preserved} orphan file(s) with local edits — review with \`status\`.`);
   }
 
-  console.log(`Done. Content written to ${outputDir}/`);
+  progress(`Done. Content written to ${outputDir}/`);
+
+  return {
+    outputDir,
+    documents: Object.keys(manifest.documents).length,
+    collections: targetCollections,
+    globals: targetGlobals,
+    pruned,
+    preserved,
+  };
 }

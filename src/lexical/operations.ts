@@ -43,6 +43,23 @@ function identifyingProps(node: LexicalNode): Partial<ListEntry> {
   return {};
 }
 
+/**
+ * The text a node reads as, including text nested inside inline wrappers such as
+ * links — a preview that dropped those would silently misquote the paragraph.
+ * Blocks carry no inline text, so they contribute nothing.
+ */
+function collectText(children: LexicalNode[]): string {
+  let text = "";
+  for (const child of children) {
+    if (typeof child.text === "string") {
+      text += child.text;
+    } else if (!isBlockNode(child) && child.type !== "inlineBlock" && hasChildren(child)) {
+      text += collectText(child.children);
+    }
+  }
+  return text;
+}
+
 function textPreview(node: LexicalNode): string {
   if (typeof node.text === "string") {
     const preview = node.text.length > 60 ? node.text.slice(0, 57) + "..." : node.text;
@@ -56,14 +73,8 @@ function textPreview(node: LexicalNode): string {
     return `(${(node.fields as Record<string, unknown>).blockType})`;
   }
   if (hasChildren(node)) {
-    const texts: string[] = [];
-    for (const child of node.children) {
-      if (typeof child.text === "string") {
-        texts.push(child.text);
-      }
-    }
-    if (texts.length > 0) {
-      const joined = texts.join("");
+    const joined = collectText(node.children);
+    if (joined.length > 0) {
       const preview = joined.length > 60 ? joined.slice(0, 57) + "..." : joined;
       return `"${preview}"`;
     }

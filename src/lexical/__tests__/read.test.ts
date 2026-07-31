@@ -35,6 +35,29 @@ describe("readRichText", () => {
     ]);
   });
 
+  it("includes link text in a paragraph's preview", () => {
+    const document = {
+      content: field([
+        {
+          type: "paragraph",
+          version: 1,
+          direction: "ltr",
+          format: "",
+          indent: 0,
+          children: [
+            { type: "text", text: "See the ", format: 0, version: 1 },
+            buildInternalLink("docs", "pages", "page-1"),
+            { type: "text", text: " for details.", format: 0, version: 1 },
+          ],
+        },
+      ]),
+    } as Record<string, unknown>;
+
+    expect(readRichText(document, "content", { depth: 1 })[0].preview).toBe(
+      '"See the docs for details."',
+    );
+  });
+
   it("descends into nested nodes by default", () => {
     const addresses = readRichText(doc(), "content").map((entry) => entry.address);
     expect(addresses).toContain("0.0");

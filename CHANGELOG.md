@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- fix: `readRichText` previews include text nested inside links, which was previously dropped.
+
 ## 0.4.0
 
 - **breaking:** the package root (`"."`) is no longer exported. It mapped to `dist/cli.js`, so importing it ran dotenv loading, argv parsing and possibly `process.exit` as a side effect rather than exposing an API. Use the `payload-content` binary for the CLI, and `./plugin` or `./lexical` for programmatic use.

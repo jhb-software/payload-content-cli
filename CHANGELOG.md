@@ -2,29 +2,27 @@
 
 ## Unreleased
 
+- **breaking:** the exported `getEntitySchema` follows progressive disclosure — a `blocks` field now returns its `blockSlugs` instead of inlining every block definition, and `jsonSchema` is omitted (it would re-inline them). Pass `blocks: "inline"` for the previous self-contained shape. The `/content-cli/schema` endpoint and the CLI are unchanged.
 - feat: the Lexical toolkit behind the `lexical` commands is exported as `@jhb.software/payload-content-cli/lexical`, so server-side tools (e.g. an MCP `updateRichText`) can edit richtext without the CLI. `editRichText(doc, field, edit)` is the single way in: it resolves the field, applies one edit or a batch, validates the result, and writes it back, leaving the document untouched if any step fails. Alongside it: reads that take the same document-and-field-path arguments and return copies (`readRichText`, `getRichTextNode`, `searchRichText`, `extractRichTextLinks`/`extractRichTextBlocks`, `diffRichText`), builders for paragraphs, headings, lists, rules, blocks, links and any other element node, and `LexicalError` with a `code` so a caller can tell bad input from a genuine fault.
-- feat: the exported schema helpers follow progressive disclosure — `getEntitySchema` now returns a `blocks` field's `blockSlugs` instead of inlining every block definition (and omits `jsonSchema`, which would re-inline them), and `getBlockSchema` resolves those slugs on demand, itself referencing nested blocks. Pass `blocks: "inline"` for the previous self-contained shape. The `/content-cli/schema` endpoint and the CLI are unchanged.
-- feat: `getBlockSchema` resolves blocks declared inline on a field or in a lexical `BlocksFeature`, not just those registered on `config.blocks`.
-
+- feat: `getBlockSchema` resolves the slugs `getEntitySchema` reports, itself referencing nested blocks by slug. It resolves blocks declared inline on a field or in a lexical `BlocksFeature`, not just those registered on `config.blocks`.
 - feat: field schemas now flag Payload-injected bookkeeping fields (`system`), fields gated by an `admin.condition` (`hasCondition`), and static `filterOptions` on relationship/upload fields, so agents can hide bookkeeping and see which related documents a field accepts.
 - feat: the plugin exports `extractLexicalSummary`, so consumers with their own field walker can build a richText field's `LexicalFeatureSummary` directly instead of routing the field through `toFieldSchemas`.
-- fix: corrected the `relationship` lexical node docs — `relationTo`/`value` live on the node itself, not under `fields`.
-
 - feat: the plugin's schema response now carries a contract `version`; the CLI warns when the installed plugin and CLI speak different contract versions instead of silently mis-parsing.
 - feat: `find` gained `--page` for paging through large collections.
-- fix: the plugin resolves custom endpoint paths against `routes.api` instead of hardcoding `/api`, and applying the plugin twice no longer registers the schema endpoint twice.
+- feat: mutating `lexical` commands validate the resulting tree before writing and refuse to write invalid documents (previously they wrote first and warned after).
 - fix: mutating requests (create/update/upload/push) are no longer retried after mid-flight network errors or 5xx responses — a flaky connection can no longer create duplicate documents. Reads retry as before; rate-limited (429) and never-sent requests still retry.
+- fix: the plugin resolves custom endpoint paths against `routes.api` instead of hardcoding `/api`, and applying the plugin twice no longer registers the schema endpoint twice.
 - fix: `find --local --where` rejects unsupported operators (e.g. `not_equals`) with a clear error instead of silently matching the wrong documents, and `equals` now matches exactly instead of by substring.
 - fix: manifest keys are always written with `/` separators, making pulled content directories portable between Windows and macOS/Linux.
 - fix: `diff` now checks legacy flat `globals/<slug>.json` files instead of silently skipping them.
 - fix: `push` prints a warning when a conflict check fails (e.g. server error) instead of silently skipping conflict detection for that document.
+- fix: `push`/`status` no longer warn `Could not scan content directory` when a content type was intentionally not pulled (e.g. a collections-only pull leaves no `globals/` directory). A missing root directory is treated as "nothing of that type"; only genuine errors (permissions, etc.) are reported.
 - fix: `_jsonschema.json` now emits array types for `hasMany` text and number fields instead of falsely flagging pulled arrays as invalid.
 - fix: `join` fields are marked virtual and excluded from JSON schemas, so pulls strip this read-only data instead of round-tripping it into invalid pushes.
 - fix: a throwing `access.read` function now logs a warning naming the entity instead of silently dropping it from the schema response.
 - fix: `lexical diff` and `lexical link --from` now resolve populated relationship objects (depth>0 pulls) to their document ID instead of rendering `[object Object]`.
-- feat: mutating `lexical` commands validate the resulting tree before writing and refuse to write invalid documents (previously they wrote first and warned after).
 - fix: `lexical search`/`lexical link` no longer match text inside autolink nodes, `lexical diff` finds blocks nested in container nodes, and invalid `--tag` values or conflicting node flags are rejected with clear errors.
-- fix: `push`/`status` no longer warn `Could not scan content directory` when a content type was intentionally not pulled (e.g. a collections-only pull leaves no `globals/` directory). A missing root directory is treated as "nothing of that type"; only genuine errors (permissions, etc.) are reported.
+- fix: corrected the `relationship` lexical node docs — `relationTo`/`value` live on the node itself, not under `fields`.
 
 ## 0.3.0
 

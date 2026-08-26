@@ -70,7 +70,12 @@ const SYSTEM_FIELD_NAMES = new Set(["createdAt", "updatedAt", "_status", "blockN
  */
 function isSystemField(field: any): boolean {
   if (field.name === "id") return field.admin?.hidden === true;
-  return SYSTEM_FIELD_NAMES.has(field.name);
+  if (SYSTEM_FIELD_NAMES.has(field.name)) return true;
+  // Hidden *and* read-only is how a project marks a field it maintains itself
+  // (a denormalised mirror, a search harvest). Either marker alone is not
+  // enough: read-only alone still describes a field an agent may need to read,
+  // and hidden alone hides authorable fields from the admin UI only.
+  return field.admin?.hidden === true && field.admin?.readOnly === true;
 }
 
 export interface ProjectionOptions {

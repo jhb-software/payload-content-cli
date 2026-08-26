@@ -427,6 +427,23 @@ describe("toFieldSchemas", () => {
     ]);
   });
 
+  it("marks hidden read-only fields as system, and needs both markers", () => {
+    expect(
+      toFieldSchemas([
+        // a project-maintained mirror: hidden from the admin UI and never authored
+        { name: "tenantScope", type: "text", admin: { hidden: true, readOnly: true } },
+        // read-only alone still describes something an agent may need to read
+        { name: "computedTotal", type: "number", admin: { readOnly: true } },
+        // hidden alone only removes an authorable field from the admin UI
+        { name: "internalNote", type: "text", admin: { hidden: true } },
+      ]),
+    ).toEqual([
+      { name: "tenantScope", type: "text", system: true },
+      { name: "computedTotal", type: "number" },
+      { name: "internalNote", type: "text" },
+    ]);
+  });
+
   it("flags fields gated by an admin condition", () => {
     const fields = [
       { name: "type", type: "select", options: ["internal"] },

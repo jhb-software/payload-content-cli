@@ -462,21 +462,80 @@ describe("toFieldSchemas", () => {
         { field: "linkType", notEquals: "none" },
       ],
     };
-    const [linkLabel, bareCondition] = toFieldSchemas([
+    const [linkLabel] = toFieldSchemas([
       {
         name: "linkLabel",
         type: "text",
         admin: { condition: () => true, custom: { condition: rule, theme: "x" } },
       },
-      { name: "url", type: "text", admin: { condition: () => true } },
     ]);
     expect(linkLabel).toEqual({
       name: "linkLabel",
       type: "text",
       hasCondition: true,
-      condition: rule,
+      conditions: [rule],
     });
-    expect(bareCondition).toEqual({ name: "url", type: "text", hasCondition: true });
+  });
+
+  it("gates the fields of a conditional row, collapsible or unnamed group", () => {
+    const outer = { field: "enabled", equals: true };
+    const inner = { field: "style", equals: "secondary" };
+    const gate = (rule?: unknown) => ({
+      condition: () => true,
+      ...(rule === undefined ? {} : { custom: { condition: rule } }),
+    });
+    const fields = toFieldSchemas([
+      {
+        type: "collapsible",
+        admin: gate(outer),
+        fields: [
+          { name: "label", type: "text" },
+          { type: "row", fields: [{ name: "icon", type: "text", admin: gate(inner) }] },
+        ],
+      },
+      {
+        type: "group",
+        admin: gate(),
+        fields: [{ name: "note", type: "text", admin: gate(inner) }],
+      },
+    ]);
+    expect(fields).toEqual([
+      { name: "label", type: "text", hasCondition: true, conditions: [outer] },
+      { name: "icon", type: "text", hasCondition: true, conditions: [outer, inner] },
+      // the group's rule is undeclared, so the child's own rule is not the whole story
+      { name: "note", type: "text", hasCondition: true },
+    ]);
+  });
+
+  it("gates the fields of a conditional tab", () => {
+    const rule = { field: "kind", equals: "local" };
+    const fields = toFieldSchemas([
+      {
+        type: "tabs",
+        tabs: [
+          {
+            label: "Delivery",
+            admin: { condition: () => true, custom: { condition: rule } },
+            fields: [{ name: "radius", type: "number" }],
+          },
+          {
+            name: "pickup",
+            admin: { condition: () => true, custom: { condition: rule } },
+            fields: [{ name: "address", type: "text" }],
+          },
+        ],
+      },
+    ]);
+    expect(fields).toEqual([
+      { name: "radius", type: "number", hasCondition: true, conditions: [rule] },
+      {
+        name: "pickup",
+        type: "tab",
+        hasCondition: true,
+        conditions: [rule],
+        fields: [{ name: "address", type: "text" }],
+      },
+    ]);
   });
 
   it("does not publish a declared rule without a condition function Payload evaluates", () => {

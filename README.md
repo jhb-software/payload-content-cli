@@ -100,7 +100,7 @@ const { fields } = await getEntitySchema({ req, type: "collection", slug: "pages
 const [hero] = await getBlockSchema({ req, slugs: ["hero"] });
 ```
 
-Entity schemas name the blocks a field accepts rather than inlining them, so an agent can ask for just the ones it needs — the schema stays small, and detail unfolds one call at a time. Access control is respected throughout: entities the request can't read are omitted or throw, matching Payload's own rules. Fields carry what an agent needs to write valid content — required, localized, virtual, `filterOptions`, and a per-field summary of the richtext nodes a Lexical editor accepts.
+Entity schemas name the blocks a field accepts rather than inlining them, so an agent can ask for just the ones it needs — the schema stays small, and detail unfolds one call at a time. Access control is respected throughout: entities the request can't read are omitted or throw, matching Payload's own rules. Fields carry what an agent needs to write valid content — required, localized, virtual, `filterOptions`, conditions, and a per-field summary of the richtext nodes a Lexical editor accepts.
 
 See [USAGE.md](USAGE.md#build-custom-tools-with-the-schema-api) for the full API.
 

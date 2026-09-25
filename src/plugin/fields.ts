@@ -45,14 +45,20 @@ export interface FieldSchema {
    * content, so consumers typically hide them by default.
    */
   system?: boolean;
-  /** Field is gated by an `admin.condition`; it only applies for some sibling values. */
+  /**
+   * Field is gated by an `admin.condition` — its own, or one on a row,
+   * collapsible, unnamed group or tab it was hoisted out of. It only applies
+   * for some sibling values.
+   */
   hasCondition?: boolean;
   /**
-   * The rule behind `hasCondition`, as data. Payload conditions are functions,
-   * so a project that wants agents to see the rule declares it beside the
-   * function in `admin.custom.condition`; it is passed through unchanged.
+   * The rules behind `hasCondition`, as data, outermost first; all must hold.
+   * Payload conditions are functions, so a project that wants agents to see a
+   * rule declares it beside the function in `admin.custom.condition`. The shape
+   * is the project's own and passed through unvalidated. Omitted unless every
+   * gating condition declares its rule, so a partial list never reads as whole.
    */
-  condition?: unknown;
+  conditions?: unknown[];
   /** Static `filterOptions` query constraining which related docs can be assigned. */
   filterOptions?: unknown;
   lexicalFeatures?: LexicalFeatureSummary;
@@ -82,6 +88,26 @@ function isSystemField(field: any): boolean {
   // enough: read-only alone still describes a field an agent may need to read,
   // and hidden alone hides authorable fields from the admin UI only.
   return field.admin?.hidden === true && field.admin?.readOnly === true;
+}
+
+/**
+ * Apply an `admin.condition` to the schemas it gates: a field's own, or every
+ * field hoisted out of a conditional wrapper. The function can't be serialized,
+ * so only its declared rule (`admin.custom.condition`) is published.
+ */
+function gate(schemas: FieldSchema[], admin: any): FieldSchema[] {
+  if (typeof admin?.condition !== "function") return schemas;
+  const rule = admin.custom?.condition;
+  for (const schema of schemas) {
+    const fullyDeclared = !schema.hasCondition || schema.conditions !== undefined;
+    schema.hasCondition = true;
+    if (rule !== undefined && fullyDeclared) {
+      schema.conditions = [rule, ...(schema.conditions ?? [])];
+    } else {
+      delete schema.conditions;
+    }
+  }
+  return schemas;
 }
 
 export interface ProjectionOptions {
@@ -115,19 +141,22 @@ export function toFieldSchemas(
 
     // Tabs field: hoist unnamed tab fields, keep named tabs as nested
     if (field.type === "tabs" && Array.isArray(field.tabs)) {
+      const tabbed: FieldSchema[] = [];
       for (const tab of field.tabs) {
         if (tab.name) {
           // Named tab — behaves like a group
-          result.push({
+          const node: FieldSchema = {
             name: tab.name,
             type: "tab",
             fields: toFieldSchemas(tab.fields || [], blocksBySlug, options),
-          });
+          };
+          tabbed.push(...gate([node], tab.admin));
         } else {
           // Unnamed tab — hoist fields to parent level
-          result.push(...toFieldSchemas(tab.fields || [], blocksBySlug, options));
+          tabbed.push(...gate(toFieldSchemas(tab.fields || [], blocksBySlug, options), tab.admin));
         }
       }
+      result.push(...gate(tabbed, field.admin));
       continue;
     }
 
@@ -138,7 +167,7 @@ export function toFieldSchemas(
       !field.name &&
       Array.isArray(field.fields)
     ) {
-      result.push(...toFieldSchemas(field.fields, blocksBySlug, options));
+      result.push(...gate(toFieldSchemas(field.fields, blocksBySlug, options), field.admin));
       continue;
     }
 
@@ -158,15 +187,7 @@ export function toFieldSchemas(
     if (field.hasMany) schema.hasMany = true;
     if (field.relationTo) schema.relationTo = field.relationTo;
     if (isSystemField(field)) schema.system = true;
-    // admin.condition is a function (can't be serialized) — flag that the field
-    // is gated so agents know it only applies for certain sibling values.
-    // A project can publish the rule as data in admin.custom.condition.
-    if (typeof field.admin?.condition === "function") {
-      schema.hasCondition = true;
-      if (field.admin.custom?.condition !== undefined) {
-        schema.condition = field.admin.custom.condition;
-      }
-    }
+    gate([schema], field.admin);
     // filterOptions constrains which related docs may be assigned (e.g. a favicon
     // that accepts only `image/svg+xml` media). Skip function forms — like function
     // defaults below, they need runtime context (siblingData, user) we can't supply.

@@ -3,6 +3,7 @@
 ## Unreleased
 
 - fix: `readRichText` previews include text nested inside links, which was previously dropped.
+- feat: fields marked both hidden and read-only (e.g. a mirror your project maintains) are flagged `system`, so agents stop treating them as content to write.
 - feat: agents can see _when_ a conditional field applies. Declare the rule as data beside the function — `admin: { condition: fn, custom: { condition: { field: "style", equals: "secondary" } } }` — and the schema lists it under `conditions`.
 - fix: fields inside a conditional row, collapsible, group or tab are now flagged `hasCondition`; agents previously saw them as always applicable.
 

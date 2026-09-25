@@ -455,6 +455,37 @@ describe("toFieldSchemas", () => {
     expect(label?.hasCondition).toBeUndefined();
   });
 
+  it("publishes the condition rule a project declares in admin.custom.condition", () => {
+    const rule = {
+      all: [
+        { field: "enabled", equals: true },
+        { field: "linkType", notEquals: "none" },
+      ],
+    };
+    const [linkLabel, bareCondition] = toFieldSchemas([
+      {
+        name: "linkLabel",
+        type: "text",
+        admin: { condition: () => true, custom: { condition: rule, theme: "x" } },
+      },
+      { name: "url", type: "text", admin: { condition: () => true } },
+    ]);
+    expect(linkLabel).toEqual({
+      name: "linkLabel",
+      type: "text",
+      hasCondition: true,
+      condition: rule,
+    });
+    expect(bareCondition).toEqual({ name: "url", type: "text", hasCondition: true });
+  });
+
+  it("does not publish a declared rule without a condition function Payload evaluates", () => {
+    const [field] = toFieldSchemas([
+      { name: "note", type: "text", admin: { custom: { condition: { hidden: true } } } },
+    ]);
+    expect(field).toEqual({ name: "note", type: "text" });
+  });
+
   it("includes static filterOptions but skips function forms", () => {
     const fields = [
       {

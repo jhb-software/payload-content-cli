@@ -3,6 +3,7 @@
 ## Unreleased
 
 - fix: `readRichText` previews include text nested inside links, which was previously dropped.
+- feat: a conditional field's schema carries `condition`, the rule a project declares beside its `admin.condition` in `admin.custom.condition`, so agents can see what the field depends on instead of only that it is gated.
 
 ## 0.4.0
 

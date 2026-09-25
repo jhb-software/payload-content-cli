@@ -47,6 +47,12 @@ export interface FieldSchema {
   system?: boolean;
   /** Field is gated by an `admin.condition`; it only applies for some sibling values. */
   hasCondition?: boolean;
+  /**
+   * The rule behind `hasCondition`, as data. Payload conditions are functions,
+   * so a project that wants agents to see the rule declares it beside the
+   * function in `admin.custom.condition`; it is passed through unchanged.
+   */
+  condition?: unknown;
   /** Static `filterOptions` query constraining which related docs can be assigned. */
   filterOptions?: unknown;
   lexicalFeatures?: LexicalFeatureSummary;
@@ -154,7 +160,13 @@ export function toFieldSchemas(
     if (isSystemField(field)) schema.system = true;
     // admin.condition is a function (can't be serialized) — flag that the field
     // is gated so agents know it only applies for certain sibling values.
-    if (typeof field.admin?.condition === "function") schema.hasCondition = true;
+    // A project can publish the rule as data in admin.custom.condition.
+    if (typeof field.admin?.condition === "function") {
+      schema.hasCondition = true;
+      if (field.admin.custom?.condition !== undefined) {
+        schema.condition = field.admin.custom.condition;
+      }
+    }
     // filterOptions constrains which related docs may be assigned (e.g. a favicon
     // that accepts only `image/svg+xml` media). Skip function forms — like function
     // defaults below, they need runtime context (siblingData, user) we can't supply.

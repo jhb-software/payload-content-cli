@@ -91,6 +91,15 @@ export const Pages: PageCollectionConfig = {
                   ],
                   defaultValue: "primary",
                 },
+                {
+                  name: "icon",
+                  type: "text",
+                  admin: {
+                    condition: (_data, siblingData) => siblingData?.style === "secondary",
+                    // the same rule as data, so agents reading the schema can see it
+                    custom: { condition: { field: "style", equals: "secondary" } },
+                  },
+                },
               ],
             },
           ],

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { editAtPath, LexicalError } from "../index.js";
+import { editAtPath, LexicalError, readAtPath } from "../index.js";
 
 const text = (value: string) => ({
   type: "text",
@@ -108,17 +108,20 @@ function codeOf(fn: () => unknown): string | undefined {
 
 describe("reading by path", () => {
   it("outlines a rich-text field one line per node", () => {
-    const { result } = editAtPath(linksDoc(), "content", "read");
-    expect(result).toEqual(["0 p: Intro", "1 p [3 links]: More on costs, entry and vaccinations"]);
+    const result = readAtPath(linksDoc(), "content");
+    expect(result).toEqual([
+      "content.0 p: Intro",
+      "content.1 p [3 links]: More on costs, entry and vaccinations",
+    ]);
   });
 
   it("outlines blocks with their slug and the text of rich text inside them", () => {
-    const { result } = editAtPath(alertDoc(), "content", "read");
-    expect(result).toEqual(["0 p: Intro", "1 block alert [1 link]: See safety"]);
+    const result = readAtPath(alertDoc(), "content");
+    expect(result).toEqual(["content.0 p: Intro", "content.1 block alert [1 link]: See safety"]);
   });
 
   it("returns a node without Lexical's default properties", () => {
-    const { result } = editAtPath(linksDoc(), "content.0", "read");
+    const result = readAtPath(linksDoc(), "content.0");
     expect(result).toEqual({
       type: "paragraph",
       version: 1,
@@ -127,34 +130,47 @@ describe("reading by path", () => {
   });
 
   it("shows rich text nested in a block as an outline", () => {
-    const { result } = editAtPath(alertDoc(), "content.1", "read");
+    const result = readAtPath(alertDoc(), "content.1");
     expect(result).toMatchObject({
-      fields: { blockType: "alert", richText: ["0 p [1 link]: See safety"] },
+      fields: {
+        blockType: "alert",
+        richText: ["content.1.fields.richText.0 p [1 link]: See safety"],
+      },
     });
   });
 
   it("descends into rich text inside a block", () => {
-    const { result } = editAtPath(
-      alertDoc(),
-      "content.1.fields.richText.0.children.1.fields.doc",
-      "read",
-    );
+    const result = readAtPath(alertDoc(), "content.1.fields.richText.0.children.1.fields.doc");
     expect(result).toEqual({ relationTo: "pages", value: "old-safety" });
   });
 
   it("reaches rich text inside an array row", () => {
-    const { result } = editAtPath(
-      regionDoc(),
-      "infoSections.0.richText.1.fields.items.0.image",
-      "read",
-    );
+    const result = readAtPath(regionDoc(), "infoSections.0.richText.1.fields.items.0.image");
     expect(result).toBe("dead-media");
   });
 
-  it("does not modify the document", () => {
+  it("outlines every rich text below a path that isn't rich text itself", () => {
+    expect(readAtPath(regionDoc(), "infoSections.0")).toEqual({
+      id: "row-1",
+      richText: [
+        "infoSections.0.richText.0 h2: Arrival",
+        "infoSections.0.richText.1 block gallery",
+      ],
+    });
+  });
+
+  it("reads the whole document at the empty path", () => {
+    expect(readAtPath(linksDoc(), "")).toEqual({
+      content: [
+        "content.0 p: Intro",
+        "content.1 p [3 links]: More on costs, entry and vaccinations",
+      ],
+    });
+  });
+
+  it("does not modify the document when editing", () => {
     const document = alertDoc();
-    const { doc } = editAtPath(document, "content.1", "read");
-    expect(doc).toBeUndefined();
+    editAtPath(document, "content.1", "delete");
     expect(document).toEqual(alertDoc());
   });
 });
@@ -167,7 +183,7 @@ describe("setting by path", () => {
       "set",
       "new-media",
     );
-    expect(result).toBe("new-media");
+    expect(result).toEqual({ set: "infoSections.0.richText.1.fields.items.0.image" });
     const expected = regionDoc();
     (expected.infoSections[0].richText.root.children[1] as ReturnType<typeof block>).fields.items =
       [{ id: "item-1", image: "new-media" }];
@@ -194,7 +210,7 @@ describe("setting by path", () => {
       "set",
       '{"relationTo":"pages","value":"new-vaccinations"}',
     );
-    expect(result).toEqual({ relationTo: "pages", value: "new-vaccinations" });
+    expect(result).toEqual({ set: "content.1.children.5.fields.doc" });
   });
 
   it("retargets a link inside a block's rich text", () => {
@@ -210,7 +226,7 @@ describe("setting by path", () => {
   });
 
   it("writes back a node as read, restoring defaults and nested rich text", () => {
-    const read = editAtPath(alertDoc(), "content.1", "read").result as {
+    const read = readAtPath(alertDoc(), "content.1") as {
       fields: Record<string, unknown>;
     };
     read.fields.style = "info";
@@ -221,23 +237,38 @@ describe("setting by path", () => {
   });
 
   it("rejects an edited outline in place of nested rich text, naming the path to edit instead", () => {
-    const read = editAtPath(alertDoc(), "content.1", "read").result as {
+    const read = readAtPath(alertDoc(), "content.1") as {
       fields: Record<string, unknown>;
     };
-    read.fields.richText = ["0 p: something else"];
+    read.fields.richText = ["content.1.fields.richText.0 p: something else"];
     expect(() => editAtPath(alertDoc(), "content.1", "set", read)).toThrow(
       /content\.1\.fields\.richText\.<index>/,
     );
   });
 
-  it("builds a node from shorthand, given as an object or a JSON string", () => {
-    const { result } = editAtPath(linksDoc(), "content.0", "set", '{"type":"h2","text":"New"}');
-    expect(result).toEqual({
+  it("builds a node from shorthand, given as an object or a JSON string, and answers its outline line", () => {
+    const { doc, result } = editAtPath(
+      linksDoc(),
+      "content.0",
+      "set",
+      '{"type":"h2","text":"New"}',
+    );
+    expect(result).toEqual({ set: "content.0 h2: New" });
+    expect(readAtPath(doc, "content.0")).toEqual({
       type: "heading",
       tag: "h2",
       version: 1,
       children: [{ type: "text", version: 1, text: "New" }],
     });
+  });
+
+  it("gives a link node without a version the current link version", () => {
+    const { doc } = editAtPath(linksDoc(), "content.0.children.0", "set", {
+      type: "link",
+      fields: { linkType: "internal", doc: { relationTo: "pages", value: "x" } },
+      children: [{ type: "text", text: "Intro" }],
+    });
+    expect(readAtPath(doc, "content.0.children.0")).toMatchObject({ type: "link", version: 3 });
   });
 
   it("refuses to replace a whole rich-text field", () => {
@@ -257,12 +288,15 @@ describe("inserting and deleting by path", () => {
       type: "h2",
       text: "Costs",
     });
-    expect(result).toMatchObject({ count: 3, node: { type: "heading", tag: "h2" } });
-    expect((result as { note: string }).note).toMatch(/content\.1/);
-    expect(editAtPath(doc!, "content", "read").result).toEqual([
-      "0 p: Intro",
-      "1 h2: Costs",
-      "2 p [3 links]: More on costs, entry and vaccinations",
+    expect(result).toEqual({
+      inserted: "content.1 h2: Costs",
+      count: 3,
+      note: "Nodes from content.1 on moved down by one.",
+    });
+    expect(readAtPath(doc, "content")).toEqual([
+      "content.0 p: Intro",
+      "content.1 h2: Costs",
+      "content.2 p [3 links]: More on costs, entry and vaccinations",
     ]);
   });
 
@@ -271,27 +305,23 @@ describe("inserting and deleting by path", () => {
       type: "ul",
       items: ["a", "b"],
     });
-    expect((editAtPath(doc!, "content", "read").result as string[])[2]).toBe(
-      "2 ul (2 items): a; b",
-    );
+    expect((readAtPath(doc, "content") as string[])[2]).toBe("content.2 ul (2 items): a; b");
   });
 
   it("gives inserted blocks an id", () => {
-    const { result } = editAtPath(linksDoc(), "content.0", "insert", {
+    const { doc } = editAtPath(linksDoc(), "content.0", "insert", {
       type: "block",
       fields: { blockType: "alert" },
     });
-    expect((result as { node: { fields: { id: string } } }).node.fields.id).toMatch(
-      /^[0-9a-f]{24}$/,
-    );
+    expect((readAtPath(doc, "content.0.fields") as { id: string }).id).toMatch(/^[0-9a-f]{24}$/);
   });
 
   it("builds upload nodes from a media id", () => {
-    const { result } = editAtPath(linksDoc(), "content.0", "insert", {
+    const { doc } = editAtPath(linksDoc(), "content.0", "insert", {
       type: "upload",
       value: "media-1",
     });
-    expect((result as { node: unknown }).node).toMatchObject({
+    expect(readAtPath(doc, "content.0")).toMatchObject({
       type: "upload",
       relationTo: "media",
       value: "media-1",
@@ -300,39 +330,43 @@ describe("inserting and deleting by path", () => {
 
   it("deletes a node and returns its outline line", () => {
     const { doc, result } = editAtPath(linksDoc(), "content.0", "delete");
-    expect(result).toMatchObject({ deleted: "0 p: Intro", count: 1 });
-    expect(editAtPath(doc!, "content", "read").result).toEqual([
-      "0 p [3 links]: More on costs, entry and vaccinations",
+    expect(result).toEqual({
+      deleted: "content.0 p: Intro",
+      count: 1,
+      note: "Nodes after content.0 moved up by one.",
+    });
+    expect(readAtPath(doc, "content")).toEqual([
+      "content.0 p [3 links]: More on costs, entry and vaccinations",
     ]);
   });
 
   it("refuses a copied block whose nested rich text is still an outline", () => {
-    const read = editAtPath(alertDoc(), "content.1", "read").result;
+    const read = readAtPath(alertDoc(), "content.1");
     expect(() => editAtPath(alertDoc(), "content.2", "insert", read)).toThrow(
       /content\.2\.fields\.richText.*"root"/,
     );
   });
 
   it("refuses an outline set where the stored node has no rich text to restore", () => {
-    const read = editAtPath(alertDoc(), "content.1", "read").result;
+    const read = readAtPath(alertDoc(), "content.1");
     expect(codeOf(() => editAtPath(alertDoc(), "content.0", "set", read))).toBe("INVALID_NODE");
   });
 
   it("copies a block given its nested rich text as nodes, under a fresh id", () => {
-    const read = editAtPath(alertDoc(), "content.1", "read").result as {
+    const read = readAtPath(alertDoc(), "content.1") as {
       fields: Record<string, unknown>;
     };
     read.fields.richText = { root: { children: [{ type: "p", text: "Copied" }] } };
     const { doc } = editAtPath(alertDoc(), "content.2", "insert", read);
 
-    expect(editAtPath(doc!, "content", "read").result).toEqual([
-      "0 p: Intro",
-      "1 block alert [1 link]: See safety",
-      "2 block alert: Copied",
+    expect(readAtPath(doc, "content")).toEqual([
+      "content.0 p: Intro",
+      "content.1 block alert [1 link]: See safety",
+      "content.2 block alert: Copied",
     ]);
-    const copy = editAtPath(doc!, "content.2.fields", "read").result as { id: string };
+    const copy = readAtPath(doc, "content.2.fields") as { id: string };
     expect(copy.id).not.toBe("alert-1");
-    expect(editAtPath(doc!, "content.2.fields.richText.0", "read").result).toEqual({
+    expect(readAtPath(doc, "content.2.fields.richText.0")).toEqual({
       type: "paragraph",
       version: 1,
       children: [{ type: "text", version: 1, text: "Copied" }],
@@ -340,24 +374,20 @@ describe("inserting and deleting by path", () => {
   });
 
   it("gives a block set over another node a fresh id when its id is taken", () => {
-    const read = editAtPath(alertDoc(), "content.1", "read").result as {
+    const read = readAtPath(alertDoc(), "content.1") as {
       fields: Record<string, unknown>;
     };
     read.fields.richText = { root: { children: [{ type: "p", text: "Copied" }] } };
     const { doc } = editAtPath(alertDoc(), "content.0", "set", read);
-    const ids = [0, 1].map(
-      (i) => (editAtPath(doc!, `content.${i}.fields`, "read").result as { id: string }).id,
-    );
+    const ids = [0, 1].map((i) => (readAtPath(doc, `content.${i}.fields`) as { id: string }).id);
     expect(ids[1]).toBe("alert-1");
     expect(ids[0]).not.toBe("alert-1");
   });
 
   it("keeps a block's id when it is set back in place", () => {
-    const read = editAtPath(alertDoc(), "content.1", "read").result;
+    const read = readAtPath(alertDoc(), "content.1");
     const { doc } = editAtPath(alertDoc(), "content.1", "set", read);
-    expect((editAtPath(doc!, "content.1.fields", "read").result as { id: string }).id).toBe(
-      "alert-1",
-    );
+    expect((readAtPath(doc, "content.1.fields") as { id: string }).id).toBe("alert-1");
   });
 
   it("starts a block's empty nested rich text from nodes given as shorthand", () => {
@@ -366,10 +396,10 @@ describe("inserting and deleting by path", () => {
     const { doc: changed } = editAtPath(doc, "content.1.fields.richText", "set", {
       root: { children: [{ type: "h2", text: "Started" }] },
     });
-    expect(editAtPath(changed!, "content.1.fields.richText", "read").result).toEqual([
-      "0 h2: Started",
+    expect(readAtPath(changed, "content.1.fields.richText")).toEqual([
+      "content.1.fields.richText.0 h2: Started",
     ]);
-    expect(editAtPath(changed!, "content.1.fields.richText.0.children.0", "read").result).toEqual({
+    expect(readAtPath(changed, "content.1.fields.richText.0.children.0")).toEqual({
       type: "text",
       version: 1,
       text: "Started",
@@ -395,19 +425,31 @@ describe("inserting and deleting by path", () => {
 });
 
 describe("path errors", () => {
+  it("refuses inherited keys, so a path can't reach Object.prototype", () => {
+    const original = Object.prototype.hasOwnProperty;
+    for (const path of [
+      "content.0.__proto__.hasOwnProperty",
+      "content.0.constructor.prototype.x",
+    ]) {
+      expect(codeOf(() => editAtPath(linksDoc(), path, "set", "pwned"))).toBe("PATH_NOT_FOUND");
+    }
+    expect(Object.prototype.hasOwnProperty).toBe(original);
+    expect(codeOf(() => readAtPath(linksDoc(), "content.0.toString"))).toBe("PATH_NOT_FOUND");
+  });
+
   it("names the valid range", () => {
-    expect(() => editAtPath(linksDoc(), "content.7", "read")).toThrow(/2 nodes \(0–1\)/);
+    expect(() => readAtPath(linksDoc(), "content.7")).toThrow(/2 nodes \(0–1\)/);
   });
 
   it("names the available keys", () => {
-    expect(() => editAtPath(alertDoc(), "content.1.fields.body", "read")).toThrow(
+    expect(() => readAtPath(alertDoc(), "content.1.fields.body")).toThrow(
       /id, blockType, style, richText/,
     );
   });
 
   it("points a path outside rich text to the rich-text fields below it", () => {
-    expect(() => editAtPath(regionDoc(), "infoSections.0", "read")).toThrow(
-      /not inside a rich-text field.*infoSections\.0\.richText/,
+    expect(() => editAtPath(regionDoc(), "infoSections.0", "delete")).toThrow(
+      /not inside rich text.*infoSections\.0\.richText/,
     );
   });
 });

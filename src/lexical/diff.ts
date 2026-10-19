@@ -74,7 +74,9 @@ export interface LexicalDiffResult {
  */
 function findTextMatch(text: string, target: RichTextSection[]): string | undefined {
   const found = (search: string) =>
-    target.some(({ path, children }) => searchText(children, path, search).length > 0);
+    target.some(({ path, children }) =>
+      searchText(children, path, search).some((match) => !match.linked),
+    );
   // Try exact match first
   if (found(text)) {
     return text;

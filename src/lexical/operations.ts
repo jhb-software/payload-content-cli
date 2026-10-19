@@ -4,13 +4,15 @@ import { hasChildren, isBlockNode, isLinkNode, isTextNode } from "./types.js";
 /**
  * Wrap the first unlinked occurrence of `search` in a copy of `linkNode`,
  * splitting its text node into [before?, link, after?]. Changes `nodes` in
- * place; false when the text isn't there.
+ * place; answers the path of the new link (`base` is the path of `nodes`), or
+ * undefined when the text isn't there.
  */
 export function linkFirstMatch(
   nodes: LexicalNode[],
+  base: string,
   search: string,
   linkNode: LexicalNode,
-): boolean {
+): string | undefined {
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i];
 
@@ -30,31 +32,33 @@ export function linkFirstMatch(
       if (after) newNodes.push({ ...node, text: after });
 
       nodes.splice(i, 1, ...newNodes);
-      return true;
+      return `${base}.${before ? i + 1 : i}`;
     }
 
-    if (hasChildren(node) && linkFirstMatch(node.children, search, linkNode)) return true;
+    if (hasChildren(node)) {
+      const at = linkFirstMatch(node.children, `${base}.${i}.children`, search, linkNode);
+      if (at) return at;
+    }
   }
-  return false;
+  return undefined;
 }
 
 export interface SearchMatch {
   /** Dot path of the text node holding the match. */
   path: string;
   context: string;
+  /** The match is the text of a link. */
+  linked?: true;
 }
 
-/** Unlinked text containing `search`, below the nodes at `base` (the path of their rich text). */
+/** Text containing `search`, below the nodes at `base` (the path of their rich text). */
 export function searchText(children: LexicalNode[], base: string, search: string): SearchMatch[] {
   const matches: SearchMatch[] = [];
 
-  function walk(nodes: LexicalNode[], prefix: string): void {
+  function walk(nodes: LexicalNode[], prefix: string, linked: boolean): void {
     for (let i = 0; i < nodes.length; i++) {
       const path = `${prefix}.${i}`;
       const node = nodes[i];
-
-      // Skip existing link/autolink nodes
-      if (isLinkNode(node)) continue;
 
       if (isTextNode(node) && typeof node.text === "string") {
         if (node.text.includes(search)) {
@@ -64,17 +68,17 @@ export function searchText(children: LexicalNode[], base: string, search: string
           const end = Math.min(text.length, idx + search.length + 30);
           const snippet =
             (start > 0 ? "..." : "") + text.slice(start, end) + (end < text.length ? "..." : "");
-          matches.push({ path, context: snippet });
+          matches.push({ path, context: snippet, ...(linked ? { linked: true as const } : {}) });
         }
       }
 
       if (hasChildren(node)) {
-        walk(node.children, `${path}.children`);
+        walk(node.children, `${path}.children`, linked || isLinkNode(node));
       }
     }
   }
 
-  walk(children, base);
+  walk(children, base, false);
   return matches;
 }
 

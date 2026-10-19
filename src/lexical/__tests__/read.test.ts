@@ -1,11 +1,7 @@
 import { describe, it, expect } from "vitest";
+import { buildBlock, buildInternalLink, buildParagraph, buildText } from "../nodes.js";
 import {
-  buildBlock,
-  buildInternalLink,
-  buildParagraph,
-  buildText,
   diffRichText,
-  extractRichTextBlocks,
   extractRichTextLinks,
   LexicalError,
   linkRichText,
@@ -34,7 +30,10 @@ function page() {
             blockType: "alert",
             body: richText({
               ...buildParagraph(""),
-              children: [buildText("See "), buildInternalLink("visa rules", "pages", "visa")],
+              children: [
+                buildText("See "),
+                buildInternalLink("visa rules", { relationTo: "pages", value: "visa" }),
+              ],
             }),
           }),
         ),
@@ -73,9 +72,26 @@ describe("searchRichText", () => {
     ]);
   });
 
-  it("names the rich text below a path that isn't rich text", () => {
-    expect(() => searchRichText(page(), "layout", "x")).toThrow(/layout\.1\.richText/);
-    expect(codeOf(() => searchRichText(page(), "layout", "x"))).toBe("PATH_NOT_FOUND");
+  it("searches every rich text in the document when the path is empty, marking linked text", () => {
+    expect(searchRichText(page(), "", "e")).toEqual([
+      expect.objectContaining({ path: "intro.0.children.0" }),
+      expect.objectContaining({ path: "layout.1.richText.0.children.0" }),
+      expect.objectContaining({ path: "layout.1.richText.1.fields.body.0.children.0" }),
+      expect.objectContaining({
+        path: "layout.1.richText.1.fields.body.0.children.1.children.0",
+        linked: true,
+      }),
+    ]);
+  });
+
+  it("searches all rich text below a path that isn't rich text itself", () => {
+    expect(searchRichText(page(), "layout", "Bring")).toEqual([]);
+    expect(searchRichText(page(), "layout", "entry")).toHaveLength(1);
+  });
+
+  it("refuses a path with no rich text at or below it", () => {
+    expect(() => searchRichText(page(), "title", "x")).toThrow(/No rich text at title/);
+    expect(codeOf(() => searchRichText(page(), "title", "x"))).toBe("PATH_NOT_FOUND");
   });
 });
 
@@ -92,31 +108,31 @@ describe("extractRichTextLinks", () => {
   });
 });
 
-describe("extractRichTextBlocks", () => {
-  it("lists blocks with their paths", () => {
-    expect(extractRichTextBlocks(page(), "layout.1.richText")).toMatchObject([
-      { path: "layout.1.richText.1", blockType: "alert" },
-    ]);
-  });
-});
-
 describe("linkRichText", () => {
   it("returns a copy with the text linked and leaves the document as it was", () => {
     const doc = page();
-    const link = buildInternalLink("entry rules", "pages", "entry");
 
-    const linked = linkRichText(doc, "layout.1.richText", "entry rules", link);
+    const linked = linkRichText(doc, "layout.1.richText", "entry rules", {
+      relationTo: "pages",
+      value: "entry",
+    });
 
-    expect(extractRichTextLinks(linked, "layout.1.richText").map((l) => l.value)).toEqual([
+    expect(linked.path).toBe("layout.1.richText.0.children.1");
+    expect(extractRichTextLinks(linked.doc, "layout.1.richText").map((l) => l.value)).toEqual([
       "entry",
       "visa",
     ]);
     expect(extractRichTextLinks(doc, "layout.1.richText")).toHaveLength(1);
   });
 
+  it("searches the whole document when the path is empty", () => {
+    const linked = linkRichText(page(), "", "Welcome", { relationTo: "pages", value: "home" });
+    expect(linked.path).toBe("intro.0.children.0");
+  });
+
   it("refuses text that isn't there unlinked", () => {
-    const link = buildInternalLink("visa rules", "pages", "visa");
-    expect(codeOf(() => linkRichText(page(), "layout.1.richText", "visa rules", link))).toBe(
+    const target = { relationTo: "pages", value: "visa" };
+    expect(codeOf(() => linkRichText(page(), "layout.1.richText", "visa rules", target))).toBe(
       "TEXT_NOT_FOUND",
     );
   });

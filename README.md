@@ -95,7 +95,7 @@ Entity schemas name the blocks a field accepts rather than inlining them, so an 
 
 See [USAGE.md](USAGE.md#build-custom-tools-with-the-schema-api) for the full API.
 
-The Lexical toolkit behind the `lexical` commands ships the same way, under `@jhb.software/payload-content-cli/lexical` — `editAtPath(doc, path, operation, value?)` reads or changes anything inside rich text by the same dot paths the CLI and MCP tool use, and returns a validated, changed copy of the document. Pure functions, no filesystem or network, so fetching and saving (and the access, locale, and draft decisions that come with them) stay in your code. See [USAGE.md](USAGE.md#edit-richtext-from-your-own-code).
+The Lexical toolkit behind the `lexical` commands ships the same way, under `@jhb.software/payload-content-cli/lexical` — `readAtPath(doc, path)` and `editAtPath(doc, path, operation, value?)` read or change anything inside rich text by the same dot paths the CLI and MCP tool use, and returns a validated, changed copy of the document. Pure functions, no filesystem or network, so fetching and saving (and the access, locale, and draft decisions that come with them) stay in your code. See [USAGE.md](USAGE.md#edit-richtext-from-your-own-code).
 
 `@jhb.software/payload-content-cli/mcp` exports `createMcpContentTools()` for apps running `@payloadcms/plugin-mcp`: `listEntities`, `getEntitySchema`, `getBlockSchema`, `find`, `create`, `update`, and `updateRichText` ([USAGE.md](USAGE.md#add-the-mcp-content-tools)). The plugin's `preserveSharedRowsPlugin()` refuses API writes that would silently drop other locales' translations of array and blocks rows ([USAGE.md](USAGE.md#keep-translations-of-shared-rows)).
 

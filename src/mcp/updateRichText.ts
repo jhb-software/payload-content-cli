@@ -1,6 +1,6 @@
 import type { PayloadRequest, SelectType } from "payload";
 import { z } from "zod/v3";
-import { editAtPath, LexicalError } from "../lexical/index.js";
+import { editAtPath, LexicalError, readAtPath } from "../lexical/index.js";
 import { getBlockSchema, getEntitySchema, type FieldSchema } from "../plugin/index.js";
 import { pickLocale, type McpContentToolsOptions } from "./options.js";
 import { errorResult, jsonResult, type McpTool } from "./result.js";
@@ -312,8 +312,8 @@ export function updateRichTextTool(options: McpContentToolsOptions = {}): McpToo
           [field]: stored == null && isRichTextField(config, field) ? EMPTY_ROOT : stored,
         };
 
+        if (operation === "read") return jsonResult(readAtPath(doc, path));
         const { result, doc: changed } = editAtPath(doc, path, operation, value);
-        if (!changed) return jsonResult(result);
 
         // A publishing write starts from the published version, so it would
         // revert any newer draft. A draft version newer than it is exactly that.

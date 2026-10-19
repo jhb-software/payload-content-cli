@@ -1,37 +1,34 @@
 import { Command } from "commander";
 import { wrapAction } from "../cli-helpers.js";
 import { readDocument, writeDocument } from "./io.js";
-import { editAtPath, valueAtPath } from "./path.js";
-import type { PathOperation } from "./path.js";
+import { editAtPath, readAtPath, valueAtPath } from "./path.js";
+import type { PathEdit } from "./path.js";
 import { diffRichText, linkRichText, richTextPaths, searchRichText } from "./read.js";
 import { extractLinks } from "./operations.js";
-import { buildInternalLink, readJsonArg } from "./nodes.js";
+import { readJsonArg } from "./nodes.js";
+import type { LinkTarget } from "./nodes.js";
 import { isLinkNode } from "./types.js";
 import type { LexicalNode } from "./types.js";
 
 const PATH_HELP =
   "Dot path, e.g. content, content.3, layout.1.richText.3.fields.body.0.children.1.fields.doc";
 
-/** The document's only rich-text field, for commands where the path is optional. */
-function onlyRichTextPath(doc: Record<string, unknown>, file: string): string {
-  const paths = richTextPaths(doc);
-  if (paths.length === 1) return paths[0];
-  if (paths.length === 0) throw new Error(`${file} has no rich text.`);
-  throw new Error(
-    `${file} has several rich-text fields: ${paths.join(", ")}. Pass one as the path.`,
-  );
-}
+const SCOPE_HELP = "Rich text at or below this path. Default: the whole document";
 
 /** Apply a change at a path, save the file, and print what changed. */
 async function edit(
   file: string,
   path: string,
-  operation: Exclude<PathOperation, "read">,
+  operation: PathEdit,
   value?: unknown,
 ): Promise<void> {
   const { result, doc } = editAtPath(await readDocument(file), path, operation, value);
-  await writeDocument(file, doc!);
+  await writeDocument(file, doc);
   console.log(JSON.stringify(result, null, 2));
+}
+
+function isOutline(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((line) => typeof line === "string");
 }
 
 export function registerLexicalCommands(program: Command): void {
@@ -52,21 +49,16 @@ export function registerLexicalCommands(program: Command): void {
         const doc = await readDocument(file);
         if (path === undefined) {
           if (opts.full) throw new Error("--full needs a path.");
-          for (const field of richTextPaths(doc)) {
-            console.log(field);
-            for (const line of editAtPath(doc, field, "read").result as string[]) {
-              console.log(`  ${line}`);
-            }
-          }
+          const outlines = richTextPaths(doc).map((field) => readAtPath(doc, field) as string[]);
+          console.log(outlines.map((lines) => lines.join("\n")).join("\n\n"));
           return;
         }
         if (opts.full) {
           console.log(JSON.stringify(valueAtPath(doc, path), null, 2));
           return;
         }
-        const { result } = editAtPath(doc, path, "read");
-        const isOutline = Array.isArray(result) && result.every((line) => typeof line === "string");
-        console.log(isOutline ? result.join("\n") : JSON.stringify(result, null, 2));
+        const view = readAtPath(doc, path);
+        console.log(isOutline(view) ? view.join("\n") : JSON.stringify(view, null, 2));
       }),
     );
 
@@ -122,24 +114,19 @@ export function registerLexicalCommands(program: Command): void {
 
   lexical
     .command("search")
-    .description(
-      "Find unlinked text, nested rich text included. Without a path, searches every rich-text field",
-    )
+    .description("Find text in rich text, nested rich text included; marks matches inside a link")
     .argument("<file>", "Path to JSON document")
-    .argument("[path]", PATH_HELP)
+    .argument("[path]", SCOPE_HELP)
     .requiredOption("--text <text>", "Text to search for")
     .action(
       wrapAction(async (file: string, path: string | undefined, opts: { text: string }) => {
-        const doc = await readDocument(file);
-        const fields = path === undefined ? richTextPaths(doc) : [path];
-        const matches = fields.flatMap((field) => searchRichText(doc, field, opts.text));
-
+        const matches = searchRichText(await readDocument(file), path ?? "", opts.text);
         if (matches.length === 0) {
           console.log("No matches found.");
           return;
         }
         for (const match of matches) {
-          console.log(`[${match.path}] "${match.context}"`);
+          console.log(`[${match.path}] "${match.context}"${match.linked ? " (linked)" : ""}`);
         }
       }),
     );
@@ -148,11 +135,10 @@ export function registerLexicalCommands(program: Command): void {
     .command("link")
     .description("Wrap the first unlinked match of text in an internal link")
     .argument("<file>", "Path to JSON document")
-    .argument("[path]", "Rich text to link in. Default: the document's only rich-text field")
-    .option("--search <text>", "Text to find and wrap in a link")
-    .option("--relationTo <collection>", "Target collection (e.g. countries, regions)")
+    .argument("[path]", SCOPE_HELP)
+    .option("--text <text>", "Text to find and wrap in a link")
+    .option("--relationTo <collection>", "Target collection (e.g. pages)")
     .option("--value <id>", "Target document ID")
-    .option("--label <label>", "Link label (defaults to search text)")
     .option("--from <file>", "File to copy a link's target from (use with --link)")
     .option("--link <path>", "Path of the link node in the --from file")
     .action(
@@ -161,17 +147,15 @@ export function registerLexicalCommands(program: Command): void {
           file: string,
           path: string | undefined,
           opts: {
-            search?: string;
+            text?: string;
             relationTo?: string;
             value?: string;
-            label?: string;
             from?: string;
             link?: string;
           },
         ) => {
-          let search: string;
-          let relationTo: string;
-          let value: string;
+          let text: string;
+          let target: LinkTarget;
 
           if (opts.from) {
             if (!opts.link) throw new Error("--from needs --link <path>.");
@@ -180,25 +164,21 @@ export function registerLexicalCommands(program: Command): void {
             if (!source) {
               throw new Error(`${opts.link} in ${opts.from} is not an internal link.`);
             }
-            search = opts.search ?? source.text;
-            relationTo = source.relationTo;
-            value = source.value;
+            text = opts.text ?? source.text;
+            target = { relationTo: source.relationTo, value: source.value };
           } else {
-            if (!opts.search || !opts.relationTo || !opts.value) {
+            if (!opts.text || !opts.relationTo || !opts.value) {
               throw new Error(
-                "--search, --relationTo and --value are required (or use --from --link)",
+                "--text, --relationTo and --value are required (or use --from --link)",
               );
             }
-            search = opts.search;
-            relationTo = opts.relationTo;
-            value = opts.value;
+            text = opts.text;
+            target = { relationTo: opts.relationTo, value: opts.value };
           }
 
-          const doc = await readDocument(file);
-          const at = path ?? onlyRichTextPath(doc, file);
-          const link = buildInternalLink(search, relationTo, value, opts.label);
-          await writeDocument(file, linkRichText(doc, at, search, link));
-          console.log(JSON.stringify({ ok: true, path: at, search, relationTo, value }));
+          const linked = linkRichText(await readDocument(file), path ?? "", text, target);
+          await writeDocument(file, linked.doc);
+          console.log(JSON.stringify({ linked: linked.path, text, ...target }));
         },
       ),
     );
@@ -208,14 +188,12 @@ export function registerLexicalCommands(program: Command): void {
     .description("Compare links and blocks between two files (e.g. locale variants)")
     .argument("<source>", "Source file (e.g. document_de.json)")
     .argument("<target>", "Target file (e.g. document_en.json)")
-    .argument("[path]", "Rich text to compare. Default: the source's only rich-text field")
+    .argument("[path]", SCOPE_HELP)
     .action(
       wrapAction(async (sourceFile: string, targetFile: string, path: string | undefined) => {
         const sourceDoc = await readDocument(sourceFile);
         const targetDoc = await readDocument(targetFile);
-        const at = path ?? onlyRichTextPath(sourceDoc, sourceFile);
-
-        const result = diffRichText(sourceDoc, targetDoc, at);
+        const result = diffRichText(sourceDoc, targetDoc, path ?? "");
 
         if (result.linksOnlyInSource.length > 0) {
           console.log(`Links only in source (${result.linksOnlyInSource.length}):`);
@@ -223,7 +201,7 @@ export function registerLexicalCommands(program: Command): void {
             const matchHint = link.match
               ? link.match === link.text
                 ? "  ✓ text found in target"
-                : `  ✓ use --search "${link.match}"`
+                : `  ✓ use --text "${link.match}"`
               : "  ✗ no match in target";
             console.log(
               `  [${link.path}] "${link.text}" → ${link.relationTo}/${link.value.slice(0, 8)}${matchHint}`,

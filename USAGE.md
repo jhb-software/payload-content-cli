@@ -106,14 +106,14 @@ The Lexical toolkit behind the `lexical` commands is exported separately, for to
 One dot path addresses anything in a document's rich text: it starts at a richtext field (`content`, `layout.1.richText`), a number after a richtext value indexes its top-level nodes (`content.3`), and from there it follows the node's JSON — including into rich text nested in a block (`content.3.fields.body.0`). The same paths work in the CLI and the `updateRichText` MCP tool.
 
 ```ts
-import { editAtPath } from "@jhb.software/payload-content-cli/lexical";
+import { editAtPath, readAtPath } from "@jhb.software/payload-content-cli/lexical";
 
 const doc = await payload.findByID({ collection: "posts", id, depth: 0, req });
 
-editAtPath(doc, "content", "read").result;
-// → ["0 p: Intro", "1 block alert [1 link]: See safety", "2 ul (2 items): a; b"]
+readAtPath(doc, "content");
+// → ["content.0 p: Intro", "content.1 block alert [1 link]: See safety", "content.2 ul (2 items): a; b"]
 
-editAtPath(doc, "content.0", "read").result;
+readAtPath(doc, "content.0");
 // → { type: "paragraph", version: 1, children: [{ type: "text", version: 1, text: "Intro" }] }
 
 const { doc: changed } = editAtPath(
@@ -126,24 +126,24 @@ const { doc: changed } = editAtPath(
 await payload.update({ collection: "posts", id, data: { content: changed.content }, req });
 ```
 
-`editAtPath(doc, path, operation, value?)`:
+`readAtPath(doc, path)` works on any path, `""` for the whole document: rich text becomes an outline, one line per node, each starting with its path; a node becomes its JSON without Lexical's default properties; anything else is returned as it is, with the rich text inside it outlined.
 
-- **`read`**: a richtext value as an outline, one line per node; a node as its JSON without Lexical's default properties, with rich text nested in its fields outlined; anything else as it is.
-- **`set`**: replace the value. Nodes may be given as read (defaults and unchanged outlines are restored), in full, or as shorthand: `{type: "p", text}`, `{type: "h2", text}`, `{type: "ul", items}`, `{type: "hr"}`, `{type: "block", fields}`, `{type: "upload", value}`. Returns what a read now shows.
-- **`insert`** a node before the index the path ends in (the node count appends), **`delete`** the node at the path. Both return the new count and which indexes moved.
+`editAtPath(doc, path, operation, value?)` changes rich text:
 
-An outline only stands in for the rich text it was read from. To copy a block, or put one where a different node was, give its nested rich text as `{root: {children: [...]}}`, nodes as read or as shorthand. A copied block gets a new id.
+- **`set`**: replace the value. Nodes may be given as read (defaults and unchanged outlines are restored), in full, or as shorthand: `{type: "p", text}`, `{type: "h2", text}`, `{type: "ul", items}`, `{type: "hr"}`, `{type: "block", fields}`, `{type: "upload", value}`. Returns the node's new outline line.
+- **`insert`** a node before the index the path ends in (the node count appends), **`delete`** the node at the path. Both return the node's outline line, the new count, and which nodes moved.
+
+An outline only stands in for the rich text it was read from: an unchanged one is restored, an edited one is refused. To copy a block, or put one where a different node was, give its nested rich text as `{root: {children: [...]}}`, nodes as read or as shorthand. A copied block gets a new id.
 
 The input document is never modified; a change returns a changed copy as `doc`, validated first. Failures throw `LexicalError` with a `code` — `PATH_NOT_FOUND` (naming the valid range or keys), `UNSUPPORTED_AT_PATH`, `INVALID_NODE`, `INVALID_TREE`, `TEXT_NOT_FOUND` — all meaning the input was wrong, so a tool can relay the message instead of reporting a fault.
 
-Alongside it, each taking the document and the path of a rich-text value, covering the rich text nested inside it, and naming full dot paths in their results:
+Alongside them, each covering every rich text at or below a path (`""` for the whole document) and naming full dot paths in their results:
 
 - `richTextPaths(doc, { nested? })` — every rich-text value's path, fields in array rows included.
-- `searchRichText(doc, path, text)` — text not already inside a link.
-- `linkRichText(doc, path, text, link)` — wrap the first unlinked match in a link; returns a changed copy.
-- `extractRichTextLinks(doc, path)` / `extractRichTextBlocks(doc, path)` — inventories.
+- `searchRichText(doc, path, text)` — matches, those inside a link marked `linked`.
+- `linkRichText(doc, path, text, { relationTo, value, newTab? })` — wrap the first unlinked match in an internal link; returns a changed copy and the new link's path.
+- `extractRichTextLinks(doc, path)` — internal links and their targets.
 - `diffRichText(source, target, path)` — links and blocks only one locale variant has.
-- Node builders: `buildParagraph`, `buildHeading`, `buildList`, `buildText`, `buildHorizontalRule`, `buildBlock`, `buildInternalLink`, and `buildElement` for any other node type. Plus the `LexicalNode` types and their guards (`isTextNode`, `isLinkNode`, `hasChildren`).
 
 Fetching and saving stay yours, and with them the decisions the CLI can't make for you: access control (`overrideAccess: false`), which locale, and whether the write is a draft.
 
@@ -518,18 +518,17 @@ A path starts at a richtext field — `content`, or `layout.1.richText` for one 
 
 ```bash
 payload-content lexical read page.json
-# layout.1.richText
-#   0 h2: Before you go
-#   1 p: Check the entry rules before booking.
-#   2 block alert: Bring cash.
-#   3 block alert [1 link]: See visa requirements first.
+# layout.1.richText.0 h2: Before you go
+# layout.1.richText.1 p: Check the entry rules before booking.
+# layout.1.richText.2 block alert: Bring cash.
+# layout.1.richText.3 block alert [1 link]: See visa requirements first.
 
 payload-content lexical read page.json layout.1.richText.3.fields.body   # rich text nested in the second alert
 payload-content lexical read page.json layout.1.richText.0               # a node, without Lexical's defaults
 payload-content lexical read page.json layout.1.richText.3 --full        # the stored JSON
 ```
 
-Without a path, `read` outlines every richtext field.
+Without a path, `read` outlines every richtext field. Each line starts with the node's path, ready to pass to the other commands.
 
 ### lexical set — replace a node or value
 
@@ -552,7 +551,7 @@ payload-content lexical delete page.json layout.1.richText.2
 
 `insert` adds before the index the path ends in. Shorthand nodes: `{"type":"p","text"}`, `{"type":"h2","text"}`, `{"type":"ul","items":[…]}`, `{"type":"hr"}`, `{"type":"block","fields":{…}}`, `{"type":"upload","value"}`; full nodes work too. An invalid node leaves the file untouched.
 
-### lexical search — find unlinked text
+### lexical search — find text
 
 ```bash
 payload-content lexical search page.json --text "visa"
@@ -560,19 +559,19 @@ payload-content lexical search page.json layout.1.richText --text "visa"
 # [layout.1.richText.1.children.0] "Check the visa rules..."
 ```
 
-Without a path, searches every richtext field, nested rich text included. Skips already-linked text.
+Without a path, searches every richtext field, nested rich text included. Matches inside a link are marked `(linked)`.
 
 ### lexical link — wrap text in an internal link
 
 ```bash
-payload-content lexical link page.json --search "TypeScript" --relationTo tags --value <id>
-payload-content lexical link page.json layout.1.richText --search "TypeScript" --relationTo tags --value <id>
+payload-content lexical link page.json --text "TypeScript" --relationTo tags --value <id>
+payload-content lexical link page.json layout.1.richText --text "TypeScript" --relationTo tags --value <id>
 
 # Copy a link's target from another file, e.g. another locale
-payload-content lexical link page_en.json --from page_de.json --link layout.1.richText.3.fields.body.0.children.1 --search "visa requirements"
+payload-content lexical link page_en.json --from page_de.json --link layout.1.richText.3.fields.body.0.children.1
 ```
 
-Without a path, links in the file's only richtext field; with several, it names them.
+Links the first unlinked match at or below the path, or anywhere in the file without one, and prints the new link's path. With `--from`, the link's own text is searched unless `--text` is given.
 
 ### lexical diff — compare two files
 
@@ -581,7 +580,7 @@ payload-content lexical diff page_de.json page_en.json
 payload-content lexical diff page_de.json page_en.json layout.1.richText
 ```
 
-Shows links and blocks, nested ones included, that exist in one file but not the other. Useful for locale sync.
+Shows links and blocks, nested ones included, that exist in one file but not the other; the whole file without a path. Useful for locale sync.
 
 ### Copying nodes between files
 

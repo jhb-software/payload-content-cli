@@ -107,16 +107,25 @@ function label(node: LexicalNode): string {
   }
 }
 
-/** One line per node: index, kind, link count, text preview — e.g. `1 p [3 links]: More on …`. */
-export function outlineLine(node: LexicalNode, index: number): string {
+/** A path one key further down; the empty path is the document itself. */
+export function joinPath(path: string, key: string | number): string {
+  return path === "" ? String(key) : `${path}.${key}`;
+}
+
+/**
+ * One line per node: its path, kind, link count and a text preview — e.g.
+ * `content.1 p [3 links]: More on …` — so the path can be used as it is.
+ */
+export function outlineLine(node: LexicalNode, path: string): string {
   const links = countLinks(node);
   const linkNote = links > 0 ? ` [${links} ${links === 1 ? "link" : "links"}]` : "";
   const text = truncate(nodeText(node));
-  return `${index} ${label(node)}${linkNote}${text ? `: ${text}` : ""}`;
+  return `${path} ${label(node)}${linkNote}${text ? `: ${text}` : ""}`;
 }
 
-export function outline(nodes: LexicalNode[]): string[] {
-  return nodes.map(outlineLine);
+/** The outline of the rich text at `path`. */
+export function outline(nodes: LexicalNode[], path: string): string[] {
+  return nodes.map((node, i) => outlineLine(node, joinPath(path, i)));
 }
 
 // ── Stripping defaults ──────────────────────────────────────────────
@@ -134,14 +143,17 @@ const DEFAULTS: Record<string, unknown[]> = {
 };
 
 /** A node as an agent reads it: no default properties, nested rich text as an outline. */
-export function viewNode(node: LexicalNode): LexicalNode {
+function viewNode(node: LexicalNode, path: string): LexicalNode {
   const view: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(node)) {
     if (DEFAULTS[key]?.includes(value)) continue;
     if (key === "children" && Array.isArray(value)) {
-      view.children = (value as LexicalNode[]).map(viewNode);
+      const children = joinPath(path, "children");
+      view.children = (value as LexicalNode[]).map((child, i) =>
+        viewNode(child, joinPath(children, i)),
+      );
     } else if (key === "fields") {
-      view.fields = viewFields(value);
+      view.fields = viewFields(value, joinPath(path, "fields"));
     } else {
       view[key] = value;
     }
@@ -149,11 +161,13 @@ export function viewNode(node: LexicalNode): LexicalNode {
   return view as LexicalNode;
 }
 
-function viewFields(value: unknown): unknown {
-  if (isRichText(value)) return outline(value.root.children);
-  if (Array.isArray(value)) return value.map(viewFields);
+function viewFields(value: unknown, path: string): unknown {
+  if (isRichText(value)) return outline(value.root.children, path);
+  if (Array.isArray(value)) return value.map((item, i) => viewFields(item, joinPath(path, i)));
   if (isRecord(value)) {
-    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, viewFields(v)]));
+    return Object.fromEntries(
+      Object.entries(value).map(([k, v]) => [k, viewFields(v, joinPath(path, k))]),
+    );
   }
   return value;
 }
@@ -163,13 +177,18 @@ export function looksLikeNode(value: unknown): value is LexicalNode {
   return isRecord(value) && typeof value.type === "string" && value.version !== undefined;
 }
 
-/** Any value reached by a path, as an agent reads it. */
-export function viewValue(value: unknown): unknown {
-  if (isRichText(value)) return outline(value.root.children);
-  if (looksLikeNode(value)) return viewNode(value);
-  if (Array.isArray(value)) return value.map(viewValue);
+/**
+ * The value at `path`, as an agent reads it: rich text anywhere inside it as
+ * an outline whose lines start with their paths, nodes without defaults.
+ */
+export function viewValue(value: unknown, path: string): unknown {
+  if (isRichText(value)) return outline(value.root.children, path);
+  if (looksLikeNode(value)) return viewNode(value, path);
+  if (Array.isArray(value)) return value.map((item, i) => viewValue(item, joinPath(path, i)));
   if (isRecord(value)) {
-    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, viewValue(v)]));
+    return Object.fromEntries(
+      Object.entries(value).map(([k, v]) => [k, viewValue(v, joinPath(path, k))]),
+    );
   }
   return value;
 }
@@ -200,7 +219,8 @@ export function hydrateNode(input: LexicalNode): LexicalNode {
     node.fields = { id: newId(), ...node.fields };
   }
   if (node.fields !== undefined) node.fields = hydrateFields(node.fields);
-  node.version ??= node.type === "block" ? 2 : node.type === "upload" ? 3 : 1;
+  node.version ??=
+    node.type === "block" ? 2 : node.type === "upload" || node.type === "link" ? 3 : 1;
   return node as LexicalNode;
 }
 
@@ -221,17 +241,17 @@ export function hydrateFields(value: unknown): unknown {
   return value;
 }
 
-/** An outline as a read shows it: lines `0 …`, `1 …`, in order. */
+/** An outline as a read shows it: lines `<path>.0 …`, `<path>.1 …`, in order. */
 function isOutline(value: unknown): value is string[] {
   return (
     Array.isArray(value) &&
     value.length > 0 &&
-    value.every((line, i) => typeof line === "string" && line.startsWith(`${i} `))
+    value.every((line, i) => typeof line === "string" && new RegExp(`^(\\S+\\.)?${i} `).test(line))
   );
 }
 
-function sameOutline(value: unknown[], richText: RichTextValue): boolean {
-  const lines = outline(richText.root.children);
+function sameOutline(value: unknown[], richText: RichTextValue, path: string): boolean {
+  const lines = outline(richText.root.children, path);
   return value.length === lines.length && value.every((line, i) => line === lines[i]);
 }
 
@@ -243,7 +263,7 @@ function sameOutline(value: unknown[], richText: RichTextValue): boolean {
  */
 export function restoreOutlines(value: unknown, stored: unknown, path: string): unknown {
   if (isRichText(stored) && Array.isArray(value) && value.every((v) => typeof v === "string")) {
-    if (sameOutline(value, stored)) return stored;
+    if (sameOutline(value, stored, path)) return stored;
     throw new LexicalError(
       "INVALID_NODE",
       `${path} is rich text shown as an outline, which can't be edited as text. Pass it back unchanged and edit its nodes at ${path}.<index>.`,

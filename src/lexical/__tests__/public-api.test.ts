@@ -1,11 +1,6 @@
 import { describe, it, expect } from "vitest";
-import {
-  buildInternalLink,
-  buildParagraph,
-  editAtPath,
-  linkRichText,
-  searchRichText,
-} from "../index.js";
+import { editAtPath, linkRichText, readAtPath, searchRichText } from "../index.js";
+import { buildParagraph } from "../nodes.js";
 
 /**
  * The `./lexical` entry point exists so a server-side tool or script can edit
@@ -37,22 +32,18 @@ describe("lexical entry point", () => {
       type: "p",
       text: "see the docs",
     });
-    const [match] = searchRichText(inserted!, "content", "docs");
+    const [match] = searchRichText(inserted, "content", "docs");
     expect(match.path).toBe("content.1.children.0");
 
-    const linked = linkRichText(
-      inserted!,
-      "content",
-      "docs",
-      buildInternalLink("docs", "pages", "7"),
-    );
+    const linked = linkRichText(inserted, "content", "docs", { relationTo: "pages", value: "7" });
 
-    expect(editAtPath(linked, "content", "read").result).toEqual([
-      "0 p: first",
-      "1 p [1 link]: see the docs",
-      "2 p: second",
+    expect(linked.path).toBe("content.1.children.1");
+    expect(readAtPath(linked.doc, "content")).toEqual([
+      "content.0 p: first",
+      "content.1 p [1 link]: see the docs",
+      "content.2 p: second",
     ]);
-    expect(linked.title).toBe("A post");
-    expect(editAtPath(original, "content", "read").result).toHaveLength(2);
+    expect(linked.doc.title).toBe("A post");
+    expect(readAtPath(original, "content")).toHaveLength(2);
   });
 });

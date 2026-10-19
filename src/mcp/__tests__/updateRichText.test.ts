@@ -7,7 +7,7 @@ import { sqliteAdapter } from "@payloadcms/db-sqlite";
 import { BlocksFeature, lexicalEditor } from "@payloadcms/richtext-lexical";
 import { buildConfig, createLocalReq, getPayload, type Payload } from "payload";
 import { beforeAll, describe, expect, it } from "vitest";
-import { buildBlock, buildInternalLink, buildParagraph, buildText } from "../../lexical/index.js";
+import { buildBlock, buildInternalLink, buildParagraph, buildText } from "../../lexical/nodes.js";
 import { updateRichTextTool, type McpContentToolsOptions } from "../index.js";
 
 const open = { read: () => true, create: () => true, update: () => true };
@@ -76,10 +76,8 @@ function richText(...children: unknown[]) {
   };
 }
 
-/** SQLite ids are numbers, which `buildInternalLink` doesn't take. */
 function internalLink(text: string, id: string | number) {
-  const link = buildInternalLink(text, "pages", String(id));
-  return { ...link, fields: { linkType: "internal", doc: { relationTo: "pages", value: id } } };
+  return buildInternalLink(text, { relationTo: "pages", value: id });
 }
 
 /** A published post: an intro paragraph, and an alert block whose body links to `linkTo`. */
@@ -124,8 +122,8 @@ describe("updateRichText", () => {
     const id = await createPost(page.id);
 
     expect(await call({ collection: "posts", id, path: "content", operation: "read" })).toEqual([
-      "0 p: Intro",
-      "1 block alert [1 link]: See safety",
+      "content.0 p: Intro",
+      "content.1 block alert [1 link]: See safety",
     ]);
     expect(await call({ collection: "posts", id, path: "content.0", operation: "read" })).toEqual({
       type: "paragraph",
@@ -149,7 +147,7 @@ describe("updateRichText", () => {
       value: newPage.id,
     });
 
-    expect(result).toBe(newPage.id);
+    expect(result).toEqual({ set: "content.1.fields.body.0.children.1.fields.doc.value" });
     expect(await readPost(id, true)).toContain(`"value":${JSON.stringify(newPage.id)}`);
     expect(await readPost(id, false)).toBe(liveBefore);
     expect(await readPost(id, true, "de")).toBe(germanBefore);
@@ -306,7 +304,7 @@ describe("updateRichText", () => {
       { resolveLocale: () => "de" },
     );
 
-    expect(outline).toEqual(["0 p: Einleitung"]);
+    expect(outline).toEqual(["content.0 p: Einleitung"]);
   });
 
   it("starts a locale's empty rich text instead of editing another locale's text through fallback", async () => {

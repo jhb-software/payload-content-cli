@@ -52,7 +52,7 @@ describe("searchText", () => {
     expect(matches[1].path).toBe("c.1.children.0");
   });
 
-  it("skips text inside link nodes", () => {
+  it("marks text inside link nodes as linked", () => {
     const children: LexicalNode[] = [
       {
         type: "link",
@@ -66,9 +66,10 @@ describe("searchText", () => {
       },
     ];
 
-    const matches = searchText(children, "c", "Great Migration");
-    expect(matches).toHaveLength(1);
-    expect(matches[0].path).toBe("c.1.children.0");
+    expect(searchText(children, "c", "Great Migration")).toEqual([
+      { path: "c.0.children.0", context: "Great Migration", linked: true },
+      { path: "c.1.children.0", context: "Great Migration elsewhere" },
+    ]);
   });
 
   it("returns empty array when no matches", () => {
@@ -76,7 +77,7 @@ describe("searchText", () => {
     expect(matches).toHaveLength(0);
   });
 
-  it("skips text inside autolink nodes", () => {
+  it("marks text inside autolink nodes as linked", () => {
     const children: LexicalNode[] = [
       {
         type: "paragraph",
@@ -91,7 +92,9 @@ describe("searchText", () => {
       },
     ];
 
-    expect(searchText(children, "c", "Great Migration")).toHaveLength(0);
+    expect(searchText(children, "c", "Great Migration")).toEqual([
+      { path: "c.0.children.0.children.0", context: "Great Migration", linked: true },
+    ]);
   });
 });
 
@@ -103,7 +106,7 @@ describe("linkFirstMatch", () => {
     fields: { linkType: "internal", doc: { relationTo: "topics", value: "m1" } },
   };
 
-  it("splits a text node into before/link/after and preserves formatting", () => {
+  it("splits a text node into before/link/after, preserves formatting and returns the link's path", () => {
     const children: LexicalNode[] = [
       {
         type: "paragraph",
@@ -112,7 +115,7 @@ describe("linkFirstMatch", () => {
       },
     ];
 
-    expect(linkFirstMatch(children, "Migration", link)).toBe(true);
+    expect(linkFirstMatch(children, "c", "Migration", link)).toBe("c.0.children.1");
     const result = children;
     const para = result[0] as unknown as { children: LexicalNode[] };
     expect(para.children).toHaveLength(3);
@@ -130,7 +133,7 @@ describe("linkFirstMatch", () => {
       },
     ];
 
-    expect(linkFirstMatch(children, "Migration", link)).toBe(true);
+    expect(linkFirstMatch(children, "c", "Migration", link)).toBe("c.0.children.0");
     const result = children;
     const para = result[0] as unknown as { children: LexicalNode[] };
     expect(para.children).toHaveLength(1);
@@ -151,7 +154,7 @@ describe("linkFirstMatch", () => {
       },
     ];
 
-    expect(linkFirstMatch(children, "Migration", link)).toBe(true);
+    expect(linkFirstMatch(children, "c", "Migration", link)).toBe("c.0.children.0");
     const result = children;
     const first = result[0] as unknown as { children: LexicalNode[] };
     const second = result[1] as unknown as { children: LexicalNode[] };
@@ -175,7 +178,7 @@ describe("linkFirstMatch", () => {
       },
     ];
 
-    expect(linkFirstMatch(children, "Migration", link)).toBe(false);
+    expect(linkFirstMatch(children, "c", "Migration", link)).toBeUndefined();
   });
 
   it("does not re-link text inside autolink nodes", () => {
@@ -193,11 +196,11 @@ describe("linkFirstMatch", () => {
       },
     ];
 
-    expect(linkFirstMatch(children, "Migration", link)).toBe(false);
+    expect(linkFirstMatch(children, "c", "Migration", link)).toBeUndefined();
   });
 
   it("reports when the text is not found", () => {
-    expect(linkFirstMatch(makeChildren(), "missing", link)).toBe(false);
+    expect(linkFirstMatch(makeChildren(), "c", "missing", link)).toBeUndefined();
   });
 });
 

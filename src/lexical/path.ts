@@ -11,18 +11,17 @@ import {
   outlineLine,
   restoreOutlines,
   toNode,
-  viewNode,
   viewValue,
   type RichTextValue,
 } from "./view.js";
 
-export type PathOperation = "read" | "set" | "insert" | "delete";
+export type PathEdit = "set" | "insert" | "delete";
 
 export interface PathEditResult<T> {
-  /** What the agent sees: the read view of the path, or a summary of the change. */
-  result: unknown;
-  /** The changed copy of the document; absent for `read`. */
-  doc?: T;
+  /** What changed, in outline lines and paths: `{set}`, `{inserted, count, note?}` or `{deleted, count, note?}`. */
+  result: Record<string, unknown>;
+  /** The changed copy of the document. */
+  doc: T;
 }
 
 /** Where a path ended up. */
@@ -38,6 +37,7 @@ interface Target {
 }
 
 const INDEX = /^\d+$/;
+const UNSAFE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -77,7 +77,7 @@ function parseIfObject(value: unknown, stored: unknown): unknown {
   }
 }
 
-function resolve(doc: unknown, segments: string[], operation: PathOperation): Target {
+function resolve(doc: unknown, segments: string[], operation: PathEdit | "read"): Target {
   let target: Target = { value: doc, inNodeList: false };
 
   segments.forEach((segment, i) => {
@@ -110,7 +110,8 @@ function resolve(doc: unknown, segments: string[], operation: PathOperation): Ta
       }
       target = { value: value[index], parent: value, key: index, inNodeList, richText };
     } else if (isRecord(value)) {
-      if (!(segment in value)) {
+      // Own keys only: `__proto__` or `constructor` would reach the shared prototypes.
+      if (!Object.hasOwn(value, segment) || UNSAFE_KEYS.has(segment)) {
         const keys = Object.keys(value).join(", ") || "none";
         const where = here || "the document";
         throw new LexicalError("PATH_NOT_FOUND", `No "${segment}" in ${where}. It has: ${keys}.`);
@@ -134,6 +135,7 @@ function resolve(doc: unknown, segments: string[], operation: PathOperation): Ta
 }
 
 function segmentsOf(path: string): string[] {
+  if (path === "") return [];
   const segments = path.split(".");
   if (segments.some((segment) => segment === "")) {
     throw new LexicalError("PATH_NOT_FOUND", `"${path}" is not a path, e.g. content or content.3.`);
@@ -141,23 +143,23 @@ function segmentsOf(path: string): string[] {
   return segments;
 }
 
-/** The stored value at a path, as is — no read view. */
+/** The stored value at a path, as is — no read view. The empty path is the document. */
 export function valueAtPath(doc: unknown, path: string): unknown {
   return resolve(doc, segmentsOf(path), "read").value;
 }
 
-/** The rich-text value at a path; a path that reaches anything else names the rich text below it. */
-export function richTextAt(doc: unknown, path: string): RichTextValue {
-  const value = valueAtPath(doc, path);
-  if (isRichText(value)) return value;
-  const below = richTextPathsBelow(value, path);
-  throw new LexicalError(
-    "PATH_NOT_FOUND",
-    `${path} is not a rich-text value.${below.length > 0 ? ` Rich text below it: ${below.join(", ")}.` : ""}`,
-  );
+/**
+ * What an agent reads at a path: the value with every rich text inside it as
+ * an outline (one line per node, each starting with its path) and nodes
+ * without Lexical's default properties. Works on any path — a rich-text field
+ * (`content`), a node (`content.3`), a value inside one, an array row holding
+ * rich text (`layout.1`), or `""` for the whole document.
+ */
+export function readAtPath(doc: unknown, path: string): unknown {
+  return viewValue(valueAtPath(doc, path), path);
 }
 
-function nodeListOf(target: Target, path: string, operation: PathOperation): LexicalNode[] {
+function nodeListOf(target: Target, path: string, operation: PathEdit): LexicalNode[] {
   if (!target.inNodeList || !Array.isArray(target.parent)) {
     const hint = isRichText(target.value)
       ? ` Address a node position instead, e.g. ${path}.0.`
@@ -168,8 +170,8 @@ function nodeListOf(target: Target, path: string, operation: PathOperation): Lex
 }
 
 /**
- * Read or change one thing inside a document's rich text, addressed by a single
- * dot path — the path a read shows. The document is never modified; a change
+ * Change one thing inside a document's rich text, addressed by a single dot
+ * path — the path a read shows. The document is never modified; the change
  * comes back as a changed copy for the caller to save.
  *
  * A path starts at a rich-text field (`content`, `sections.0.body`). A number
@@ -177,15 +179,13 @@ function nodeListOf(target: Target, path: string, operation: PathOperation): Lex
  * the path follows the node's own JSON (`content.3.children.1.fields.doc`),
  * including into rich text nested in a block (`content.3.fields.body.0`).
  *
- * - `read`: a rich-text value reads as an outline, one line per node; a node as
- *   its JSON without Lexical's default properties, nested rich text outlined;
- *   anything else as it is.
  * - `set`: replace the value at the path. A node may be given as read (defaults
  *   and unchanged outlines are restored), as a full node, or as shorthand
- *   (`{type: "h2", text}`). Returns what a read of the path now shows.
- * - `insert`: add a node before the index the path ends in; the node count
- *   appends. Returns the node, the new count and which indexes moved.
- * - `delete`: remove the node at the path. Returns its outline line and the new count.
+ *   (`{type: "h2", text}`).
+ * - `insert`: add a node before the index the path ends in; the node count appends.
+ * - `delete`: remove the node at the path.
+ *
+ * The result names what changed by outline line or path, and which indexes moved.
  *
  * Throws `LexicalError`: `PATH_NOT_FOUND` names what the path could have said
  * instead, `UNSUPPORTED_AT_PATH` an operation that doesn't fit the target,
@@ -194,26 +194,24 @@ function nodeListOf(target: Target, path: string, operation: PathOperation): Lex
 export function editAtPath<T extends object>(
   doc: T,
   path: string,
-  operation: PathOperation,
+  operation: PathEdit,
   value?: unknown,
 ): PathEditResult<T> {
   const segments = segmentsOf(path);
-  const copy = operation === "read" ? doc : structuredClone(doc);
+  const copy = structuredClone(doc);
   const target = resolve(copy, segments, operation);
 
   if (!target.richText && !isRichText(target.value)) {
     const below = richTextPathsBelow(target.value, path);
     throw new LexicalError(
       "PATH_NOT_FOUND",
-      `${path} is not inside a rich-text field. ${
+      `${path || "The document"} is not inside rich text. ${
         below.length > 0
-          ? `Rich-text fields below it: ${below.join(", ")}.`
+          ? `Rich text below it: ${below.join(", ")}.`
           : "Start the path at a rich-text field."
       }`,
     );
   }
-
-  if (operation === "read") return { result: viewValue(target.value) };
 
   if (operation === "set") {
     if (isRichText(target.value)) {
@@ -230,11 +228,12 @@ export function editAtPath<T extends object>(
       const taken = new Set([...blockIds(copy)].filter((id) => !replaced.has(id)));
       freshenBlockIds(node, taken);
       parent[target.key!] = node;
-    } else {
-      parent[target.key!] = hydrateFields(restored);
+      assertValidTree(target.richText!.root.children);
+      return { result: { set: outlineLine(node, path) }, doc: copy };
     }
+    parent[target.key!] = hydrateFields(restored);
     assertValidTree(target.richText!.root.children);
-    return { result: viewValue(parent[target.key!]), doc: copy };
+    return { result: { set: path }, doc: copy };
   }
 
   const nodes = nodeListOf(target, path, operation);
@@ -245,18 +244,22 @@ export function editAtPath<T extends object>(
     freshenBlockIds(node, blockIds(copy));
     nodes.splice(index, 0, node);
     assertValidTree(target.richText!.root.children);
-    const note =
-      index === nodes.length - 1
-        ? `Appended as ${path}.`
-        : `Nodes from ${path} on moved down by one.`;
-    return { result: { node: viewNode(node), count: nodes.length, note }, doc: copy };
+    const shifted = index < nodes.length - 1;
+    return {
+      result: {
+        inserted: outlineLine(node, path),
+        count: nodes.length,
+        ...(shifted ? { note: `Nodes from ${path} on moved down by one.` } : {}),
+      },
+      doc: copy,
+    };
   }
 
   const [removed] = nodes.splice(index, 1);
   const shifted = index < nodes.length;
   return {
     result: {
-      deleted: outlineLine(removed, index),
+      deleted: outlineLine(removed, path),
       count: nodes.length,
       ...(shifted ? { note: `Nodes after ${path} moved up by one.` } : {}),
     },

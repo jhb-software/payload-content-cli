@@ -1,22 +1,22 @@
 /**
- * Searching, linking and comparing the rich text at a dot path.
+ * Searching, linking and comparing rich text.
  *
- * Each function takes the document and the dot path of a rich-text value
- * (`content`, `layout.1.richText`, `content.3.fields.body`) and covers the rich
- * text nested inside it too, so a link in a block's body is found from the
- * field the block sits in. Results name full dot paths, the same paths
- * `editAtPath` takes.
+ * Each function takes the document and a dot path, and covers every rich text
+ * at or below it, nested rich text included: `content`, `layout.1` (an array
+ * row), `content.3` (a block), or `""` for the whole document. Results name
+ * full dot paths, the same paths `readAtPath` and `editAtPath` take.
  */
 
 import { diffLexicalDocs } from "./diff.js";
 import type { LexicalDiffResult, RichTextSection } from "./diff.js";
 import { LexicalError } from "./errors.js";
-import { extractBlocks, extractLinks, linkFirstMatch, searchText } from "./operations.js";
-import type { ExtractedBlock, ExtractedLink, SearchMatch } from "./operations.js";
-import { richTextAt } from "./path.js";
-import type { LexicalNode } from "./types.js";
+import { buildInternalLink } from "./nodes.js";
+import type { LinkTarget } from "./nodes.js";
+import { extractLinks, linkFirstMatch, searchText } from "./operations.js";
+import type { ExtractedLink, SearchMatch } from "./operations.js";
+import { valueAtPath } from "./path.js";
 import { assertValidTree } from "./validate.js";
-import { isRichText } from "./view.js";
+import { hydrateNode, isRichText, type RichTextValue } from "./view.js";
 
 export interface RichTextPathsOptions {
   /** Also list rich text nested inside nodes, such as a block's body. Default: false. */
@@ -49,15 +49,20 @@ export function richTextPaths(doc: object, options: RichTextPathsOptions = {}): 
   return found;
 }
 
-/** The rich text at `path` and every rich text nested inside it. */
+/** Every rich text at or below `path`, nested rich text included. */
 function sections(doc: object, path: string): RichTextSection[] {
-  const value = richTextAt(doc, path);
   const paths: string[] = [];
-  collectPaths(value, path, true, paths);
-  return paths.map((at) => ({ path: at, children: richTextAt(doc, at).root.children }));
+  collectPaths(valueAtPath(doc, path), path, true, paths);
+  if (paths.length === 0) {
+    throw new LexicalError("PATH_NOT_FOUND", `No rich text at ${path || "the document"}.`);
+  }
+  return paths.map((at) => ({
+    path: at,
+    children: (valueAtPath(doc, at) as RichTextValue).root.children,
+  }));
 }
 
-/** Unlinked text containing `search`, with the path of each text node it's in. */
+/** Text containing `search`, with the path of each text node it's in; matches inside a link say `linked`. */
 export function searchRichText(doc: object, path: string, search: string): SearchMatch[] {
   return sections(doc, path).flatMap((section) =>
     searchText(section.children, section.path, search),
@@ -69,30 +74,27 @@ export function extractRichTextLinks(doc: object, path: string): ExtractedLink[]
   return sections(doc, path).flatMap((section) => extractLinks(section.children, section.path));
 }
 
-/** Every block node, with its slug and the text it follows. */
-export function extractRichTextBlocks(doc: object, path: string): ExtractedBlock[] {
-  return sections(doc, path).flatMap((section) => extractBlocks(section.children, section.path));
-}
-
 /**
- * Wrap the first unlinked occurrence of `search` in `link` (e.g. from
- * `buildInternalLink`). Returns a changed copy; the document is not modified.
+ * Link the first unlinked occurrence of `text` to a document. Returns a
+ * changed copy and the path of the new link; the document is not modified.
  * Throws `TEXT_NOT_FOUND` when there is no unlinked match.
  */
 export function linkRichText<T extends object>(
   doc: T,
   path: string,
-  search: string,
-  link: LexicalNode,
-): T {
+  text: string,
+  target: LinkTarget,
+): { doc: T; path: string } {
   const copy = structuredClone(doc);
+  const link = hydrateNode(buildInternalLink(text, target));
   for (const section of sections(copy, path)) {
-    if (linkFirstMatch(section.children, search, link)) {
+    const at = linkFirstMatch(section.children, section.path, text, link);
+    if (at) {
       assertValidTree(section.children);
-      return copy;
+      return { doc: copy, path: at };
     }
   }
-  throw new LexicalError("TEXT_NOT_FOUND", `No unlinked "${search}" in ${path}.`);
+  throw new LexicalError("TEXT_NOT_FOUND", `No unlinked "${text}" in ${path || "the document"}.`);
 }
 
 /**

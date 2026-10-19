@@ -101,7 +101,7 @@ describe("buildList", () => {
 
 describe("inline children", () => {
   it("accepts pre-built inline nodes instead of plain text", () => {
-    const link = buildInternalLink("docs", "pages", "42");
+    const link = buildInternalLink("docs", { relationTo: "pages", value: "42" });
     const node = buildParagraph([buildText("see "), link]);
 
     expect(node.children).toEqual([buildText("see "), link]);

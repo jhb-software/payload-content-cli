@@ -112,12 +112,14 @@ export function buildBlock(fields: Record<string, unknown>): LexicalNode {
   return { type: "block", fields, format: "", version: 2 };
 }
 
-export function buildInternalLink(
-  text: string,
-  relationTo: string,
-  value: string,
-  label?: string,
-): LexicalElementNode {
+/** The document an internal link points to. */
+export interface LinkTarget {
+  relationTo: string;
+  value: string | number;
+  newTab?: boolean;
+}
+
+export function buildInternalLink(text: string, target: LinkTarget): LexicalElementNode {
   return {
     type: "link",
     version: 3,
@@ -127,11 +129,8 @@ export function buildInternalLink(
     indent: 0,
     fields: {
       linkType: "internal",
-      doc: {
-        label: label ?? text,
-        relationTo,
-        value,
-      },
+      newTab: target.newTab ?? false,
+      doc: { relationTo: target.relationTo, value: target.value },
     },
   };
 }

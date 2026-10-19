@@ -102,17 +102,16 @@ describe("lexical CLI", () => {
     const result = runCLI(["read", pagePath]);
     expect(result.status, result.stderr).toBe(0);
     expect(result.stdout.trim().split("\n")).toEqual([
-      "layout.1.richText",
-      "  0 h2: Before you go",
-      "  1 p: Check the entry rules before booking.",
-      "  2 block alert: Bring cash.",
-      "  3 block alert [1 link]: See visa requirements first.",
+      `${field}.0 h2: Before you go`,
+      `${field}.1 p: Check the entry rules before booking.`,
+      `${field}.2 block alert: Bring cash.`,
+      `${field}.3 block alert [1 link]: See visa requirements first.`,
     ]);
   });
 
   it("reaches the rich text of the second of two blocks of the same type", () => {
     expect(outline(pagePath, `${field}.3.fields.body`)).toEqual([
-      "0 p [1 link]: See visa requirements first.",
+      `${field}.3.fields.body.0 p [1 link]: See visa requirements first.`,
     ]);
   });
 
@@ -145,13 +144,16 @@ describe("lexical CLI", () => {
     ]);
     expect(result.status, result.stderr).toBe(0);
     expect(JSON.parse(result.stdout)).toMatchObject({ count: 5, note: expect.any(String) });
-    expect(outline()[2]).toBe("2 p: Japan uses type A plugs.");
+    expect(outline()[2]).toBe(`${field}.2 p: Japan uses type A plugs.`);
   });
 
   it("deletes a node", () => {
     const result = runCLI(["delete", pagePath, `${field}.2`]);
     expect(result.status, result.stderr).toBe(0);
-    expect(JSON.parse(result.stdout)).toMatchObject({ deleted: "2 block alert: Bring cash." });
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      deleted: `${field}.2 block alert: Bring cash.`,
+      count: 3,
+    });
     expect(outline()).toHaveLength(3);
   });
 
@@ -164,8 +166,8 @@ describe("lexical CLI", () => {
     expect(insert.status, insert.stderr).toBe(0);
 
     expect(outline(otherPath, "content")).toEqual([
-      "0 p: Hi",
-      "1 block alert [1 link]: See visa requirements first.",
+      "content.0 p: Hi",
+      "content.1 block alert [1 link]: See visa requirements first.",
     ]);
   });
 
@@ -188,11 +190,11 @@ describe("lexical CLI", () => {
     expect(result.stdout.trim()).toBe(`[${field}.2.fields.body.0.children.0] "Bring cash."`);
   });
 
-  it("links text in the document's only rich-text field", async () => {
+  it("links text anywhere in the document and prints the new link's path", async () => {
     const result = runCLI([
       "link",
       pagePath,
-      "--search",
+      "--text",
       "entry rules",
       "--relationTo",
       "pages",
@@ -200,26 +202,24 @@ describe("lexical CLI", () => {
       "entry",
     ]);
     expect(result.status, result.stderr).toBe(0);
-    expect(outline()[1]).toBe("1 p [1 link]: Check the entry rules before booking.");
+    expect(JSON.parse(result.stdout)).toMatchObject({ linked: `${field}.1.children.1` });
+    expect(outline()[1]).toBe(`${field}.1 p [1 link]: Check the entry rules before booking.`);
   });
 
-  it("asks for a path when a document has more than one rich-text field", async () => {
-    await fs.writeFile(
-      otherPath,
-      JSON.stringify({ intro: richText(paragraph(text("a"))), body: richText() }),
-    );
+  it("links only inside the path when one is given", async () => {
     const result = runCLI([
       "link",
-      otherPath,
-      "--search",
-      "a",
+      pagePath,
+      `${field}.3`,
+      "--text",
+      "entry rules",
       "--relationTo",
       "pages",
       "--value",
-      "x",
+      "entry",
     ]);
     expect(result.status).toBe(1);
-    expect(result.stderr).toMatch(/intro, body/);
+    expect(result.stderr).toMatch(/No unlinked "entry rules" in layout\.1\.richText\.3/);
   });
 
   it("copies a link's target from another file by the link's path", async () => {

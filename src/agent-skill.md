@@ -70,7 +70,7 @@ Use `--dry-run` on push to preview changes before committing them.
 
 ### Step 6: Use lexical subcommands for richtext
 
-Prefer `lexical` subcommands (`read`, `set`, `insert`, `delete`) over rewriting the entire Lexical tree. Run `lexical read <file>` first: it outlines every richtext field with its path. Paths continue into nodes and nested rich text (`layout.1.richText.3.fields.body.0`). Copy nodes between files with `lexical read --full` piped into `lexical insert --json -`.
+Prefer `lexical` subcommands (`read`, `set`, `insert`, `delete`) over rewriting the entire Lexical tree. Run `lexical read <file>` first: it outlines every richtext field, each line starting with the node's path. Paths continue into nodes and nested rich text (`layout.1.richText.3.fields.body.0`). Copy nodes between files with `lexical read --full` piped into `lexical insert --json -`.
 
 ### Step 7: Handle locales
 

@@ -4,9 +4,18 @@
 [![npm version](https://img.shields.io/npm/v/@jhb.software/payload-content-cli.svg)](https://www.npmjs.com/package/@jhb.software/payload-content-cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Helpers that let AI agents work efficiently with Payload CMS content: a CLI, a Lexical rich-text toolkit, a schema plugin, and MCP tools.
+Helpers that let AI agents work efficiently with Payload CMS content: a CLI, MCP tools, a Payload plugin, and a Lexical rich-text toolkit.
 
-> **Beta.** APIs and command surface may change before 1.0. The `./mcp` tools and `editAtPath` are experimental and may change in any minor release. Feedback and bug reports are very welcome.
+> **Beta.** APIs and command surface may change before 1.0. The `./mcp` tools and `./lexical` are experimental and may change in any minor release. Feedback and bug reports are very welcome.
+
+## What's in the package
+
+| Entry point                                 | For                                       | What it gives you                                                                                                                                                           |
+| ------------------------------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `payload-content` CLI                       | Agents with a shell (Claude Code, Codex…) | Every REST operation as a command, `pull`/`push` content sync, rich-text editing by path, an agent skill                                                                    |
+| [`/mcp`](#mcp-tools)                        | Apps running `@payloadcms/plugin-mcp`     | Seven collection-agnostic content tools: discover, read schemas, find, create, update, edit rich text                                                                       |
+| [`/plugin`](#schema-api-for-custom-tools)   | Your Payload config                       | The schema endpoint the CLI reads, the schema API for your own tools, and `preserveSharedRowsPlugin`, which keeps other locales' translations of array and blocks rows safe |
+| [`/lexical`](#rich-text-from-your-own-code) | Your own scripts and tools                | Read and edit Lexical rich text by dot path; pure functions, no I/O                                                                                                         |
 
 ## Quickstart
 
@@ -57,6 +66,20 @@ Agents work best with CLIs — structured commands, predictable JSON output, and
 | CLI extras       | —                                                                                            | `pull` / `push` with dry run and conflict detection, bulk `upload`, `count`, versions |
 | Setup            | Plugin in the Payload config, API keys with per-tool permissions                             | CLI: an API key. `./mcp`: one line in the plugin's `mcp.tools`                        |
 
+## MCP tools
+
+If your agents reach Payload over MCP rather than a shell, `/mcp` adds a small set of content tools to [`@payloadcms/plugin-mcp`](https://payloadcms.com/docs/plugins/mcp):
+
+```ts
+import { createMcpContentTools } from "@jhb.software/payload-content-cli/mcp";
+
+mcpPlugin({ collections: {}, mcp: { tools: [...createMcpContentTools()] } });
+```
+
+`listEntities`, `getEntitySchema`, `getBlockSchema`, `find`, `create`, `update` and `updateRichText` cover every collection and global, run with the request's user and Payload's access control, and save drafts unless told to publish.
+
+They are aligned with the CLI, so an agent that knows one knows the other. Rich text reads as the same outline in both, one line per node, each starting with its path (`content.3 block alert [1 link]: See safety`), and `updateRichText` and the `lexical` commands edit and link at those paths with the same engine. The schema tools answer from the same projection the CLI's `_schema.json` comes from. Most differences come from where each runs: the CLI calls the REST API and can work on pulled files, while the MCP tools run inside Payload and read without locale fallback. See [USAGE.md](USAGE.md#add-the-mcp-content-tools).
+
 ## Content sync
 
 For bulk edits or offline workflows, the CLI can pull content to the filesystem as JSON files, let you edit locally, and push changes back:
@@ -95,9 +118,11 @@ Entity schemas name the blocks a field accepts rather than inlining them, so an 
 
 See [USAGE.md](USAGE.md#build-custom-tools-with-the-schema-api) for the full API.
 
-The Lexical toolkit behind the `lexical` commands ships the same way, under `@jhb.software/payload-content-cli/lexical` — `readAtPath(doc, path)` and `editAtPath(doc, path, operation, value?)` read or change anything inside rich text by the same dot paths the CLI and MCP tool use, and returns a validated, changed copy of the document. Pure functions, no filesystem or network, so fetching and saving (and the access, locale, and draft decisions that come with them) stay in your code. See [USAGE.md](USAGE.md#edit-richtext-from-your-own-code).
+The plugin also exports `preserveSharedRowsPlugin()`, which refuses API writes that would silently drop other locales' translations of array and blocks rows ([USAGE.md](USAGE.md#keep-translations-of-shared-rows)). It guards every writer, the CLI and the MCP tools included.
 
-`@jhb.software/payload-content-cli/mcp` exports `createMcpContentTools()` for apps running `@payloadcms/plugin-mcp`: `listEntities`, `getEntitySchema`, `getBlockSchema`, `find`, `create`, `update`, and `updateRichText` ([USAGE.md](USAGE.md#add-the-mcp-content-tools)). The plugin's `preserveSharedRowsPlugin()` refuses API writes that would silently drop other locales' translations of array and blocks rows ([USAGE.md](USAGE.md#keep-translations-of-shared-rows)).
+## Rich text from your own code
+
+The Lexical toolkit behind the `lexical` commands and `updateRichText` ships as `@jhb.software/payload-content-cli/lexical`: `readAtPath(doc, path)` and `editAtPath(doc, path, operation, value?)` read or change anything inside rich text by the same dot paths, and an edit returns a validated, changed copy of the document. Pure functions, no filesystem or network, so fetching and saving (and the access, locale, and draft decisions that come with them) stay in your code. See [USAGE.md](USAGE.md#edit-richtext-from-your-own-code).
 
 ## Getting started
 

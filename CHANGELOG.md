@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.0-beta.0
 
 - **breaking:** the `lexical` commands address rich text by one dot path (`layout.1.richText.3.fields.body.0`), through array rows and nested blocks: `read [path]`, `set`, `insert`, `delete`, `search [path]`, `link [path] --text`, `diff [path]`. `list`, `get`, `add`, `replace`, `remove`, `--field`, `--at`, `link --search`/`--label` and the node flags are removed.
 - **breaking:** `./lexical` drops `editRichText`, `readRichText`, `getRichTextNode`, `extractRichTextBlocks`, the node builders and the type guards. `searchRichText`, `extractRichTextLinks` and `diffRichText` take a path and return full paths.

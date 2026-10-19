@@ -2,6 +2,8 @@ import { withPayload } from "@payloadcms/next/withPayload";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Stop `next dev` from writing AGENTS.md and CLAUDE.md into the example app.
+  agentRules: false,
   // This app imports the plugin from TS source (`../../src/plugin`), which uses
   // NodeNext `.js`-extension imports (e.g. `./schema.js` -> `schema.ts`). Turbopack
   // can't rewrite `.js`->`.ts` (vercel/next.js#82945), so the dev/build scripts pin

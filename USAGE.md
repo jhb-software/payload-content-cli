@@ -191,6 +191,8 @@ Every tool runs with the request's user and Payload's access control. Collection
 | `getEntitySchema` | One entity's fields as a compact tree, one line per field. Blocks are listed by slug.           |
 | `getBlockSchema`  | The fields of blocks by slug, in the same tree format.                                          |
 | `find`            | One document by id, a page of a collection filtered by `where`, or a global.                    |
+| `create`          | A document in a collection, as a draft by default. Answers with its id.                         |
+| `update`          | Some fields of a document by id, of every document a `where` matches, or of a global.           |
 | `updateRichText`  | Read and edit rich text by path (below).                                                        |
 
 The schema tools answer in a tree rather than JSON, which costs an agent about half the tokens; the legend rides in the tool description, so it is paid once per session:
@@ -206,6 +208,8 @@ pages (collection)
 ```
 
 `find` reads the latest draft unless `draft: false`, so an agent sees its own unpublished edits. It returns what a locale stores, without fallback, so an untranslated field reads as empty rather than as another language. `where` and `select` may be objects or JSON strings (some MCP clients send nested objects as strings), `limit` is capped at 100, and `depth` defaults to 0.
+
+Writes go to the draft unless `draft: false`, which publishes (the tools set `_status` explicitly, since Payload's `draft: false` alone never publishes). Publishing one document or a global publishes its latest draft together with the changes, as the admin panel's Publish does. A bulk publish by `where` starts from the live documents instead, so it is refused when a matched document has newer draft changes, unless `overwriteDraft: true`. `data` may be an object or a JSON string; `locale: "all"` is refused for writes. Answers are lean: `{ id, status }` (`status` only on collections with drafts), `{ ids, status }` for a bulk update.
 
 `createMcpContentTools(options)` takes the same `resolveLocale` and `checkId` options as `updateRichTextTool` (below) and hands them to every tool. To drop or replace one tool, filter the list by `name`. Tool names are stable, since `@payloadcms/plugin-mcp` keys its per-key access flags on them.
 

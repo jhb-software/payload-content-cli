@@ -106,7 +106,7 @@ See [USAGE.md](USAGE.md#build-custom-tools-with-the-schema-api) for the full API
 
 The Lexical toolkit behind the `lexical` commands ships the same way, under `@jhb.software/payload-content-cli/lexical` — one `editRichText(doc, field, edit)` call addresses a node, edits it, validates the result, and writes the field back, without rewriting the document. Pure functions, no filesystem or network, so fetching and saving (and the access, locale, and draft decisions that come with them) stay in your code. See [USAGE.md](USAGE.md#edit-richtext-from-your-own-code).
 
-For Payload apps running `@payloadcms/plugin-mcp`, `@jhb.software/payload-content-cli/mcp` ships a fixed set of collection-agnostic content tools, `createMcpContentTools()`: schemas as a compact field tree instead of JSON, reads that show what a locale actually stores, and an `updateRichText` tool that addresses any node or value inside rich text — including rich text nested in blocks — with one dot path, reads compact outlines instead of raw Lexical JSON, and edits drafts by default. See [USAGE.md](USAGE.md#add-the-mcp-content-tools).
+For Payload apps running `@payloadcms/plugin-mcp`, `@jhb.software/payload-content-cli/mcp` ships a fixed set of collection-agnostic content tools, `createMcpContentTools()`: schemas as a compact field tree instead of JSON, reads that show what a locale actually stores, writes that go to drafts unless told to publish, and an `updateRichText` tool that addresses any node or value inside rich text — including rich text nested in blocks — with one dot path, reads compact outlines instead of raw Lexical JSON, and edits drafts by default. See [USAGE.md](USAGE.md#add-the-mcp-content-tools).
 
 ## Getting started
 

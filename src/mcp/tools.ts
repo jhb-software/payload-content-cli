@@ -3,6 +3,7 @@ import type { McpContentToolsOptions } from "./options.js";
 import type { McpTool } from "./result.js";
 import { getBlockSchemaTool, getEntitySchemaTool, listEntitiesTool } from "./schema.js";
 import { updateRichTextTool } from "./updateRichText.js";
+import { createTool, updateTool } from "./write.js";
 
 /**
  * The content tools for `@payloadcms/plugin-mcp`, in the order an agent uses
@@ -15,6 +16,8 @@ export function createMcpContentTools(options: McpContentToolsOptions = {}): Mcp
     getEntitySchemaTool(),
     getBlockSchemaTool(),
     findTool(options),
+    createTool(options),
+    updateTool(options),
     updateRichTextTool(options),
   ];
 }

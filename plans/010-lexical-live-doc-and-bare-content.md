@@ -7,63 +7,62 @@ priority: high
 
 # Lexical subcommands against live docs and bare-content files
 
-The `lexical` subcommands today require a pulled file shaped like a full document (richtext nested under a known field, e.g. `doc.content`). For an agent making surgical edits to a live document this means a five-step round trip:
+The `lexical` subcommands work on a pulled file shaped like a full document, with rich text addressed by dot path (`content.3`, `layout.1.richText.3.fields.body.0`, plan 015). For an agent making a surgical edit to a live document that means a three-command round trip:
 
 ```bash
 payload-content find episodes 6a0b... --select '{"content":true}' > /tmp/doc.json
-payload-content lexical replace /tmp/doc.json --field content --at <addr> --paragraph "..."
+payload-content lexical set /tmp/doc.json content.3 '{"type":"p","text":"..."}'
 payload-content update episodes 6a0b... --file /tmp/doc.json --override-lock
 ```
 
-And if the agent is already holding a standalone content tree (root is `{root: {children: [...]}}`), the subcommands error with `No Lexical rich text found in document` because they assume a wrapping document shape.
+And a standalone content tree (a file that is `{root: {children: [...]}}` itself) has no field to start a path at, so `lexical read` finds nothing to show and every path fails.
+
+MCP clients don't have this problem: the `updateRichText` tool (`./mcp`) already reads and edits a live document by path. This plan brings the same to the CLI.
 
 ## Current state
 
-- `src/lexical/*` operates on file paths. The file must contain a document object with the richtext field nested under a known path.
+- `src/lexical/commands.ts` operates on file paths. Paths start at a rich-text field inside a document object.
 - No fetch/update integration — the user is responsible for pulling and pushing.
-- Bare content trees (top-level `{root: {children: [...]}}`) are rejected.
+- Bare content trees (top-level `{root: {children: [...]}}`) can't be addressed: `richTextPaths` reports them at the empty path, which no command accepts.
 
 ## Proposal
 
-### 1. Live-doc target syntax
+### 1. Live-doc targets
 
-Accept `<collection>:<id>:<field>[@locale]` as a target for `lexical {search, get, replace, add, remove, set, link, list, diff}`:
+Accept `<collection>:<id>[@locale]` (and `globals/<slug>[@locale]`) in place of `<file>` for every `lexical` command. The path stays the same dot path a file takes:
 
 ```bash
-payload-content lexical replace episodes:6a0b...:content --at <addr> --paragraph "..."
-payload-content lexical link episodes:6a0b...:content --text "Auction Atlas" --url https://...
-payload-content lexical search posts:42:body@de --query "Kronenberg"
+payload-content lexical read episodes:6a0b...
+payload-content lexical set episodes:6a0b... content.3 '{"type":"p","text":"..."}'
+payload-content lexical link episodes:6a0b... content --search "Auction Atlas" --relationTo pages --value <id>
+payload-content lexical search posts:42@de --text "Kronenberg"
 ```
 
-Internally: fetch the doc (selecting the target field), mutate the tree in memory, push back with `--override-lock` semantics. Locale is appended with `@` to keep the colon path unambiguous.
+Internally: fetch the doc (selecting the path's first segment, no locale fallback, draft by default as the MCP tools do), apply the change with `editAtPath`/`linkRichText`, and update it back. Locale is appended with `@` to keep the target unambiguous.
 
-`--override-lock` should be a flag on these commands too — default off (fail loudly on lock conflict), opt-in for AFK agents. Matches the pattern already used by `update`.
+`--override-lock` should be a flag on the writing commands too — default off (fail loudly on lock conflict), opt-in for AFK agents. Matches the pattern already used by `update`.
 
-### 2. Bare-content file detection
+### 2. Bare-content files
 
-When `<file>` is passed as a target, detect the shape:
-
-- If the root has `root.children`, treat the whole file as the field value.
-- Otherwise, expect a document object and require `--field <path>` as today.
-
-The detection is one check — `typeof parsed?.root?.children !== "undefined"` — and removes the only reason agents currently have to wrap content trees by hand before invoking `lexical`.
+When the file itself is rich text, paths start at its top-level nodes: `3`, `3.children.0`, `3.fields.body.0`. `read` without a path outlines it; `link`, `search` and `diff` without a path use it.
 
 ## Implementation notes
 
-- Target parser: a single function that returns `{ kind: "file", path } | { kind: "doc", collection, id, field, locale? }`. All lexical commands route through it.
-- For `kind: "doc"`, share the existing client fetch/update logic. Don't duplicate auth/profile/header handling.
-- Diff command: should still print to stdout, not write back, even for live targets. The whole point of `diff` is preview.
-- Read-only commands (`search`, `get`, `list`) shouldn't require `--override-lock` and shouldn't pull a lock.
+- Target parser: a single function that returns `{ kind: "file", path } | { kind: "doc", collection, id, locale? } | { kind: "global", slug, locale? }`. All lexical commands route through it, so they read a document and write one back without knowing where it came from.
+- For live targets, share the existing client fetch/update logic. Don't duplicate auth/profile/header handling.
+- Bare files: `editAtPath` already resolves an index against a rich-text document; the work is accepting the empty path for "the whole file" in `read`, `richTextPaths` and the commands' default-path logic.
+- `diff` should still print to stdout, not write back, even for live targets. The whole point of `diff` is preview.
+- Read-only commands (`read`, `search`, `diff`) shouldn't require `--override-lock` and shouldn't pull a lock.
 
 ## Files
 
 - `src/lexical/target.ts` — new, target parser
-- `src/lexical/*.ts` — every subcommand routes file vs. live target
-- `src/cli.ts` — argument parsing changes
-- `src/agent-skill.md` — replace round-trip workaround section with the new syntax (coordinate with plan 009)
+- `src/lexical/commands.ts` — every subcommand routes file vs. live target
+- `src/lexical/read.ts`, `src/lexical/path.ts` — the empty path for bare files
+- `src/agent-skill.md`, `USAGE.md`, `README.md` — document the live-target syntax (coordinate with plan 009)
 
 ## Open questions
 
 - Concurrency: between fetch and update the doc could change. Use the manifest/etag flow already used by `update`, or accept that `--override-lock` is the escape hatch and document the race?
-- For `lexical add` on a deeply nested address, the fetch needs the whole field (no projection within richtext). Confirm we're not trying to be clever with partial fetches.
-- Should `<collection>:<id>` without a field default to the first richtext field on the collection? Probably no — explicit beats magic, and a schema lookup adds latency.
+- Publishing: default to drafts like the MCP tools, with a `--publish` flag and the same guard against publishing over a newer draft?
+- Should a live target without a path in `link`/`diff` fall back to the document's only rich-text field, as file targets do? That works on the fetched document without a schema lookup, so probably yes.

@@ -21,7 +21,7 @@ export function boot(key: string, config: Omit<Config, "db" | "secret">): Promis
     config: buildConfig({
       secret: "test-secret",
       db: sqliteAdapter({ client: { url: ":memory:" } }),
-      typescript: { outputFile: "/dev/null" },
+      typescript: { autoGenerate: false },
       ...config,
     }),
   });

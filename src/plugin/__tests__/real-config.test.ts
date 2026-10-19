@@ -36,7 +36,7 @@ async function buildSchemaResponse(): Promise<SchemaResponse> {
   const config = await buildConfig({
     secret: "test-secret",
     db: stubDb,
-    typescript: { outputFile: "/dev/null" },
+    typescript: { autoGenerate: false },
     plugins: [contentCliPlugin()],
     collections: [
       {

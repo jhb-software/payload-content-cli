@@ -47,28 +47,15 @@ Agents work best with CLIs — structured commands, predictable JSON output, and
 
 ## Comparison to the official MCP plugin
 
-The [official MCP plugin](https://github.com/payloadcms/payload-mcp) works well for simple use cases, especially for reading content, but it adds friction:
+[`@payloadcms/plugin-mcp`](https://payloadcms.com/docs/plugins/mcp) is a good base for reading content and for your own MCP tools, prompts, and resources. Its stock tools get expensive once agents edit content. This package covers that with the CLI and with [`./mcp` tools](USAGE.md#add-the-mcp-content-tools) that run on top of the plugin:
 
-- **Setup required** — the MCP plugin needs to be installed and configured. The CLI only needs an API key.
-
-Full comparison:
-
-|                    | MCP plugin (as of 05/2026)                             | @jhb.software/payload-content-cli                     |
-| ------------------ | ------------------------------------------------------ | ----------------------------------------------------- |
-| Tool scaling       | One tool per operation per collection — bloats quickly | Collection-agnostic commands — fixed tool count       |
-| REST API parity    | Partial — limited query parameters                     | Full — all Payload REST API parameters supported      |
-| Operations         | Missing `count`, versions, and others                  | All collection + global operations                    |
-| Read a document    | Good — single tool call                                | Good — `find` or read pulled JSON                     |
-| Update one field   | OK — full document round-trip                          | Good — edit one field in a file                       |
-| Edit richtext      | Bad — agent must construct entire Lexical tree         | Good — `lexical set/insert/delete` for surgical edits |
-| Bulk edits         | Bad — one API call per document                        | Good — edit files, push once                          |
-| Conflict detection | None                                                   | Built-in — manifest-based diffing                     |
-| Dry run            | Not possible                                           | `push --dry-run`                                      |
-| Offline work       | Not possible                                           | `status` works without network                        |
-| Setup              | MCP plugin to install and configure                    | Just an API key                                       |
-| Token cost         | High                                                   | Low                                                   |
-
-The CLI and MCP aren't mutually exclusive. While the MCP plugin is a great fit for simple use cases, the CLI is a better fit for more complex use cases, especially when you need to edit content. If you run the MCP plugin, this package's `./mcp` tools close most of the gaps above: a fixed tool count, compact schemas, and path-addressed rich-text edits.
+|                  | plugin-mcp 3.91.0 stock tools                                                                | This package                                                                          |
+| ---------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Tools and tokens | Four tools per collection, two per global; write tools embed the full schema, blocks inlined | Seven collection-agnostic tools; compact schema trees, blocks fetched on demand       |
+| Rich text        | Rewrite the whole Lexical JSON field                                                         | Read and edit one node or value by dot path, through nested blocks                    |
+| Drafts, locales  | Writes publish unless `draft: true`; reads apply locale fallback                             | Writes go to drafts by default; reads show what a locale stores; shared rows kept     |
+| CLI extras       | —                                                                                            | `pull` / `push` with dry run and conflict detection, bulk `upload`, `count`, versions |
+| Setup            | Plugin in the Payload config, API keys with per-tool permissions                             | CLI: an API key. `./mcp`: one line in the plugin's `mcp.tools`                        |
 
 ## Content sync
 
@@ -110,7 +97,7 @@ See [USAGE.md](USAGE.md#build-custom-tools-with-the-schema-api) for the full API
 
 The Lexical toolkit behind the `lexical` commands ships the same way, under `@jhb.software/payload-content-cli/lexical` — `editAtPath(doc, path, operation, value?)` reads or changes anything inside rich text by the same dot paths the CLI and MCP tool use, and returns a validated, changed copy of the document. Pure functions, no filesystem or network, so fetching and saving (and the access, locale, and draft decisions that come with them) stay in your code. See [USAGE.md](USAGE.md#edit-richtext-from-your-own-code).
 
-For Payload apps running `@payloadcms/plugin-mcp`, `@jhb.software/payload-content-cli/mcp` ships a fixed set of collection-agnostic content tools, `createMcpContentTools()`: schemas as a compact field tree instead of JSON, reads that show what a locale actually stores, writes that go to drafts unless told to publish, and an `updateRichText` tool that addresses any node or value inside rich text — including rich text nested in blocks — with one dot path, reads compact outlines instead of raw Lexical JSON, and edits drafts by default. See [USAGE.md](USAGE.md#add-the-mcp-content-tools). The plugin's `preserveSharedRowsPlugin()` refuses API writes that would silently drop other locales' translations of array and blocks rows ([USAGE.md](USAGE.md#keep-translations-of-shared-rows)).
+`@jhb.software/payload-content-cli/mcp` exports `createMcpContentTools()` for apps running `@payloadcms/plugin-mcp`: `listEntities`, `getEntitySchema`, `getBlockSchema`, `find`, `create`, `update`, and `updateRichText` ([USAGE.md](USAGE.md#add-the-mcp-content-tools)). The plugin's `preserveSharedRowsPlugin()` refuses API writes that would silently drop other locales' translations of array and blocks rows ([USAGE.md](USAGE.md#keep-translations-of-shared-rows)).
 
 ## Getting started
 

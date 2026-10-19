@@ -93,6 +93,10 @@ const shouldCheck = (data: unknown, req: PayloadRequest): data is Data =>
   req.context?.[ALLOW_SHARED_ROW_REPLACEMENT] !== true &&
   containsObjectArray(data);
 
+/** Whether the write itself skips access control; the Local API's default is to. */
+const callerOverridesAccess = (args: unknown): boolean =>
+  (args as { overrideAccess?: boolean }).overrideAccess !== false;
+
 function check(
   fields: Field[],
   data: Data,
@@ -114,6 +118,8 @@ function check(
 // runs before every document-level hook, hands each id-less row a fresh id.
 // A beforeChange hook would see ids on every row and never fire. The price is
 // reading the stored document here, so only writes carrying rows are checked.
+// That read runs before Payload's access check, so it uses the caller's access:
+// a refusal names row ids, and must not for a document the caller can't read.
 const collectionHook: CollectionBeforeOperationHook = async ({ args, operation, collection }) => {
   if (operation !== "update") return args;
   const { req, data } = args as { req: PayloadRequest; data?: unknown };
@@ -124,7 +130,7 @@ const collectionHook: CollectionBeforeOperationHook = async ({ args, operation, 
     depth: 0,
     draft: Boolean((args as { draft?: boolean }).draft),
     locale: req.locale,
-    overrideAccess: true,
+    overrideAccess: callerOverridesAccess(args),
     req,
   } as const;
   const { id, where } = args as { id?: number | string; where?: Where };
@@ -150,7 +156,7 @@ const globalHook: GlobalBeforeOperationHook = async ({ args, operation, global }
     depth: 0,
     draft: Boolean((args as { draft?: boolean }).draft),
     locale: req.locale,
-    overrideAccess: true,
+    overrideAccess: callerOverridesAccess(args),
     req,
   });
   check(global.fields, data, existing, req, global.slug);

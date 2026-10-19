@@ -40,6 +40,12 @@ beforeAll(async () => {
     blocks: [{ slug: "section", fields: [{ name: "title", type: "text", localized: true }] }],
     collections: [
       { slug: "hotels", access: open, fields },
+      // Only the API's own code may touch these.
+      {
+        slug: "vaults",
+        access: { read: () => false, create: () => false, update: () => false },
+        fields,
+      },
       // Sorted so the bulk test controls which document comes last.
       {
         slug: "rooms",
@@ -260,6 +266,30 @@ describe("preserveSharedRowsPlugin allows", () => {
     );
 
     expect(await titles(id, "en")).toEqual(["Food"]);
+  });
+});
+
+describe("access", () => {
+  it("gives a caller who may not update the document Payload's refusal, not the stored row ids", async () => {
+    const vault = await payload.create({
+      collection: "vaults",
+      locale: "en",
+      data: { extras: [{ item: { title: "Secret" } }] } as never,
+    });
+    const storedIds = (vault as unknown as { extras: Row[] }).extras.map((row) => row.id);
+
+    const error = await payload
+      .update({
+        collection: "vaults",
+        id: vault.id,
+        locale: "en",
+        overrideAccess: false,
+        data: { extras: [{ item: { title: "Probe" } }] } as never,
+      })
+      .catch((err: Error) => err);
+
+    expect(isSharedRowRefusal(error)).toBe(false);
+    expect((error as Error).message).not.toContain(storedIds[0]);
   });
 });
 

@@ -30,25 +30,29 @@ const isObject = (value: unknown): value is Data =>
 const rowId = (row: Data): string | number | undefined =>
   typeof row.id === "string" || typeof row.id === "number" ? row.id : undefined;
 
-/** Sub-fields of an array or blocks field, with `blockReferences` resolved against the config. */
-function subFields(
-  field: Extract<Field, { type: "array" | "blocks" }>,
-  configBlocks: Block[],
-  blockType?: unknown,
-): Field[] {
-  if (field.type === "array") return field.fields;
-  const blocks = (
+/** The blocks a blocks field accepts, with `blockReferences` resolved against the config. */
+function blocksOf(field: Extract<Field, { type: "blocks" }>, configBlocks: Block[]): Block[] {
+  return (
     field.blockReferences
       ? field.blockReferences.map((ref) =>
           typeof ref === "string" ? configBlocks.find((block) => block.slug === ref) : ref,
         )
       : field.blocks
   ).filter((block): block is Block => Boolean(block));
-  if (typeof blockType !== "string") return blocks.flatMap((block) => block.fields);
-  return blocks.find((block) => block.slug === blockType)?.fields ?? [];
 }
 
-// Memoised per field array: block definitions are shared across many fields.
+/** The sub-fields of one row of an array or blocks field. */
+function rowFields(
+  field: Extract<Field, { type: "array" | "blocks" }>,
+  configBlocks: Block[],
+  blockType: unknown,
+): Field[] {
+  if (field.type === "array") return field.fields;
+  return blocksOf(field, configBlocks).find((block) => block.slug === blockType)?.fields ?? [];
+}
+
+// Memoised per field array, which is the config's own and so stable: block
+// definitions are shared across many fields, and may nest themselves.
 const localizedBelow = new WeakMap<Field[], boolean>();
 
 function hasLocalizedDescendant(fields: Field[], configBlocks: Block[]): boolean {
@@ -62,8 +66,11 @@ function hasLocalizedDescendant(fields: Field[], configBlocks: Block[]): boolean
       case "tabs":
         return field.tabs.some((tab) => hasLocalizedDescendant(tab.fields, configBlocks));
       case "array":
+        return hasLocalizedDescendant(field.fields, configBlocks);
       case "blocks":
-        return hasLocalizedDescendant(subFields(field, configBlocks), configBlocks);
+        return blocksOf(field, configBlocks).some((block) =>
+          hasLocalizedDescendant(block.fields, configBlocks),
+        );
       case "group":
       case "row":
       case "collapsible":
@@ -140,8 +147,7 @@ function walk(
 
     const rows = value.filter(isObject);
     const existingRows = Array.isArray(existingValue) ? existingValue.filter(isObject) : [];
-    const shared =
-      !localized && hasLocalizedDescendant(subFields(field, configBlocks), configBlocks);
+    const shared = !localized && hasLocalizedDescendant([field], configBlocks);
 
     // Every incoming row is new, yet rows exist: this replaces them all. One
     // row with an id is enough to read the write as an edit plus additions.
@@ -162,7 +168,7 @@ function walk(
       const id = rowId(row);
       const match = id === undefined ? undefined : existingRows.find((r) => rowId(r) === id);
       walk(
-        subFields(field, configBlocks, row.blockType),
+        rowFields(field, configBlocks, row.blockType),
         row,
         match,
         `${childPath}[${id ?? index}]`,

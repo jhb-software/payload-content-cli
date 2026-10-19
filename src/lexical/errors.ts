@@ -21,7 +21,11 @@ export type LexicalErrorCode =
   /** The resulting tree has nodes Payload would reject; the edit was not applied. */
   | "INVALID_TREE"
   /** A node builder was given input it can't turn into a valid node. */
-  | "INVALID_NODE";
+  | "INVALID_NODE"
+  /** A path segment names no key or index of the value it was applied to. */
+  | "PATH_NOT_FOUND"
+  /** The operation doesn't apply to what the path reaches, e.g. inserting where there is no list of nodes. */
+  | "UNSUPPORTED_AT_PATH";
 
 export class LexicalError extends Error {
   readonly code: LexicalErrorCode;

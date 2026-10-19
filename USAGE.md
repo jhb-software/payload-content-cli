@@ -144,6 +144,51 @@ editRichText(doc, "content", [
 
 Fetching and saving stay yours, and with them the decisions the CLI can't make for you: access control (`overrideAccess: false`), which locale, and whether the write is a draft.
 
+#### Edit by path
+
+`editAtPath(doc, path, operation, value?)` addresses anything inside a richtext field with one dot path — including rich text nested in blocks — and shows it compactly, for agents. The path starts at a richtext field; a number after a richtext value indexes its top-level nodes; from there it follows the node's JSON.
+
+```ts
+import { editAtPath } from "@jhb.software/payload-content-cli/lexical";
+
+editAtPath(doc, "content", "read").result;
+// → ["0 p: Intro", "1 block alert [1 link]: See safety", "2 ul (2 items): a; b"]
+
+editAtPath(doc, "content.0", "read").result;
+// → { type: "paragraph", version: 1, children: [{ type: "text", version: 1, text: "Intro" }] }
+
+const { doc: changed } = editAtPath(doc, "content.1.fields.body.0.children.1.fields.doc.value", "set", newPageId);
+```
+
+- **`read`**: a richtext value as an outline, one line per node; a node as its JSON without Lexical's default properties, with rich text nested in its fields outlined; anything else as it is.
+- **`set`**: replace the value. Nodes may be given as read (defaults and unchanged outlines are restored), in full, or as shorthand: `{type: "p", text}`, `{type: "h2", text}`, `{type: "ul", items}`, `{type: "hr"}`, `{type: "block", fields}`, `{type: "upload", value}`. Returns what a read now shows.
+- **`insert`** a node before the index the path ends in (the node count appends), **`delete`** the node at the path. Both return the new count and which indexes moved.
+
+The input document is never modified; a change returns a changed copy as `doc`. Path mistakes throw `LexicalError` with `PATH_NOT_FOUND` (naming the valid range or keys) or `UNSUPPORTED_AT_PATH`.
+
+### Add the updateRichText MCP tool
+
+For a Payload app running [`@payloadcms/plugin-mcp`](https://payloadcms.com/docs/plugins/mcp), `/mcp` packages `editAtPath` as a ready tool:
+
+```ts
+import { updateRichTextTool } from "@jhb.software/payload-content-cli/mcp";
+
+mcpPlugin({ mcp: { tools: [updateRichTextTool()] } });
+```
+
+It takes `collection` (or `"globals/<slug>"`), `id`, `path`, `operation`, `value`, `locale`, `draft` and `overwriteDraft`, and runs with the request's user and access control. Edits go to the draft by default. `draft: false` publishes, and is refused when it would discard newer draft changes unless `overwriteDraft: true`. Since draft writes skip Payload's validation, block slugs and link or upload targets the edit adds are checked first.
+
+Two options cover what differs between apps:
+
+```ts
+updateRichTextTool({
+  // The locale to read and write, e.g. a tenant's primary locale when the agent passes none.
+  resolveLocale: (req, { collection, id, locale }) => locale ?? primaryLocaleOf(req),
+  // Refuse an id before it is looked up, by returning the message to show.
+  checkId: (collection, id) => (isSlug(id) ? "Pass the document id, not its slug." : undefined),
+});
+```
+
 ### Enable API key auth
 
 The CLI authenticates via Payload's API key feature. We recommend creating a dedicated `api-keys` collection rather than adding API keys to your `users` collection — this keeps machine credentials separate from user accounts. Example:

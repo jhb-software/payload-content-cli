@@ -30,6 +30,11 @@ export { hasChildren, isLinkNode, isTextNode } from "./types.js";
 export { editRichText } from "./edit.js";
 export type { RichTextEdit } from "./edit.js";
 
+// Path-addressed reads and edits — one dot path from a rich-text field down to
+// any node or value inside it, with compact views for agents.
+export { editAtPath } from "./path.js";
+export type { PathEditResult, PathOperation } from "./path.js";
+
 // Failures, tagged with a code the caller can branch on.
 export { LexicalError } from "./errors.js";
 export type { LexicalErrorCode } from "./errors.js";

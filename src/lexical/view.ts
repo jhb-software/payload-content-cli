@@ -1,0 +1,303 @@
+import { randomBytes } from "node:crypto";
+import { LexicalError } from "./errors.js";
+import { buildHeading, buildHorizontalRule, buildList } from "./nodes.js";
+import type { LexicalNode } from "./types.js";
+import { hasChildren, isLinkNode } from "./types.js";
+
+/**
+ * The compact views `editAtPath` shows an agent, and their inverse.
+ *
+ * A Lexical tree is mostly boilerplate: every text node carries `detail`,
+ * `format`, `mode` and `style`, every element `direction`, `format` and
+ * `indent`, almost always at their defaults. Showing them costs tokens and
+ * buys nothing, so reads strip them and writes put them back. Rich text nested
+ * inside a block is shown as an outline, one line per node, and restored from
+ * the stored value on write when it comes back unchanged.
+ */
+
+export interface RichTextValue {
+  root: { children: LexicalNode[]; [key: string]: unknown };
+  [key: string]: unknown;
+}
+
+export function isRichText(value: unknown): value is RichTextValue {
+  if (typeof value !== "object" || value === null) return false;
+  const root = (value as { root?: unknown }).root;
+  return (
+    typeof root === "object" &&
+    root !== null &&
+    Array.isArray((root as { children?: unknown }).children)
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+// ── Outline ─────────────────────────────────────────────────────────
+
+const PREVIEW_LENGTH = 80;
+
+function truncate(text: string): string {
+  const flat = text.replace(/\s+/g, " ").trim();
+  return flat.length > PREVIEW_LENGTH ? `${flat.slice(0, PREVIEW_LENGTH - 1)}…` : flat;
+}
+
+/** Every rich-text value inside a block's fields, in field order. */
+function nestedRichTexts(value: unknown, found: RichTextValue[] = []): RichTextValue[] {
+  if (isRichText(value)) {
+    found.push(value);
+  } else if (Array.isArray(value)) {
+    for (const item of value) nestedRichTexts(item, found);
+  } else if (isRecord(value)) {
+    for (const item of Object.values(value)) nestedRichTexts(item, found);
+  }
+  return found;
+}
+
+function nodeText(node: LexicalNode): string {
+  if (typeof node.text === "string") return node.text;
+  if (node.type === "linebreak") return " ";
+  if (node.type === "list" && hasChildren(node)) {
+    return node.children.map(nodeText).join("; ");
+  }
+  if (hasChildren(node)) return node.children.map(nodeText).join("");
+  if (node.fields !== undefined) {
+    return nestedRichTexts(node.fields)
+      .map((value) => value.root.children.map(nodeText).join(" "))
+      .join(" ");
+  }
+  return "";
+}
+
+function countLinks(node: LexicalNode): number {
+  let count = isLinkNode(node) ? 1 : 0;
+  if (hasChildren(node)) {
+    for (const child of node.children) count += countLinks(child);
+  }
+  if (node.fields !== undefined) {
+    for (const value of nestedRichTexts(node.fields)) {
+      for (const child of value.root.children) count += countLinks(child);
+    }
+  }
+  return count;
+}
+
+function label(node: LexicalNode): string {
+  const fields = isRecord(node.fields) ? node.fields : {};
+  switch (node.type) {
+    case "paragraph":
+      return "p";
+    case "heading":
+      return typeof node.tag === "string" ? node.tag : "heading";
+    case "horizontalrule":
+      return "hr";
+    case "list": {
+      const items = hasChildren(node) ? node.children.length : 0;
+      const tag = typeof node.tag === "string" ? node.tag : String(node.listType ?? "list");
+      return `${tag} (${items} ${items === 1 ? "item" : "items"})`;
+    }
+    case "block":
+    case "inlineBlock":
+      return `${node.type} ${String(fields.blockType ?? "?")}`;
+    case "upload":
+      return `upload ${String(node.relationTo ?? "?")} ${String(node.value ?? "?")}`;
+    default:
+      return node.type;
+  }
+}
+
+/** One line per node: index, kind, link count, text preview — e.g. `1 p [3 links]: More on …`. */
+export function outlineLine(node: LexicalNode, index: number): string {
+  const links = countLinks(node);
+  const linkNote = links > 0 ? ` [${links} ${links === 1 ? "link" : "links"}]` : "";
+  const text = truncate(nodeText(node));
+  return `${index} ${label(node)}${linkNote}${text ? `: ${text}` : ""}`;
+}
+
+export function outline(nodes: LexicalNode[]): string[] {
+  return nodes.map(outlineLine);
+}
+
+// ── Stripping defaults ──────────────────────────────────────────────
+
+/** Node properties Lexical writes on (almost) every node, with the values that mean "nothing set". */
+const DEFAULTS: Record<string, unknown[]> = {
+  detail: [0],
+  direction: ["ltr", null],
+  format: ["", 0],
+  indent: [0],
+  mode: ["normal"],
+  style: [""],
+  textFormat: [0],
+  textStyle: [""],
+};
+
+/** A node as an agent reads it: no default properties, nested rich text as an outline. */
+export function viewNode(node: LexicalNode): LexicalNode {
+  const view: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(node)) {
+    if (DEFAULTS[key]?.includes(value)) continue;
+    if (key === "children" && Array.isArray(value)) {
+      view.children = (value as LexicalNode[]).map(viewNode);
+    } else if (key === "fields") {
+      view.fields = viewFields(value);
+    } else {
+      view[key] = value;
+    }
+  }
+  return view as LexicalNode;
+}
+
+function viewFields(value: unknown): unknown {
+  if (isRichText(value)) return outline(value.root.children);
+  if (Array.isArray(value)) return value.map(viewFields);
+  if (isRecord(value)) {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, viewFields(v)]));
+  }
+  return value;
+}
+
+/** Lexical nodes are the objects with a string `type` and a `version`. */
+function looksLikeNode(value: unknown): value is LexicalNode {
+  return isRecord(value) && typeof value.type === "string" && value.version !== undefined;
+}
+
+/** Any value reached by a path, as an agent reads it. */
+export function viewValue(value: unknown): unknown {
+  if (isRichText(value)) return outline(value.root.children);
+  if (looksLikeNode(value)) return viewNode(value);
+  if (Array.isArray(value)) return value.map(viewValue);
+  if (isRecord(value)) {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, viewValue(v)]));
+  }
+  return value;
+}
+
+// ── Writing back ────────────────────────────────────────────────────
+
+/** A 24-hex-character id, the shape Payload gives block rows and upload nodes. */
+function newId(): string {
+  return randomBytes(12).toString("hex");
+}
+
+const ELEMENT_DEFAULTS = { direction: "ltr", format: "", indent: 0 };
+const TEXT_DEFAULTS = { detail: 0, format: 0, mode: "normal", style: "" };
+
+/** Put back the default properties a read stripped, and the ids Payload expects on new nodes. */
+export function hydrateNode(input: LexicalNode): LexicalNode {
+  const node: Record<string, unknown> = { ...input };
+  if (node.type === "text") {
+    Object.assign(node, { ...TEXT_DEFAULTS, ...node });
+  } else if (Array.isArray(node.children)) {
+    Object.assign(node, { ...ELEMENT_DEFAULTS, ...node });
+    if (node.type === "paragraph") Object.assign(node, { textFormat: 0, textStyle: "", ...node });
+    node.children = (node.children as LexicalNode[]).map(hydrateNode);
+  }
+  if (node.type === "block" || node.type === "upload") node.format ??= "";
+  if (node.type === "link" || node.type === "upload") node.id ??= newId();
+  if ((node.type === "block" || node.type === "inlineBlock") && isRecord(node.fields)) {
+    node.fields = { id: newId(), ...node.fields };
+  }
+  if (node.fields !== undefined) node.fields = hydrateFields(node.fields);
+  node.version ??= node.type === "block" ? 2 : node.type === "upload" ? 3 : 1;
+  return node as LexicalNode;
+}
+
+function hydrateFields(value: unknown): unknown {
+  if (isRichText(value)) {
+    return { ...value, root: { ...value.root, children: value.root.children.map(hydrateNode) } };
+  }
+  if (Array.isArray(value)) return value.map(hydrateFields);
+  if (isRecord(value)) {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, hydrateFields(v)]));
+  }
+  return value;
+}
+
+function sameOutline(value: unknown[], richText: RichTextValue): boolean {
+  const lines = outline(richText.root.children);
+  return value.length === lines.length && value.every((line, i) => line === lines[i]);
+}
+
+/**
+ * Swap outlines in a written value back for the rich text they stand for.
+ * An unchanged outline restores the stored value; a changed one is refused,
+ * because an outline is a summary, not something that can be turned back into
+ * nodes.
+ */
+export function restoreOutlines(value: unknown, stored: unknown, path: string): unknown {
+  if (isRichText(stored) && Array.isArray(value) && value.every((v) => typeof v === "string")) {
+    if (sameOutline(value, stored)) return stored;
+    throw new LexicalError(
+      "INVALID_NODE",
+      `${path} is rich text shown as an outline, which can't be edited as text. Pass it back unchanged and edit its nodes at ${path}.<index>.`,
+    );
+  }
+  if (Array.isArray(value)) {
+    return value.map((item, i) =>
+      restoreOutlines(item, Array.isArray(stored) ? stored[i] : undefined, `${path}.${i}`),
+    );
+  }
+  if (isRecord(value)) {
+    const storedRecord = isRecord(stored) ? stored : {};
+    return Object.fromEntries(
+      Object.entries(value).map(([k, v]) => [
+        k,
+        restoreOutlines(v, storedRecord[k], `${path}.${k}`),
+      ]),
+    );
+  }
+  return value;
+}
+
+// ── Shorthand ───────────────────────────────────────────────────────
+
+const HEADINGS = ["h1", "h2", "h3", "h4", "h5", "h6"];
+
+/**
+ * Turn what an agent passes as a node into a Lexical node. Accepts a JSON
+ * string or an object; besides full nodes, it takes shorthand: `{type: "p",
+ * text}`, `{type: "h2", text}`, `{type: "ul" | "ol", items}`, `{type: "hr"}`,
+ * `{type: "upload", value}`, and `text` in place of `children` on any element.
+ */
+export function toNode(input: unknown): LexicalNode {
+  let value = input;
+  if (typeof value === "string") {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      throw new LexicalError("INVALID_NODE", "A node must be an object or a JSON object string.");
+    }
+  }
+  if (!isRecord(value) || typeof value.type !== "string" || value.type === "") {
+    throw new LexicalError(
+      "INVALID_NODE",
+      'A node needs a "type", e.g. {"type":"p","text":"…"} or a node as read.',
+    );
+  }
+  const { type, text, items, ...rest } = value;
+
+  if (HEADINGS.includes(type)) return { ...buildHeading(String(text ?? ""), type), ...rest };
+  if (type === "ul" || type === "ol") {
+    const list = Array.isArray(items) ? items.map(String) : [];
+    return buildList(list, type === "ul" ? "bullet" : "number");
+  }
+  if (type === "hr") return buildHorizontalRule();
+  if (type === "upload") {
+    if (rest.value === undefined) {
+      throw new LexicalError("INVALID_NODE", 'An upload node needs a "value": the media id.');
+    }
+    return hydrateNode({ type, relationTo: "media", fields: null, ...rest });
+  }
+  if (type === "block" && !(isRecord(rest.fields) && typeof rest.fields.blockType === "string")) {
+    throw new LexicalError("INVALID_NODE", 'A block node needs "fields" with a "blockType".');
+  }
+
+  const node: Record<string, unknown> = { type: type === "p" ? "paragraph" : type, ...rest };
+  if (type === "text") node.text = text;
+  else if (typeof text === "string" && node.children === undefined) {
+    node.children = [{ type: "text", text }];
+  }
+  return hydrateNode(node as LexicalNode);
+}

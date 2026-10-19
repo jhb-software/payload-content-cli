@@ -114,7 +114,8 @@ jobs:
       - name: Publish to npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: pnpm publish --no-git-checks --provenance --access public
+        # Prereleases go to the `beta` dist-tag so `latest` stays on the last stable version.
+        run: pnpm publish --no-git-checks --provenance --access public --tag ${{ contains(steps.version.outputs.version, '-') && 'beta' || 'latest' }}
 
       # Tag and GitHub release happen after npm publish so the tag
       # only exists when the package is actually on the registry.

@@ -39,7 +39,7 @@ const parameters = {
     .unknown()
     .optional()
     .describe(
-      'For set and insert. A node as read, or shorthand: {"type":"p","text":"…"}, {"type":"h2","text":"…"}, {"type":"ul","items":["…"]}, {"type":"block","fields":{"blockType":"…"}}, {"type":"upload","value":"<media id>"}. For a value inside a node, the new value.',
+      'For set and insert. A node as read, or shorthand: {"type":"p","text":"…"}, {"type":"h2","text":"…"}, {"type":"ul","items":["…"]}, {"type":"block","fields":{"blockType":"…"}}, {"type":"upload","value":"<id>","relationTo":"media"} (relationTo defaults to media). For a value inside a node, the new value.',
     ),
   locale: z
     .string()
@@ -237,7 +237,7 @@ async function findAddedProblem(
     if (knownRefs.has(key)) continue;
     const collection = req.payload.collections[relationTo];
     if (!collection) {
-      return `The value links to "${relationTo}", which is not a collection.`;
+      return `The value links to "${relationTo}", which is not a collection. Set relationTo to the collection's slug.`;
     }
     const found = await req.payload.findByID({
       collection: relationTo,

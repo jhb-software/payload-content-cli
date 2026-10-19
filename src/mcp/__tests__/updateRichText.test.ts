@@ -163,6 +163,21 @@ describe("updateRichText", () => {
     expect(await readPost(id, true)).toBe(before);
   });
 
+  it("asks for relationTo when an upload node's default media collection doesn't exist", async () => {
+    const page = await payload.create({ collection: "pages", data: { title: "Safety" } });
+    const id = await createPost(page.id);
+
+    const result = await call({
+      collection: "posts",
+      id,
+      path: "content.0",
+      operation: "insert",
+      value: { type: "upload", value: 1 },
+    });
+
+    expect(result).toEqual({ error: expect.stringMatching(/"media".*relationTo/) });
+  });
+
   it("refuses a block the config doesn't define", async () => {
     const page = await payload.create({ collection: "pages", data: { title: "Safety" } });
     const id = await createPost(page.id);

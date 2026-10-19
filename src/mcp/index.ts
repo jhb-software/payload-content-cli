@@ -8,6 +8,8 @@
  * build on the `./lexical` toolkit.
  */
 
+export { createMcpContentTools } from "./tools.js";
+export type { McpContentToolsOptions } from "./options.js";
 export { updateRichTextTool } from "./updateRichText.js";
 export type { UpdateRichTextOptions } from "./updateRichText.js";
 export type { McpTool, McpToolResult } from "./result.js";

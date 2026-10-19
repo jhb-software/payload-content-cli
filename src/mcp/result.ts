@@ -14,11 +14,27 @@ export interface McpTool {
    * the same at runtime but don't unify as types (TS2589).
    */
   parameters: Record<string, any>;
+  /**
+   * MCP tool hints (`readOnlyHint`, …) that let a client decide how much
+   * confirmation a call needs. Stock `@payloadcms/plugin-mcp` doesn't pass them
+   * on yet; they take effect once it does (or with a patch that forwards them).
+   */
+  annotations?: {
+    title?: string;
+    readOnlyHint?: boolean;
+    destructiveHint?: boolean;
+    idempotentHint?: boolean;
+  };
   handler: (args: Record<string, unknown>, req: PayloadRequest) => Promise<McpToolResult>;
 }
 
 export function jsonResult(data: unknown): McpToolResult {
   return { content: [{ type: "text", text: JSON.stringify(data) }] };
+}
+
+/** Text meant for the model to read rather than parse, e.g. a schema tree. */
+export function textResult(text: string): McpToolResult {
+  return { content: [{ type: "text", text }] };
 }
 
 export function errorResult(message: string): McpToolResult {

@@ -170,6 +170,45 @@ An outline only stands in for the rich text it was read from. To copy a block, o
 
 The input document is never modified; a change returns a changed copy as `doc`. Path mistakes throw `LexicalError` with `PATH_NOT_FOUND` (naming the valid range or keys) or `UNSUPPORTED_AT_PATH`.
 
+### Add the MCP content tools
+
+For a Payload app running [`@payloadcms/plugin-mcp`](https://payloadcms.com/docs/plugins/mcp), `/mcp` ships a small, collection-agnostic set of content tools, in place of the plugin's one-tool-per-collection-and-operation set:
+
+```ts
+import { createMcpContentTools } from "@jhb.software/payload-content-cli/mcp";
+
+mcpPlugin({
+  collections: {}, // the content tools cover every collection and global
+  mcp: { tools: [...createMcpContentTools(), ...yourOwnTools] },
+});
+```
+
+Every tool runs with the request's user and Payload's access control. Collections are addressed by slug, globals as `"globals/<slug>"`.
+
+| Tool              | What it does                                                                                    |
+| ----------------- | ----------------------------------------------------------------------------------------------- |
+| `listEntities`    | The readable collections and globals, and the locales.                                          |
+| `getEntitySchema` | One entity's fields as a compact tree, one line per field. Blocks are listed by slug.           |
+| `getBlockSchema`  | The fields of blocks by slug, in the same tree format.                                          |
+| `find`            | One document by id, a page of a collection filtered by `where`, or a global.                    |
+| `updateRichText`  | Read and edit rich text by path (below).                                                        |
+
+The schema tools answer in a tree rather than JSON, which costs an agent about half the tokens; the legend rides in the tool description, so it is paid once per session:
+
+```
+pages (collection)
+  title*: text (localized)
+  theme: select (light | dark) = "light"
+  author: relationship → authors
+  layout[]: blocks (hero | cta)
+  body: richText
+    ✎ block nodes: paragraph, heading (h2, h3), block (alert)
+```
+
+`find` reads the latest draft unless `draft: false`, so an agent sees its own unpublished edits. It returns what a locale stores, without fallback, so an untranslated field reads as empty rather than as another language. `where` and `select` may be objects or JSON strings (some MCP clients send nested objects as strings), `limit` is capped at 100, and `depth` defaults to 0.
+
+`createMcpContentTools(options)` takes the same `resolveLocale` and `checkId` options as `updateRichTextTool` (below) and hands them to every tool. To drop or replace one tool, filter the list by `name`. Tool names are stable, since `@payloadcms/plugin-mcp` keys its per-key access flags on them.
+
 ### Add the updateRichText MCP tool
 
 > Experimental: may change in any minor release.

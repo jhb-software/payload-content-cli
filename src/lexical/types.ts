@@ -1,5 +1,3 @@
-export type Address = number[];
-
 export interface LexicalNode {
   type: string;
   version?: number;

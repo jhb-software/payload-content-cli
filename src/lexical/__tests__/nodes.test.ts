@@ -1,5 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
-import { Readable } from "node:stream";
+import { describe, it, expect } from "vitest";
 import {
   buildText,
   buildParagraph,
@@ -9,7 +8,6 @@ import {
   buildBlock,
   buildElement,
   buildInternalLink,
-  parseNodeArg,
 } from "../nodes.js";
 import { validateTree } from "../validate.js";
 
@@ -170,53 +168,5 @@ describe("built nodes", () => {
         buildBlock({ blockType: "cta" }),
       ]),
     ).toEqual([]);
-  });
-});
-
-describe("parseNodeArg", () => {
-  it("builds paragraph from --paragraph", async () => {
-    const node = await parseNodeArg({ paragraph: "Test" });
-    expect(node.type).toBe("paragraph");
-  });
-
-  it("builds heading from --heading", async () => {
-    const node = await parseNodeArg({ heading: "Title", tag: "h3" });
-    expect(node.type).toBe("heading");
-    expect(node.tag).toBe("h3");
-  });
-
-  it("builds text from --text", async () => {
-    const node = await parseNodeArg({ text: "Hello" });
-    expect(node.type).toBe("text");
-  });
-
-  it("parses raw JSON from --json", async () => {
-    const json = '{"type":"paragraph","children":[],"version":1}';
-    const node = await parseNodeArg({ json });
-    expect(node.type).toBe("paragraph");
-  });
-
-  it("throws on invalid JSON", async () => {
-    await expect(parseNodeArg({ json: "not json" })).rejects.toThrow("Invalid JSON");
-  });
-
-  it("reads JSON from stdin when --json is -", async () => {
-    const json = '{"type":"paragraph","children":[],"version":1}';
-    const mockStdin = Readable.from([json]);
-    vi.spyOn(process, "stdin", "get").mockReturnValue(mockStdin as never);
-
-    const node = await parseNodeArg({ json: "-" });
-    expect(node.type).toBe("paragraph");
-
-    vi.restoreAllMocks();
-  });
-
-  it("throws when no input provided", async () => {
-    await expect(parseNodeArg({})).rejects.toThrow("Node input required");
-  });
-
-  it("rejects more than one node input option", async () => {
-    await expect(parseNodeArg({ paragraph: "a", heading: "b" })).rejects.toThrow(/only one of/);
-    await expect(parseNodeArg({ text: "a", json: "{}" })).rejects.toThrow(/only one of/);
   });
 });

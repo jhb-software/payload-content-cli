@@ -8,10 +8,10 @@ High-level ideas and open questions. Concrete work lives in `plans/`.
 - Push with conflict detection (manifest-based)
 - Status (offline) and diff (online) commands
 - CRUD commands: find, create, update, delete, count, versions, restore, duplicate, upload, request
-- Lexical editing commands: list, get, add, replace, remove, set, link, search, diff
+- Lexical editing commands: read, set, insert, delete, link, search, diff
 - Per-locale file model (`{id}_en.json`, `{id}_de.json`)
 - Draft support on pull and push
-- Block-aware `--field` paths for lexical commands
+- Dot-path addressing for lexical commands, through blocks into nested rich text
 - Payload plugin for schema endpoint
 - Stdin support for lexical piping (`--json -`)
 - `--where` filtering on pull and CRUD commands

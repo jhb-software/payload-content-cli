@@ -133,6 +133,30 @@ function resolve(doc: unknown, segments: string[], operation: PathOperation): Ta
   return target;
 }
 
+function segmentsOf(path: string): string[] {
+  const segments = path.split(".");
+  if (segments.some((segment) => segment === "")) {
+    throw new LexicalError("PATH_NOT_FOUND", `"${path}" is not a path, e.g. content or content.3.`);
+  }
+  return segments;
+}
+
+/** The stored value at a path, as is — no read view. */
+export function valueAtPath(doc: unknown, path: string): unknown {
+  return resolve(doc, segmentsOf(path), "read").value;
+}
+
+/** The rich-text value at a path; a path that reaches anything else names the rich text below it. */
+export function richTextAt(doc: unknown, path: string): RichTextValue {
+  const value = valueAtPath(doc, path);
+  if (isRichText(value)) return value;
+  const below = richTextPathsBelow(value, path);
+  throw new LexicalError(
+    "PATH_NOT_FOUND",
+    `${path} is not a rich-text value.${below.length > 0 ? ` Rich text below it: ${below.join(", ")}.` : ""}`,
+  );
+}
+
 function nodeListOf(target: Target, path: string, operation: PathOperation): LexicalNode[] {
   if (!target.inNodeList || !Array.isArray(target.parent)) {
     const hint = isRichText(target.value)
@@ -173,11 +197,7 @@ export function editAtPath<T extends object>(
   operation: PathOperation,
   value?: unknown,
 ): PathEditResult<T> {
-  const segments = path.split(".");
-  if (segments.some((segment) => segment === "")) {
-    throw new LexicalError("PATH_NOT_FOUND", `"${path}" is not a path, e.g. content or content.3.`);
-  }
-
+  const segments = segmentsOf(path);
   const copy = operation === "read" ? doc : structuredClone(doc);
   const target = resolve(copy, segments, operation);
 

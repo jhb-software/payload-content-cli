@@ -70,11 +70,11 @@ Use `--dry-run` on push to preview changes before committing them.
 
 ### Step 6: Use lexical subcommands for richtext
 
-Prefer `lexical` subcommands (`add`, `remove`, `replace`, `set`) over rewriting the entire Lexical tree. Use `lexical list` to see node structure first. Pipe nodes between files with `lexical get` and `lexical add`.
+Prefer `lexical` subcommands (`read`, `set`, `insert`, `delete`) over rewriting the entire Lexical tree. Run `lexical read <file>` first: it outlines every richtext field with its path. Paths continue into nodes and nested rich text (`layout.1.richText.3.fields.body.0`). Copy nodes between files with `lexical read --full` piped into `lexical insert --json -`.
 
 ### Step 7: Handle locales
 
-Pull multiple locales (`--locale en de`), use `lexical diff` to compare, and `lexical link --from` to sync links between locale files.
+Pull multiple locales (`--locale en de`), use `lexical diff` to compare, and `lexical link --from <file> --link <path>` to sync links between locale files.
 
 ## Output
 
@@ -118,8 +118,9 @@ echo '<svg>...</svg>' | payload-content upload media --filename icon.svg --data 
 ### Richtext surgery
 
 ```bash
-payload-content lexical list <file>
-payload-content lexical add <file> --at 0 --position after --paragraph "New text."
+payload-content lexical read <file>
+payload-content lexical insert <file> content.1 '{"type":"p","text":"New text."}'
+payload-content lexical set <file> content.0.tag h3
 ```
 
 ## Error Handling

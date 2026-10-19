@@ -2,6 +2,12 @@ import type { LexicalNode } from "./types.js";
 import { extractLinks, extractBlocks, searchText } from "./operations.js";
 import type { ExtractedLink, ExtractedBlock } from "./operations.js";
 
+/** One rich-text value: its dot path and top-level nodes. */
+export interface RichTextSection {
+  path: string;
+  children: LexicalNode[];
+}
+
 /** Common English/German stop words excluded from the fuzzy word-match heuristic. */
 const DIFF_STOP_WORDS: ReadonlySet<string> = new Set([
   "the",
@@ -66,9 +72,11 @@ export interface LexicalDiffResult {
  * Fuzzy text-match heuristic: does the link's text (or a significant word from
  * it) exist as unlinked text in the target? Used to suggest `lexical link --search`.
  */
-function findTextMatch(text: string, target: LexicalNode[]): string | undefined {
+function findTextMatch(text: string, target: RichTextSection[]): string | undefined {
+  const found = (search: string) =>
+    target.some(({ path, children }) => searchText(children, path, search).length > 0);
   // Try exact match first
-  if (searchText(target, text).length > 0) {
+  if (found(text)) {
     return text;
   }
   // Try significant words (4+ chars, longest first, split on spaces and hyphens)
@@ -77,7 +85,7 @@ function findTextMatch(text: string, target: LexicalNode[]): string | undefined 
     .filter((w) => w.length >= 4 && !DIFF_STOP_WORDS.has(w.toLowerCase()))
     .sort((a, b) => b.length - a.length);
   for (const word of words) {
-    if (searchText(target, word).length > 0) {
+    if (found(word)) {
       return word;
     }
   }
@@ -85,14 +93,21 @@ function findTextMatch(text: string, target: LexicalNode[]): string | undefined 
 }
 
 /**
- * Compare internal links and blocks between two Lexical trees
- * (e.g. locale variants of the same document).
+ * Compare internal links and blocks between two sets of rich text
+ * (e.g. a field and the rich text nested in it, in two locale variants of a document).
  */
-export function diffLexicalDocs(source: LexicalNode[], target: LexicalNode[]): LexicalDiffResult {
+export function diffLexicalDocs(
+  source: RichTextSection[],
+  target: RichTextSection[],
+): LexicalDiffResult {
   const linkKey = (l: ExtractedLink) => `${l.relationTo}:${l.value}`;
 
-  const sourceLinks = extractLinks(source);
-  const targetLinks = extractLinks(target);
+  const links = (sections: RichTextSection[]) =>
+    sections.flatMap(({ path, children }) => extractLinks(children, path));
+  const blocks = (sections: RichTextSection[]) =>
+    sections.flatMap(({ path, children }) => extractBlocks(children, path));
+  const sourceLinks = links(source);
+  const targetLinks = links(target);
   const sourceLinkKeys = new Set(sourceLinks.map(linkKey));
   const targetLinkKeys = new Set(targetLinks.map(linkKey));
 
@@ -105,8 +120,8 @@ export function diffLexicalDocs(source: LexicalNode[], target: LexicalNode[]): L
   const linksOnlyInTarget = targetLinks.filter((l) => !sourceLinkKeys.has(linkKey(l)));
   const linksInBoth = sourceLinks.filter((l) => targetLinkKeys.has(linkKey(l)));
 
-  const sourceBlocks = extractBlocks(source);
-  const targetBlocks = extractBlocks(target);
+  const sourceBlocks = blocks(source);
+  const targetBlocks = blocks(target);
   const sourceBlockTypes = new Set(sourceBlocks.map((b) => b.blockType));
   const targetBlockTypes = new Set(targetBlocks.map((b) => b.blockType));
 

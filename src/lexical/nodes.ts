@@ -136,47 +136,24 @@ export function buildInternalLink(
   };
 }
 
-export interface NodeArgOptions {
-  paragraph?: string;
-  heading?: string;
-  text?: string;
-  tag?: string;
-  json?: string;
-}
-
-export async function parseNodeArg(options: NodeArgOptions): Promise<LexicalNode> {
-  const provided = [
-    options.paragraph !== undefined && "--paragraph",
-    options.heading !== undefined && "--heading",
-    options.text !== undefined && "--text",
-    options.json !== undefined && "--json",
-  ].filter(Boolean);
-  if (provided.length > 1) {
-    throw new Error(
-      `Provide only one of --paragraph, --heading, --text, or --json (got ${provided.join(", ")})`,
-    );
+/**
+ * A JSON argument as the CLI takes it: inline, `@file.json`, or `-` for stdin.
+ * Text that isn't JSON comes back as-is when `fallback` allows it.
+ */
+export async function readJsonArg(
+  raw: string,
+  fallback: "string" | "error" = "error",
+): Promise<unknown> {
+  let text = raw;
+  if (raw === "-") {
+    text = await readStdin();
+  } else if (raw.startsWith("@")) {
+    text = await fs.readFile(raw.slice(1), "utf-8");
   }
-  if (options.paragraph !== undefined) {
-    return buildParagraph(options.paragraph);
+  try {
+    return JSON.parse(text);
+  } catch {
+    if (fallback === "string") return text;
+    throw new Error(`Not valid JSON: ${text.length > 60 ? `${text.slice(0, 59)}…` : text}`);
   }
-  if (options.heading !== undefined) {
-    return buildHeading(options.heading, options.tag ?? "h2");
-  }
-  if (options.text !== undefined) {
-    return buildText(options.text);
-  }
-  if (options.json !== undefined) {
-    let raw = options.json;
-    if (raw === "-") {
-      raw = await readStdin();
-    } else if (raw.startsWith("@")) {
-      raw = await fs.readFile(raw.slice(1), "utf-8");
-    }
-    try {
-      return JSON.parse(raw) as LexicalNode;
-    } catch {
-      throw new Error("Invalid JSON for --json argument");
-    }
-  }
-  throw new Error("Node input required: use --paragraph, --heading, --text, or --json");
 }

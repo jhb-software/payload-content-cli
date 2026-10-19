@@ -1,23 +1,17 @@
 /**
  * Public entry point for the Lexical toolkit (`@jhb.software/payload-content-cli/lexical`).
  *
- * Everything here works on a document you fetched and will save yourself: a
- * plain object and a field path. It lets a server-side tool (an MCP
- * `updateRichText`, a migration script, a seed) change one node of a richtext
- * field instead of rewriting the whole document:
+ * Everything here works on a document you fetched and will save yourself. One
+ * dot path addresses anything in it, from a rich-text field down to a value
+ * inside a node, through blocks into the rich text nested in them:
  *
- *   readRichText(doc, "content", { depth: 1 }); // what's there, with addresses
- *   editRichText(doc, "content", { op: "append", node: buildParagraph("New") });
+ *   editAtPath(doc, "content", "read");                 // an outline, one line per node
+ *   editAtPath(doc, "content.2", "insert", { type: "p", text: "New" });
+ *   editAtPath(doc, "layout.1.richText.3.fields.body.0.children.1.fields.doc.value", "set", "id");
  *
- * `readRichText` returns copies and `editRichText` is the only way to change a
- * field: it resolves the path, applies one edit or a batch, validates the
- * result, and writes it back — all or nothing, so a rejected edit leaves the
- * document exactly as it was.
- *
- * Nodes are addressed by their path through the tree — `"3"` is the fourth
- * top-level node, `"3.1"` its second child — so nesting is reachable, not just
- * `root.children`. Failures throw `LexicalError` with a `code`, so a tool can
- * tell "the agent gave a bad address" from a genuine fault.
+ * Changes come back as a changed copy, validated first — a rejected change
+ * leaves nothing half-written. Failures throw `LexicalError` with a `code`, so a
+ * tool can tell "the agent gave a bad path" from a genuine fault.
  *
  * Fetching and saving the document is the caller's job; this module never talks
  * to Payload or the network.
@@ -25,10 +19,6 @@
 
 export type { LexicalElementNode, LexicalNode, LexicalRoot, LexicalTextNode } from "./types.js";
 export { hasChildren, isLinkNode, isTextNode } from "./types.js";
-
-// Editing: every change goes through here — resolve, apply, validate, write back.
-export { editRichText } from "./edit.js";
-export type { RichTextEdit } from "./edit.js";
 
 // Path-addressed reads and edits — one dot path from a rich-text field down to
 // any node or value inside it, with compact views for agents.
@@ -39,17 +29,17 @@ export type { PathEditResult, PathOperation } from "./path.js";
 export { LexicalError } from "./errors.js";
 export type { LexicalErrorCode } from "./errors.js";
 
-// Reading. Each takes the document and a field path, and returns copies.
+// Searching, linking and comparing the rich text at a path, nested rich text included.
 export {
   diffRichText,
   extractRichTextBlocks,
   extractRichTextLinks,
-  getRichTextNode,
-  readRichText,
+  linkRichText,
+  richTextPaths,
   searchRichText,
 } from "./read.js";
-export type { ReadOptions } from "./read.js";
-export type { ExtractedBlock, ExtractedLink, ListEntry, SearchMatch } from "./operations.js";
+export type { RichTextPathsOptions } from "./read.js";
+export type { ExtractedBlock, ExtractedLink, SearchMatch } from "./operations.js";
 export type { LexicalDiffResult, SourceLinkDiff } from "./diff.js";
 
 // Building nodes to insert. Element builders take plain text or ready-made

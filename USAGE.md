@@ -32,10 +32,7 @@ The same field extraction the `/schema` endpoint uses is exported for building y
 `listReadableEntities` is the discovery half — it returns the collection and global slugs the request may read, plus localization:
 
 ```ts
-import {
-  listReadableEntities,
-  getEntitySchema,
-} from "@jhb.software/payload-content-cli/plugin";
+import { listReadableEntities, getEntitySchema } from "@jhb.software/payload-content-cli/plugin";
 
 // inside a Payload endpoint / MCP tool handler that has a `req`
 const { collections, globals, localization } = await listReadableEntities({
@@ -102,56 +99,16 @@ A condition is a function, so the schema can't show the rule on its own. To publ
 
 ### Edit richtext from your own code
 
-The Lexical toolkit behind the `lexical` commands is exported separately, for tools that fetch and save documents themselves — an MCP `updateRichText`, a migration script, a seed. It is pure: no filesystem, no network, no Payload import.
-
-```ts
-import {
-  readRichText,
-  editRichText,
-  buildParagraph,
-} from "@jhb.software/payload-content-cli/lexical";
-
-const doc = await payload.findByID({ collection: "posts", id, depth: 0, req });
-
-// What's in the field? Each entry carries the address the edits take.
-readRichText(doc, "content", { depth: 1 });
-// → [{ address: "0", type: "heading", tag: "h2", preview: '"Intro"' },
-//    { address: "1", type: "block", blockType: "cta", preview: "(cta)" }, ...]
-
-editRichText(doc, "content", { op: "insertAfter", address: "0", node: buildParagraph("New") });
-
-await payload.update({ collection: "posts", id, data: { content: doc.content }, req });
-```
-
-`editRichText` is the only way to change a field: it resolves the field, applies the edit, validates the result, and writes it back into `doc` — mutating only the field's children, so you can send the top-level field back as a whole. If anything fails, `doc` is left exactly as it was.
-
-Edits are `{ op, … }`: `append` and `prepend` (no address needed — they work on an empty field), `insertBefore`, `insertAfter`, `insertInside`, `replace`, `remove`, `setProp`, and `linkText`. Pass an array to apply several in one go — resolved once, validated once, written once, and all-or-nothing if one of them fails:
-
-```ts
-editRichText(doc, "content", [
-  { op: "replace", address: "0", node: buildHeading("New title") },
-  { op: "setProp", address: "2", key: "format", value: "center" },
-  { op: "linkText", search: "our docs", node: buildInternalLink("our docs", "pages", pageId) },
-]);
-```
-
-- **One level of abstraction.** Every function takes the document and a field path, so nothing in your code has to know that a richtext value is `{ root: { children } }`. Reads hand back copies; `editRichText` is the only way to change a field.
-- **Addresses, not indexes.** `"3"` is the fourth top-level node, `"3.1"` its second child — so nested nodes are reachable. `readRichText` returns each node's address, type, and text preview, plus the one property that identifies it: `tag` for headings, `listType`/`itemCount` for lists, `blockType` for blocks. `{ depth: 1 }` keeps the summary to the top level.
-- **Errors you can branch on.** Failures throw `LexicalError` with a `code`: `FIELD_NOT_FOUND`, `INVALID_ADDRESS`, `ADDRESS_OUT_OF_BOUNDS`, `NOT_A_CONTAINER`, `INVALID_TREE`, `INVALID_NODE`. All of them mean the input was wrong, so a tool can relay the message to whoever sent it instead of reporting a fault.
-- **Node builders.** `buildParagraph`, `buildHeading`, `buildList`, `buildText`, `buildHorizontalRule`, `buildBlock`, `buildInternalLink`, and `buildElement` for any other node type. The element builders take plain text or ready-made inline nodes — `buildParagraph([buildText("see "), link])` — and every built node passes validation as-is.
-- **Field paths resolve through blocks.** A path walks plain properties and array indexes, and descends into a lexical block by its `blockType` — `"content.TwoColumnRichText.firstColumn"` reaches the richtext field inside a block nested in `content`.
-- **Reads.** `readRichText` for the map, `getRichTextNode` for one node, `searchRichText` for text not already inside a link, `extractRichTextLinks`/`extractRichTextBlocks` for inventories, and `diffRichText(source, target, field)` for comparing locale variants. Plus the `LexicalNode` types and their guards (`isTextNode`, `isLinkNode`, `hasChildren`).
-
-Fetching and saving stay yours, and with them the decisions the CLI can't make for you: access control (`overrideAccess: false`), which locale, and whether the write is a draft.
-
-#### Edit by path
-
 > Experimental: may change in any minor release.
 
-`editAtPath(doc, path, operation, value?)` addresses anything inside a richtext field with one dot path — including rich text nested in blocks — and shows it compactly, for agents. The path starts at a richtext field; a number after a richtext value indexes its top-level nodes; from there it follows the node's JSON.
+The Lexical toolkit behind the `lexical` commands is exported separately, for tools that fetch and save documents themselves — an MCP tool, a migration script, a seed. It is pure: no filesystem, no network, no Payload import.
+
+One dot path addresses anything in a document's rich text: it starts at a richtext field (`content`, `layout.1.richText`), a number after a richtext value indexes its top-level nodes (`content.3`), and from there it follows the node's JSON — including into rich text nested in a block (`content.3.fields.body.0`). The same paths work in the CLI and the `updateRichText` MCP tool.
 
 ```ts
 import { editAtPath } from "@jhb.software/payload-content-cli/lexical";
+
+const doc = await payload.findByID({ collection: "posts", id, depth: 0, req });
 
 editAtPath(doc, "content", "read").result;
 // → ["0 p: Intro", "1 block alert [1 link]: See safety", "2 ul (2 items): a; b"]
@@ -159,8 +116,17 @@ editAtPath(doc, "content", "read").result;
 editAtPath(doc, "content.0", "read").result;
 // → { type: "paragraph", version: 1, children: [{ type: "text", version: 1, text: "Intro" }] }
 
-const { doc: changed } = editAtPath(doc, "content.1.fields.body.0.children.1.fields.doc.value", "set", newPageId);
+const { doc: changed } = editAtPath(
+  doc,
+  "content.1.fields.body.0.children.1.fields.doc.value",
+  "set",
+  newPageId,
+);
+
+await payload.update({ collection: "posts", id, data: { content: changed.content }, req });
 ```
+
+`editAtPath(doc, path, operation, value?)`:
 
 - **`read`**: a richtext value as an outline, one line per node; a node as its JSON without Lexical's default properties, with rich text nested in its fields outlined; anything else as it is.
 - **`set`**: replace the value. Nodes may be given as read (defaults and unchanged outlines are restored), in full, or as shorthand: `{type: "p", text}`, `{type: "h2", text}`, `{type: "ul", items}`, `{type: "hr"}`, `{type: "block", fields}`, `{type: "upload", value}`. Returns what a read now shows.
@@ -168,7 +134,18 @@ const { doc: changed } = editAtPath(doc, "content.1.fields.body.0.children.1.fie
 
 An outline only stands in for the rich text it was read from. To copy a block, or put one where a different node was, give its nested rich text as `{root: {children: [...]}}`, nodes as read or as shorthand. A copied block gets a new id.
 
-The input document is never modified; a change returns a changed copy as `doc`. Path mistakes throw `LexicalError` with `PATH_NOT_FOUND` (naming the valid range or keys) or `UNSUPPORTED_AT_PATH`.
+The input document is never modified; a change returns a changed copy as `doc`, validated first. Failures throw `LexicalError` with a `code` — `PATH_NOT_FOUND` (naming the valid range or keys), `UNSUPPORTED_AT_PATH`, `INVALID_NODE`, `INVALID_TREE`, `TEXT_NOT_FOUND` — all meaning the input was wrong, so a tool can relay the message instead of reporting a fault.
+
+Alongside it, each taking the document and the path of a rich-text value, covering the rich text nested inside it, and naming full dot paths in their results:
+
+- `richTextPaths(doc, { nested? })` — every rich-text value's path, fields in array rows included.
+- `searchRichText(doc, path, text)` — text not already inside a link.
+- `linkRichText(doc, path, text, link)` — wrap the first unlinked match in a link; returns a changed copy.
+- `extractRichTextLinks(doc, path)` / `extractRichTextBlocks(doc, path)` — inventories.
+- `diffRichText(source, target, path)` — links and blocks only one locale variant has.
+- Node builders: `buildParagraph`, `buildHeading`, `buildList`, `buildText`, `buildHorizontalRule`, `buildBlock`, `buildInternalLink`, and `buildElement` for any other node type. Plus the `LexicalNode` types and their guards (`isTextNode`, `isLinkNode`, `hasChildren`).
+
+Fetching and saving stay yours, and with them the decisions the CLI can't make for you: access control (`overrideAccess: false`), which locale, and whether the write is a draft.
 
 ### Add the MCP content tools
 
@@ -187,15 +164,15 @@ mcpPlugin({
 
 Every tool runs with the request's user and Payload's access control. Collections are addressed by slug, globals as `"globals/<slug>"`.
 
-| Tool              | What it does                                                                                    |
-| ----------------- | ----------------------------------------------------------------------------------------------- |
-| `listEntities`    | The readable collections and globals, and the locales.                                          |
-| `getEntitySchema` | One entity's fields as a compact tree, one line per field. Blocks are listed by slug.           |
-| `getBlockSchema`  | The fields of blocks by slug, in the same tree format.                                          |
-| `find`            | One document by id, a page of a collection filtered by `where`, or a global.                    |
-| `create`          | A document in a collection, as a draft by default. Answers with its id.                         |
-| `update`          | Some fields of a document by id, of every document a `where` matches, or of a global.           |
-| `updateRichText`  | Read and edit rich text in place by path (below).                                               |
+| Tool              | What it does                                                                          |
+| ----------------- | ------------------------------------------------------------------------------------- |
+| `listEntities`    | The readable collections and globals, and the locales.                                |
+| `getEntitySchema` | One entity's fields as a compact tree, one line per field. Blocks are listed by slug. |
+| `getBlockSchema`  | The fields of blocks by slug, in the same tree format.                                |
+| `find`            | One document by id, a page of a collection filtered by `where`, or a global.          |
+| `create`          | A document in a collection, as a draft by default. Answers with its id.               |
+| `update`          | Some fields of a document by id, of every document a `where` matches, or of a global. |
+| `updateRichText`  | Read and edit rich text in place by path (below).                                     |
 
 The schema tools answer in a tree rather than JSON, which costs an agent about half the tokens; the legend rides in the tool description, so it is paid once per session:
 
@@ -507,23 +484,23 @@ payload-content pull --json > result.json      # progress still shown on stderr
 
 Shapes:
 
-| Command | stdout |
-|---|---|
-| `pull` | `{ outputDir, documents, collections, globals, pruned, preserved }` |
-| `push` | `{ pushed, created, conflicts, errors }` |
-| `status` | `{ modified, added, deleted }` — or `null` when nothing has been pulled yet |
-| `diff` | `{ localOnly, remoteOnly, remoteModified, localModified, bothModified, unchanged }` |
-| `find --local` | array of `{ filePath, fields }` |
+| Command        | stdout                                                                              |
+| -------------- | ----------------------------------------------------------------------------------- |
+| `pull`         | `{ outputDir, documents, collections, globals, pruned, preserved }`                 |
+| `push`         | `{ pushed, created, conflicts, errors }`                                            |
+| `status`       | `{ modified, added, deleted }` — or `null` when nothing has been pulled yet         |
+| `diff`         | `{ localOnly, remoteOnly, remoteModified, localModified, bothModified, unchanged }` |
+| `find --local` | array of `{ filePath, fields }`                                                     |
 
 `status --json` returns `null` rather than empty arrays when there is no manifest, so "never pulled" stays distinguishable from "no changes".
 
 ### Exit codes
 
-| Code | Meaning |
-|---|---|
-| `0` | Success |
-| `1` | Error — bad arguments, network/API failure, or a document that failed to push. Also `find` (local or remote) when nothing matched |
-| `2` | `push` only: one or more documents were skipped as conflicts. Nothing was written for those; re-run with `--force` to overwrite, or `pull` to take the remote version |
+| Code | Meaning                                                                                                                                                               |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `0`  | Success                                                                                                                                                               |
+| `1`  | Error — bad arguments, network/API failure, or a document that failed to push. Also `find` (local or remote) when nothing matched                                     |
+| `2`  | `push` only: one or more documents were skipped as conflicts. Nothing was written for those; re-run with `--force` to overwrite, or `pull` to take the remote version |
 
 Code `2` is distinct from `1` so automation can tell "your content is stale" from "the command broke". A `push` that hits both conflicts and errors exits `2`.
 
@@ -531,108 +508,89 @@ Code `2` is distinct from `1` so automation can tell "your content is stale" fro
 
 ## Lexical commands
 
-Surgical editing of Lexical richtext fields. All commands operate on local files — no API calls.
+Read and edit Lexical rich text in pulled files by dot path. All commands operate on local files — no API calls.
 
-### Node addressing
+### Paths
 
-Nodes are addressed by index path from the root's children: `0` = first child, `2.1` = third child's second child. Use `lexical list` to discover addresses.
+A path starts at a richtext field — `content`, or `layout.1.richText` for one inside an array or blocks row. A number after a richtext value indexes its top-level nodes (`content.3`); from there the path follows the node's JSON, into rich text nested in a block too: `layout.1.richText.3.fields.body.0.children.1.fields.doc.value`. Every command prints full paths, so any output can be fed back as input. A wrong path names the valid keys or index range.
 
-### Field auto-detection
-
-If `--field` is omitted, the tool finds the Lexical richtext field automatically. Use `--field` when a document has multiple richtext fields (e.g. page blocks): `--field "layout[0].richText"`.
-
-### lexical list — show node tree
+### lexical read — outline, node, or value
 
 ```bash
-payload-content lexical list <file>
-payload-content lexical list <file> --field "layout[0].richText"
+payload-content lexical read page.json
+# layout.1.richText
+#   0 h2: Before you go
+#   1 p: Check the entry rules before booking.
+#   2 block alert: Bring cash.
+#   3 block alert [1 link]: See visa requirements first.
 
-# Output:
-# [0] heading  "Getting Started"
-# [1] paragraph  "Payload CMS is a powerful..."
-# [2] paragraph  "In this tutorial, we will..."
+payload-content lexical read page.json layout.1.richText.3.fields.body   # rich text nested in the second alert
+payload-content lexical read page.json layout.1.richText.0               # a node, without Lexical's defaults
+payload-content lexical read page.json layout.1.richText.3 --full        # the stored JSON
 ```
 
-### lexical get — extract a node as JSON
+Without a path, `read` outlines every richtext field.
+
+### lexical set — replace a node or value
 
 ```bash
-payload-content lexical get <file> --at 0
-payload-content lexical get <file> --at 2.1 --field "layout[0].richText"
+payload-content lexical set page.json layout.1.richText.0.tag h3
+payload-content lexical set page.json layout.1.richText.3.fields.body.0.children.1.fields.doc.value <id>
+payload-content lexical set page.json layout.1.richText.1 '{"type":"p","text":"Replaced."}'
+payload-content lexical set page.json layout.1.richText.1 --json @node.json
 ```
 
-### lexical add — insert a node
+The value is JSON-parsed unless the current value is a string. `--json` takes JSON, `@file.json`, or `-` for stdin.
+
+### lexical insert / delete — add or remove a node
 
 ```bash
-payload-content lexical add <file> --at 0 --position after --paragraph "New paragraph."
-payload-content lexical add <file> --at 0 --position before --heading "New Section" --tag h2
-payload-content lexical add <file> --position end --paragraph "Appended."
-payload-content lexical add <file> --position end --json '{"type":"paragraph",...}'
-payload-content lexical add <file> --position end --json -         # read from stdin
+payload-content lexical insert page.json layout.1.richText.2 '{"type":"p","text":"New paragraph."}'
+payload-content lexical insert page.json layout.1.richText.4 '{"type":"h2","text":"Appended"}'   # index = count appends
+payload-content lexical delete page.json layout.1.richText.2
 ```
 
-Node shorthands: `--paragraph "text"`, `--heading "text" --tag h2`, `--text "text"`. Use `--json` for custom node types.
+`insert` adds before the index the path ends in. Shorthand nodes: `{"type":"p","text"}`, `{"type":"h2","text"}`, `{"type":"ul","items":[…]}`, `{"type":"hr"}`, `{"type":"block","fields":{…}}`, `{"type":"upload","value"}`; full nodes work too. An invalid node leaves the file untouched.
 
-### lexical replace — replace a node
+### lexical search — find unlinked text
 
 ```bash
-payload-content lexical replace <file> --at 2 --json '{"type":"paragraph",...}'
-payload-content lexical replace <file> --at 2 --paragraph "Replaced text."
+payload-content lexical search page.json --text "visa"
+payload-content lexical search page.json layout.1.richText --text "visa"
+# [layout.1.richText.1.children.0] "Check the visa rules..."
 ```
 
-### lexical remove — remove a node
-
-```bash
-payload-content lexical remove <file> --at 3
-```
-
-### lexical set — modify a node property
-
-```bash
-payload-content lexical set <file> --at 0 --prop tag --value h3
-payload-content lexical set <file> --at 1.0 --prop text --value "Updated text"
-```
-
-### lexical search — find unlinked text matches
-
-```bash
-payload-content lexical search <file> --text "TypeScript"
-payload-content lexical search <file> --text "TypeScript" --field "layout[0].richText"
-```
-
-Prints addresses and surrounding context for matches. Skips already-linked text.
+Without a path, searches every richtext field, nested rich text included. Skips already-linked text.
 
 ### lexical link — wrap text in an internal link
 
 ```bash
-# Manual: specify collection and ID
-payload-content lexical link <file> --search "TypeScript" --relationTo tags --value <id>
+payload-content lexical link page.json --search "TypeScript" --relationTo tags --value <id>
+payload-content lexical link page.json layout.1.richText --search "TypeScript" --relationTo tags --value <id>
 
-# From another file: copy link definition
-payload-content lexical link target.json --from source.json --at 2.1
-payload-content lexical link target.json --from source.json --at 2.1 --search "English text"
+# Copy a link's target from another file, e.g. another locale
+payload-content lexical link page_en.json --from page_de.json --link layout.1.richText.3.fields.body.0.children.1 --search "visa requirements"
 ```
+
+Without a path, links in the file's only richtext field; with several, it names them.
 
 ### lexical diff — compare two files
 
 ```bash
-payload-content lexical diff file_de.json file_en.json --field content
+payload-content lexical diff page_de.json page_en.json
+payload-content lexical diff page_de.json page_en.json layout.1.richText
 ```
 
-Shows links and blocks that exist in one file but not the other. Useful for locale sync.
+Shows links and blocks, nested ones included, that exist in one file but not the other. Useful for locale sync.
 
-### Piping nodes between files
-
-Copy nodes between files by piping `lexical get` into `lexical add`:
+### Copying nodes between files
 
 ```bash
-# Copy node 8 from one file and append to another
-payload-content lexical get source.json --at 8 \
-  | payload-content lexical add target.json --position end --json -
-
-# Replace a node with one from another file
-payload-content lexical get source.json --at 2 \
-  | payload-content lexical replace target.json --at 4 --json -
+payload-content lexical read source.json content.8 --full \
+  | payload-content lexical insert target.json content.2 --json -
 ```
+
+A copied block gets a new id.
 
 ---
 

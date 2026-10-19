@@ -1,12 +1,17 @@
 import { describe, it, expect } from "vitest";
-import { buildParagraph, editRichText, readRichText } from "../index.js";
+import {
+  buildInternalLink,
+  buildParagraph,
+  editAtPath,
+  linkRichText,
+  searchRichText,
+} from "../index.js";
 
 /**
- * The `./lexical` entry point exists so a server-side tool (e.g. an MCP
- * `updateRichText`) can do surgical edits without the CLI: read the document it
- * fetched itself, change one node, hand the document back to Payload. This
- * exercises that round trip through the public barrel — if the surface stops
- * composing, an editing tool built on it breaks.
+ * The `./lexical` entry point exists so a server-side tool or script can edit
+ * a document it fetched itself and hand it back to Payload. This exercises that
+ * round trip through the public barrel — if the surface stops composing, a tool
+ * built on it breaks.
  */
 function doc() {
   return {
@@ -21,25 +26,33 @@ function doc() {
         version: 1,
       },
     },
-  } as Record<string, unknown>;
+  };
 }
 
 describe("lexical entry point", () => {
-  it("reads a field's nodes, edits one, and leaves the document ready to save", () => {
-    const document = doc();
+  it("reads, inserts and links by path, leaving a document ready to save", () => {
+    const original = doc();
 
-    const before = readRichText(document, "content", { depth: 1 });
-    expect(before.map((entry) => entry.address)).toEqual(["0", "1"]);
-
-    editRichText(document, "content", {
-      op: "insertAfter",
-      address: before[0].address,
-      node: buildParagraph("inserted"),
+    const { doc: inserted } = editAtPath(original, "content.1", "insert", {
+      type: "p",
+      text: "see the docs",
     });
+    const [match] = searchRichText(inserted!, "content", "docs");
+    expect(match.path).toBe("content.1.children.0");
 
-    const after = readRichText(document, "content", { depth: 1 });
-    expect(after.map((entry) => entry.preview)).toEqual(['"first"', '"inserted"', '"second"']);
-    // The rest of the document is untouched, so the caller can send the field back whole.
-    expect(document.title).toBe("A post");
+    const linked = linkRichText(
+      inserted!,
+      "content",
+      "docs",
+      buildInternalLink("docs", "pages", "7"),
+    );
+
+    expect(editAtPath(linked, "content", "read").result).toEqual([
+      "0 p: first",
+      "1 p [1 link]: see the docs",
+      "2 p: second",
+    ]);
+    expect(linked.title).toBe("A post");
+    expect(editAtPath(original, "content", "read").result).toHaveLength(2);
   });
 });

@@ -40,7 +40,7 @@ Agents work best with CLIs — structured commands, predictable JSON output, and
 - **Full REST API parity** — all Payload query parameters (`where`, `select`, `depth`, `locale`, `joins`, `populate`, `draft`, etc.) exposed as CLI flags
 - **Every operation** — `find`, `create`, `update`, `delete`, `count`, `versions`, `restore`, `duplicate`, `upload`, plus raw `request` for custom endpoints
 - **Bulk upload** — upload a directory or glob of media files with concurrent uploads, shared metadata, and dry-run support
-- **Lexical richtext surgery** — add, remove, replace, and modify individual nodes without rewriting the entire tree
+- **Lexical richtext surgery** — read, set, insert, and delete any node or value by one dot path, through blocks into nested rich text, without rewriting the entire tree
 - **Profiles** — save connection settings for multiple Payload instances, switch with `--profile`
 - **Agent skill** — `payload-content skill` installs a Claude Code skill file so agents know how to use the CLI
 - **Editor validation** — pulled content references a generated JSON Schema so IDEs flag missing required fields, wrong types, and invalid enums in real-time
@@ -53,20 +53,20 @@ The [official MCP plugin](https://github.com/payloadcms/payload-mcp) works well 
 
 Full comparison:
 
-|                    | MCP plugin (as of 05/2026)                             | @jhb.software/payload-content-cli                      |
-| ------------------ | ------------------------------------------------------ | ------------------------------------------------------ |
-| Tool scaling       | One tool per operation per collection — bloats quickly | Collection-agnostic commands — fixed tool count        |
-| REST API parity    | Partial — limited query parameters                     | Full — all Payload REST API parameters supported       |
-| Operations         | Missing `count`, versions, and others                  | All collection + global operations                     |
-| Read a document    | Good — single tool call                                | Good — `find` or read pulled JSON                      |
-| Update one field   | OK — full document round-trip                          | Good — edit one field in a file                        |
-| Edit richtext      | Bad — agent must construct entire Lexical tree         | Good — `lexical add/replace/remove` for surgical edits |
-| Bulk edits         | Bad — one API call per document                        | Good — edit files, push once                           |
-| Conflict detection | None                                                   | Built-in — manifest-based diffing                      |
-| Dry run            | Not possible                                           | `push --dry-run`                                       |
-| Offline work       | Not possible                                           | `status` works without network                         |
-| Setup              | MCP plugin to install and configure                    | Just an API key                                        |
-| Token cost         | High                                                   | Low                                                    |
+|                    | MCP plugin (as of 05/2026)                             | @jhb.software/payload-content-cli                     |
+| ------------------ | ------------------------------------------------------ | ----------------------------------------------------- |
+| Tool scaling       | One tool per operation per collection — bloats quickly | Collection-agnostic commands — fixed tool count       |
+| REST API parity    | Partial — limited query parameters                     | Full — all Payload REST API parameters supported      |
+| Operations         | Missing `count`, versions, and others                  | All collection + global operations                    |
+| Read a document    | Good — single tool call                                | Good — `find` or read pulled JSON                     |
+| Update one field   | OK — full document round-trip                          | Good — edit one field in a file                       |
+| Edit richtext      | Bad — agent must construct entire Lexical tree         | Good — `lexical set/insert/delete` for surgical edits |
+| Bulk edits         | Bad — one API call per document                        | Good — edit files, push once                          |
+| Conflict detection | None                                                   | Built-in — manifest-based diffing                     |
+| Dry run            | Not possible                                           | `push --dry-run`                                      |
+| Offline work       | Not possible                                           | `status` works without network                        |
+| Setup              | MCP plugin to install and configure                    | Just an API key                                       |
+| Token cost         | High                                                   | Low                                                   |
 
 The CLI and MCP aren't mutually exclusive. While the MCP plugin is a great fit for simple use cases, the CLI is a better fit for more complex use cases, especially when you need to edit content. If you run the MCP plugin, this package's `./mcp` tools close most of the gaps above: a fixed tool count, compact schemas, and path-addressed rich-text edits.
 
@@ -91,7 +91,11 @@ For small, targeted changes (update a title, toggle a status field), the CRUD co
 The optional plugin also exports its schema introspection as plain functions, so you can build your own tools — an MCP server, a code generator, a CLI of your own — against the same projection the CLI uses. Each takes a Payload `req` and runs in-process, no HTTP round-trip:
 
 ```ts
-import { listReadableEntities, getEntitySchema, getBlockSchema } from "@jhb.software/payload-content-cli/plugin";
+import {
+  listReadableEntities,
+  getEntitySchema,
+  getBlockSchema,
+} from "@jhb.software/payload-content-cli/plugin";
 
 const { collections, globals } = await listReadableEntities({ req });
 const { fields } = await getEntitySchema({ req, type: "collection", slug: "pages" });
@@ -104,7 +108,7 @@ Entity schemas name the blocks a field accepts rather than inlining them, so an 
 
 See [USAGE.md](USAGE.md#build-custom-tools-with-the-schema-api) for the full API.
 
-The Lexical toolkit behind the `lexical` commands ships the same way, under `@jhb.software/payload-content-cli/lexical` — one `editRichText(doc, field, edit)` call addresses a node, edits it, validates the result, and writes the field back, without rewriting the document. Pure functions, no filesystem or network, so fetching and saving (and the access, locale, and draft decisions that come with them) stay in your code. See [USAGE.md](USAGE.md#edit-richtext-from-your-own-code).
+The Lexical toolkit behind the `lexical` commands ships the same way, under `@jhb.software/payload-content-cli/lexical` — `editAtPath(doc, path, operation, value?)` reads or changes anything inside rich text by the same dot paths the CLI and MCP tool use, and returns a validated, changed copy of the document. Pure functions, no filesystem or network, so fetching and saving (and the access, locale, and draft decisions that come with them) stay in your code. See [USAGE.md](USAGE.md#edit-richtext-from-your-own-code).
 
 For Payload apps running `@payloadcms/plugin-mcp`, `@jhb.software/payload-content-cli/mcp` ships a fixed set of collection-agnostic content tools, `createMcpContentTools()`: schemas as a compact field tree instead of JSON, reads that show what a locale actually stores, writes that go to drafts unless told to publish, and an `updateRichText` tool that addresses any node or value inside rich text — including rich text nested in blocks — with one dot path, reads compact outlines instead of raw Lexical JSON, and edits drafts by default. See [USAGE.md](USAGE.md#add-the-mcp-content-tools). The plugin's `preserveSharedRowsPlugin()` refuses API writes that would silently drop other locales' translations of array and blocks rows ([USAGE.md](USAGE.md#keep-translations-of-shared-rows)).
 

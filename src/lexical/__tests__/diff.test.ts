@@ -40,7 +40,10 @@ describe("diffLexicalDocs", () => {
     const source = [linkedParagraph("See ", internalLink("Kenya", "countries", "abc"), ".")];
     const target = [linkedParagraph("Siehe ", internalLink("Kenia", "countries", "abc"), ".")];
 
-    const result = diffLexicalDocs(source, target);
+    const result = diffLexicalDocs(
+      [{ path: "c", children: source }],
+      [{ path: "c", children: target }],
+    );
     expect(result.inSync).toBe(true);
     expect(result.linksOnlyInSource).toHaveLength(0);
     expect(result.linksOnlyInTarget).toHaveLength(0);
@@ -52,7 +55,10 @@ describe("diffLexicalDocs", () => {
     const source = [linkedParagraph("See ", internalLink("Kenya", "countries", "abc"), ".")];
     const target = [paragraph("No links here.")];
 
-    const result = diffLexicalDocs(source, target);
+    const result = diffLexicalDocs(
+      [{ path: "c", children: source }],
+      [{ path: "c", children: target }],
+    );
     expect(result.inSync).toBe(false);
     expect(result.linksOnlyInSource).toHaveLength(1);
     expect(result.linksOnlyInSource[0]).toMatchObject({
@@ -66,7 +72,10 @@ describe("diffLexicalDocs", () => {
     const source = [paragraph("Nothing linked.")];
     const target = [linkedParagraph("See ", internalLink("Kenya", "countries", "abc"), ".")];
 
-    const result = diffLexicalDocs(source, target);
+    const result = diffLexicalDocs(
+      [{ path: "c", children: source }],
+      [{ path: "c", children: target }],
+    );
     expect(result.linksOnlyInTarget).toHaveLength(1);
     expect(result.linksOnlyInTarget[0].value).toBe("abc");
   });
@@ -75,7 +84,10 @@ describe("diffLexicalDocs", () => {
     const source = [linkedParagraph("", internalLink("Great Migration", "topics", "m1"), "")];
     const target = [linkedParagraph("", internalLink("Große Migration", "topics", "m1"), "")];
 
-    const result = diffLexicalDocs(source, target);
+    const result = diffLexicalDocs(
+      [{ path: "c", children: source }],
+      [{ path: "c", children: target }],
+    );
     expect(result.linksOnlyInSource).toHaveLength(0);
     expect(result.linksOnlyInTarget).toHaveLength(0);
   });
@@ -84,7 +96,10 @@ describe("diffLexicalDocs", () => {
     const source = [block("Gallery"), block("Cta")];
     const target = [block("Cta"), block("Newsletter")];
 
-    const result = diffLexicalDocs(source, target);
+    const result = diffLexicalDocs(
+      [{ path: "c", children: source }],
+      [{ path: "c", children: target }],
+    );
     expect(result.blocksOnlyInSource.map((b) => b.blockType)).toEqual(["Gallery"]);
     expect(result.blocksOnlyInTarget.map((b) => b.blockType)).toEqual(["Newsletter"]);
     expect(result.inSync).toBe(false);
@@ -95,7 +110,10 @@ describe("diffLexicalDocs", () => {
       const source = [linkedParagraph("", internalLink("Great Migration", "topics", "m1"), "")];
       const target = [paragraph("Read about the Great Migration here.")];
 
-      const result = diffLexicalDocs(source, target);
+      const result = diffLexicalDocs(
+        [{ path: "c", children: source }],
+        [{ path: "c", children: target }],
+      );
       expect(result.linksOnlyInSource[0].match).toBe("Great Migration");
     });
 
@@ -103,7 +121,10 @@ describe("diffLexicalDocs", () => {
       const source = [linkedParagraph("", internalLink("Great Migration", "topics", "m1"), "")];
       const target = [paragraph("The annual Migration crosses the Mara river.")];
 
-      const result = diffLexicalDocs(source, target);
+      const result = diffLexicalDocs(
+        [{ path: "c", children: source }],
+        [{ path: "c", children: target }],
+      );
       expect(result.linksOnlyInSource[0].match).toBe("Migration");
     });
 
@@ -112,7 +133,10 @@ describe("diffLexicalDocs", () => {
       const source = [linkedParagraph("", internalLink("with up Serengeti", "parks", "p1"), "")];
       const target = [paragraph("Travel with your family, look up hotels.")];
 
-      const result = diffLexicalDocs(source, target);
+      const result = diffLexicalDocs(
+        [{ path: "c", children: source }],
+        [{ path: "c", children: target }],
+      );
       expect(result.linksOnlyInSource[0].match).toBeUndefined();
     });
 
@@ -120,7 +144,10 @@ describe("diffLexicalDocs", () => {
       const source = [linkedParagraph("", internalLink("Serengeti", "parks", "p1"), "")];
       const target = [paragraph("Completely unrelated text.")];
 
-      const result = diffLexicalDocs(source, target);
+      const result = diffLexicalDocs(
+        [{ path: "c", children: source }],
+        [{ path: "c", children: target }],
+      );
       expect(result.linksOnlyInSource[0].match).toBeUndefined();
     });
 
@@ -128,7 +155,10 @@ describe("diffLexicalDocs", () => {
       const source = [linkedParagraph("", internalLink("Serengeti", "parks", "p1"), "")];
       const target = [linkedParagraph("", internalLink("Serengeti", "parks", "other"), "")];
 
-      const result = diffLexicalDocs(source, target);
+      const result = diffLexicalDocs(
+        [{ path: "c", children: source }],
+        [{ path: "c", children: target }],
+      );
       expect(result.linksOnlyInSource[0].match).toBeUndefined();
     });
   });

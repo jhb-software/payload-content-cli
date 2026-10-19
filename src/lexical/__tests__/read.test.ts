@@ -1,136 +1,138 @@
 import { describe, it, expect } from "vitest";
 import {
+  buildBlock,
+  buildInternalLink,
+  buildParagraph,
+  buildText,
   diffRichText,
+  extractRichTextBlocks,
   extractRichTextLinks,
-  getRichTextNode,
   LexicalError,
-  readRichText,
+  linkRichText,
+  richTextPaths,
   searchRichText,
 } from "../index.js";
-import { buildHeading, buildInternalLink, buildParagraph } from "../nodes.js";
 
-function field(children: unknown[]) {
+function richText(...children: unknown[]) {
   return {
     root: { type: "root", children, direction: "ltr", format: "", indent: 0, version: 1 },
   };
 }
 
-function doc() {
+/** A page whose rich text sits in an array row, with a link inside a block's body. */
+function page() {
   return {
-    title: "A post",
-    content: field([
-      buildHeading("Intro", "h2"),
-      buildParagraph("see our docs for more"),
-      { type: "block", fields: { blockType: "cta" }, format: "", version: 2 },
-    ]),
-  } as Record<string, unknown>;
+    title: "Travel",
+    intro: richText(buildParagraph("Welcome")),
+    layout: [
+      { blockType: "hero" },
+      {
+        blockType: "content",
+        richText: richText(
+          buildParagraph("Check the entry rules."),
+          buildBlock({
+            blockType: "alert",
+            body: richText({
+              ...buildParagraph(""),
+              children: [buildText("See "), buildInternalLink("visa rules", "pages", "visa")],
+            }),
+          }),
+        ),
+      },
+    ],
+  };
 }
 
-describe("readRichText", () => {
-  it("summarizes a field straight from the document", () => {
-    expect(readRichText(doc(), "content", { depth: 1 })).toEqual([
-      { address: "0", type: "heading", tag: "h2", preview: '"Intro"' },
-      { address: "1", type: "paragraph", preview: '"see our docs for more"' },
-      { address: "2", type: "block", blockType: "cta", preview: "(cta)" },
+function codeOf(fn: () => unknown): string | undefined {
+  try {
+    fn();
+  } catch (error) {
+    return (error as LexicalError).code;
+  }
+  return undefined;
+}
+
+describe("richTextPaths", () => {
+  it("finds rich-text fields inside array rows, in document order", () => {
+    expect(richTextPaths(page())).toEqual(["intro", "layout.1.richText"]);
+  });
+
+  it("adds rich text nested in blocks when asked", () => {
+    expect(richTextPaths(page(), { nested: true })).toEqual([
+      "intro",
+      "layout.1.richText",
+      "layout.1.richText.1.fields.body",
     ]);
-  });
-
-  it("includes link text in a paragraph's preview", () => {
-    const document = {
-      content: field([
-        {
-          type: "paragraph",
-          version: 1,
-          direction: "ltr",
-          format: "",
-          indent: 0,
-          children: [
-            { type: "text", text: "See the ", format: 0, version: 1 },
-            buildInternalLink("docs", "pages", "page-1"),
-            { type: "text", text: " for details.", format: 0, version: 1 },
-          ],
-        },
-      ]),
-    } as Record<string, unknown>;
-
-    expect(readRichText(document, "content", { depth: 1 })[0].preview).toBe(
-      '"See the docs for details."',
-    );
-  });
-
-  it("descends into nested nodes by default", () => {
-    const addresses = readRichText(doc(), "content").map((entry) => entry.address);
-    expect(addresses).toContain("0.0");
-  });
-
-  it("reads a field nested in an array row", () => {
-    const document = { sections: [{ body: field([buildParagraph("a")]) }] } as Record<
-      string,
-      unknown
-    >;
-    expect(readRichText(document, "sections.0.body")).toHaveLength(2);
-  });
-
-  it("reports an unknown field with a code", () => {
-    try {
-      readRichText(doc(), "nope");
-      expect.unreachable("should have thrown");
-    } catch (error) {
-      expect((error as LexicalError).code).toBe("FIELD_NOT_FOUND");
-    }
-  });
-
-  it("hands back copies, so callers can't edit the document behind the API's back", () => {
-    const document = doc();
-    const node = getRichTextNode(document, "content", "1");
-
-    (node as unknown as { children: unknown[] }).children = [];
-
-    expect(readRichText(document, "content", { depth: 1 })[1].preview).toBe(
-      '"see our docs for more"',
-    );
-  });
-});
-
-describe("getRichTextNode", () => {
-  it("returns the node at an address", () => {
-    expect(getRichTextNode(doc(), "content", "0").type).toBe("heading");
   });
 });
 
 describe("searchRichText", () => {
-  it("finds unlinked text with the address to act on", () => {
-    const matches = searchRichText(doc(), "content", "our docs");
-    expect(matches).toHaveLength(1);
-    expect(matches[0].address).toBe("1.0");
+  it("finds text in a block's nested rich text, by full path", () => {
+    expect(searchRichText(page(), "layout.1.richText", "See")).toEqual([
+      { path: "layout.1.richText.1.fields.body.0.children.0", context: "See " },
+    ]);
+  });
+
+  it("names the rich text below a path that isn't rich text", () => {
+    expect(() => searchRichText(page(), "layout", "x")).toThrow(/layout\.1\.richText/);
+    expect(codeOf(() => searchRichText(page(), "layout", "x"))).toBe("PATH_NOT_FOUND");
   });
 });
 
 describe("extractRichTextLinks", () => {
-  it("inventories internal links with their targets", () => {
-    const document = {
-      content: field([
-        { ...buildParagraph("x"), children: [buildInternalLink("docs", "pages", "7")] },
-      ]),
-    } as Record<string, unknown>;
-
-    expect(extractRichTextLinks(document, "content")).toEqual([
-      { address: "0.0", text: "docs", relationTo: "pages", value: "7" },
+  it("lists links in nested rich text with their targets", () => {
+    expect(extractRichTextLinks(page(), "layout.1.richText")).toEqual([
+      {
+        path: "layout.1.richText.1.fields.body.0.children.1",
+        text: "visa rules",
+        relationTo: "pages",
+        value: "visa",
+      },
     ]);
   });
 });
 
+describe("extractRichTextBlocks", () => {
+  it("lists blocks with their paths", () => {
+    expect(extractRichTextBlocks(page(), "layout.1.richText")).toMatchObject([
+      { path: "layout.1.richText.1", blockType: "alert" },
+    ]);
+  });
+});
+
+describe("linkRichText", () => {
+  it("returns a copy with the text linked and leaves the document as it was", () => {
+    const doc = page();
+    const link = buildInternalLink("entry rules", "pages", "entry");
+
+    const linked = linkRichText(doc, "layout.1.richText", "entry rules", link);
+
+    expect(extractRichTextLinks(linked, "layout.1.richText").map((l) => l.value)).toEqual([
+      "entry",
+      "visa",
+    ]);
+    expect(extractRichTextLinks(doc, "layout.1.richText")).toHaveLength(1);
+  });
+
+  it("refuses text that isn't there unlinked", () => {
+    const link = buildInternalLink("visa rules", "pages", "visa");
+    expect(codeOf(() => linkRichText(page(), "layout.1.richText", "visa rules", link))).toBe(
+      "TEXT_NOT_FOUND",
+    );
+  });
+});
+
 describe("diffRichText", () => {
-  it("reports links present in one locale but not the other", () => {
-    const source = {
-      content: field([
-        { ...buildParagraph("x"), children: [buildInternalLink("docs", "pages", "7")] },
-      ]),
-    } as Record<string, unknown>;
-    const target = { content: field([buildParagraph("docs")]) } as Record<string, unknown>;
+  it("reports a nested link one locale has and the other doesn't", () => {
+    const target = page();
+    target.layout[1].richText = richText(buildParagraph("Check the visa rules."));
 
-    const result = diffRichText(source, target, "content");
+    const result = diffRichText(page(), target, "layout.1.richText");
 
-    expect(result.linksOnlyInSource.map((link) => link.text)).toEqual(["docs"]);
+    expect(result.linksOnlyInSource).toMatchObject([
+      { path: "layout.1.richText.1.fields.body.0.children.1", match: "visa rules" },
+    ]);
+    expect(result.blocksOnlyInSource.map((b) => b.blockType)).toEqual(["alert"]);
+    expect(result.inSync).toBe(false);
   });
 });

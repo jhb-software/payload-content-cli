@@ -169,10 +169,10 @@ Every tool runs with the request's user and Payload's access control. Collection
 | `listEntities`    | The readable collections and globals, and the locales.                                |
 | `getEntitySchema` | One entity's fields as a compact tree, one line per field. Blocks are listed by slug. |
 | `getBlockSchema`  | The fields of blocks by slug, in the same tree format.                                |
-| `find`            | One document by id, a page of a collection filtered by `where`, or a global.          |
+| `find`            | One document by id, a page of a collection filtered by `where`, or a global; rich text as outlines, one value by `path`, or matches of `text`. |
 | `create`          | A document in a collection, as a draft by default. Answers with its id.               |
 | `update`          | Some fields of a document by id, of every document a `where` matches, or of a global. |
-| `updateRichText`  | Read and edit rich text in place by path (below).                                     |
+| `updateRichText`  | Edit rich text in place by path, or link text to a document (below).                  |
 
 The schema tools answer in a tree rather than JSON, which costs an agent about half the tokens; the legend rides in the tool description, so it is paid once per session:
 
@@ -186,28 +186,29 @@ pages (collection)
     ✎ block nodes: paragraph, heading (h2, h3), block (alert)
 ```
 
-`find` reads the latest draft unless `draft: false`, so an agent sees its own unpublished edits. It returns what a locale stores, without fallback, so an untranslated field reads as empty rather than as another language. `where` and `select` may be objects or JSON strings (some MCP clients send nested objects as strings), `limit` is capped at 100, and `depth` defaults to 0.
+`find` reads the latest draft unless `draft: false`, so an agent sees its own unpublished edits. It returns what a locale stores, without fallback, so an untranslated field reads as empty rather than as another language. Rich text comes back as an outline, one line per node starting with its path (`"content.1 block alert [1 link]: See safety"`), the same outline `lexical read` prints. For one document, `path` reads a single value, a node as JSON without Lexical's defaults, and `text` lists where the text occurs in its rich text, marking matches already inside a link. `where` and `select` may be objects or JSON strings (some MCP clients send nested objects as strings), `limit` is capped at 100, and `depth` defaults to 0.
 
-Writes go to the draft unless `draft: false`, which publishes (the tools set `_status` explicitly, since Payload's `draft: false` alone never publishes). Publishing one document or a global publishes its latest draft together with the changes, as the admin panel's Publish does. A bulk publish by `where` starts from the live documents instead, so it is refused when a matched document has newer draft changes, unless `overwriteDraft: true`. `data` may be an object or a JSON string; `locale: "all"` is refused for writes. With [`preserveSharedRowsPlugin`](#keep-translations-of-shared-rows) installed, `replaceRows: true` lets `update` replace the rows of a shared array after a refusal. Answers are lean: `{ id, status }` (`status` only on collections with drafts), `{ ids, status }` for a bulk update.
+Writes go to the draft unless `draft: false`, which publishes (the tools set `_status` explicitly, since Payload's `draft: false` alone never publishes). Publishing one document or a global publishes its latest draft together with the changes, as the admin panel's Publish does. A bulk publish by `where` starts from the live documents instead, so it is refused when a matched document has newer draft changes, unless `overwriteDraft: true`. `data` may be an object or a JSON string; `locale: "all"` is refused for writes. Rich text sent back as the outline `find` showed is kept as stored; an edited outline is refused with a pointer to edit its nodes instead. With [`preserveSharedRowsPlugin`](#keep-translations-of-shared-rows) installed, a refused `update` tells the agent about `replaceRows: true`, which replaces the rows of a shared array on purpose. Answers are lean: `{ id, status }` (`status` only on collections with drafts), `{ ids, status }` for a bulk update.
 
 #### Edit rich text by path
 
-`updateRichText` packages [`editAtPath`](#edit-by-path) as a tool. It takes `collection`, `id`, `path`, `operation` (`read`, `set`, `insert`, `delete`), `value`, `locale`, `draft` and `overwriteDraft`. Edits go to the draft by default. `draft: false` publishes, and is refused when it would discard newer draft changes unless `overwriteDraft: true`. Since draft writes skip Payload's validation, the blocks and the link or upload targets an edit adds are checked first: each block must be one its rich-text field allows. A locale is read without fallback, so a locale with no rich text yet reads as empty and can be started with `insert` at `content.0`. `updateRichTextTool(options)` is also exported on its own.
+`updateRichText` packages [`editAtPath`](#edit-richtext-from-your-own-code) and `linkRichText` as a tool, on the paths `find` shows. It takes `collection`, `id`, `path`, `operation` (`set`, `insert`, `delete`, `link`), `value`, `text` (for `link`), `locale`, `draft` and `overwriteDraft`. `link` wraps the first unlinked match of `text` at or below `path` in an internal link to `value` (`{ relationTo, value }`) and answers with the new link's path. Edits go to the draft by default. `draft: false` publishes, and is refused when it would discard newer draft changes unless `overwriteDraft: true`. Since draft writes skip Payload's validation, the blocks and the link or upload targets an edit adds are checked first: each block must be one its rich-text field allows, also when an edit keeps a block's id but changes its type. A locale is read without fallback; rich text nobody has written yet in it, at any depth (an array row, a block), is started empty, so `insert` at `content.0` or `sections.0.body.0` begins it.
 
 #### Options
 
-Two options cover what differs between apps, and every tool that takes a locale or an id uses them:
+Two options cover what differs between apps, and every tool that takes a locale or an id uses them. Both may be async:
 
 ```ts
 createMcpContentTools({
   // The locale to read and write, e.g. a tenant's primary locale when the agent passes none.
   resolveLocale: (req, { collection, id, locale }) => locale ?? primaryLocaleOf(req),
   // Refuse an id before it is looked up, by returning the message to show.
-  checkId: (collection, id) => (isSlug(id) ? "Pass the document id, not its slug." : undefined),
+  checkId: (req, { collection, id }) =>
+    isSlug(id) ? "Pass the document id, not its slug." : undefined,
 });
 ```
 
-To drop or replace one tool, filter the list by `name`. Tool names are stable, since `@payloadcms/plugin-mcp` keys its per-key access flags on them. Tools carry MCP `annotations` (read-only, title), which `@payloadcms/plugin-mcp` doesn't forward to clients yet.
+An unknown collection or global is answered with the ones the agent may use. To drop or replace one tool, filter the list by `name`. Tool names are stable, since `@payloadcms/plugin-mcp` keys its per-key access flags on them. Tools carry MCP `annotations` (read-only, title), which `@payloadcms/plugin-mcp` doesn't forward to clients yet.
 
 ### Keep translations of shared rows
 

@@ -1,9 +1,10 @@
-import type { PayloadRequest, Where } from "payload";
+import type { PayloadRequest, SelectType, Where } from "payload";
 import { z } from "zod/v3";
-import { ALLOW_SHARED_ROW_REPLACEMENT } from "../plugin/preserveSharedRows.js";
+import { restoreOutlines } from "../lexical/view.js";
+import { ALLOW_SHARED_ROW_REPLACEMENT, isSharedRowRefusal } from "../plugin/preserveSharedRows.js";
 import { jsonObject, pickLocale, toObject, type McpContentToolsOptions } from "./options.js";
 import { errorResult, jsonResult, type McpTool } from "./result.js";
-import { entityConfig, errorMessage, hasDrafts, parseTarget } from "./target.js";
+import { errorMessage, hasDrafts, openTarget, type Target } from "./target.js";
 
 const collectionArg = z
   .string()
@@ -80,6 +81,51 @@ function requireData(value: Record<string, unknown> | string): Record<string, un
   return data;
 }
 
+/** A non-empty list of strings somewhere in a value: what an outline looks like. */
+function holdsStringList(value: unknown): boolean {
+  if (Array.isArray(value)) {
+    return (
+      (value.length > 0 && value.every((item) => typeof item === "string")) ||
+      value.some(holdsStringList)
+    );
+  }
+  if (typeof value === "object" && value !== null) {
+    return Object.values(value).some(holdsStringList);
+  }
+  return false;
+}
+
+/**
+ * `data` with rich text sent back as find showed it — an outline — swapped for
+ * the stored rich text. Only an unchanged outline is restored; an edited one is
+ * refused, as is one where nothing is stored to restore it from.
+ */
+async function withRichTextRestored(
+  req: PayloadRequest,
+  target: Target,
+  id: Id | undefined,
+  locale: string | undefined,
+  data: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  if (!holdsStringList(data)) return data;
+  const read = {
+    depth: 0,
+    draft: true,
+    locale,
+    fallbackLocale: false,
+    select: Object.fromEntries(Object.keys(data).map((key) => [key, true])) as SelectType,
+    overrideAccess: false,
+    req,
+  } as const;
+  const stored =
+    target.kind === "global"
+      ? await req.payload.findGlobal({ slug: target.slug, ...read })
+      : id !== undefined
+        ? await req.payload.findByID({ collection: target.slug, id, disableErrors: true, ...read })
+        : undefined;
+  return restoreOutlines(data, stored ?? undefined, "") as Record<string, unknown>;
+}
+
 export function createTool(options: McpContentToolsOptions = {}): McpTool {
   return {
     name: "create",
@@ -90,15 +136,23 @@ export function createTool(options: McpContentToolsOptions = {}): McpTool {
     handler: async (args, req) => {
       try {
         const parsed = createSchema.parse(args);
-        const target = parseTarget(parsed.collection);
+        const { target, config } = await openTarget(req, options, parsed.collection);
         if (target.kind === "global") {
           return errorResult("A global always exists; update it instead of creating it.");
         }
-        const config = entityConfig(req, target);
-        if (!config) return errorResult(`No collection "${target.slug}".`);
         const draft = parsed.draft ?? true;
         const drafts = hasDrafts(config);
-        const data = requireData(parsed.data);
+        const locale = await writeLocale(options, req, {
+          collection: parsed.collection,
+          locale: parsed.locale,
+        });
+        const data = await withRichTextRestored(
+          req,
+          target,
+          undefined,
+          locale,
+          requireData(parsed.data),
+        );
         // `draft: false` alone never publishes; `_status` has to say so.
         if (drafts) data._status = draft ? "draft" : "published";
 
@@ -106,10 +160,7 @@ export function createTool(options: McpContentToolsOptions = {}): McpTool {
           collection: target.slug,
           data,
           draft,
-          locale: await writeLocale(options, req, {
-            collection: parsed.collection,
-            locale: parsed.locale,
-          }),
+          locale,
           depth: 0,
           select: {},
           overrideAccess: false,
@@ -158,13 +209,7 @@ export function updateTool(options: McpContentToolsOptions = {}): McpTool {
       try {
         const parsed = updateSchema.parse(args);
         const { collection, id } = parsed;
-        const target = parseTarget(collection);
-        const config = entityConfig(req, target);
-        if (!config) return errorResult(`No ${target.kind} "${target.slug}".`);
-        if (id !== undefined && options.checkId) {
-          const refusal = options.checkId(collection, id);
-          if (refusal) return errorResult(refusal);
-        }
+        const { target, config } = await openTarget(req, options, collection, id);
         const where = toObject(parsed.where, "where") as Where | undefined;
         if (target.kind === "collection" && (id === undefined) === (where === undefined)) {
           return errorResult("Pass either id or where.");
@@ -172,13 +217,14 @@ export function updateTool(options: McpContentToolsOptions = {}): McpTool {
 
         const draft = parsed.draft ?? true;
         const drafts = hasDrafts(config);
-        const data = requireData(parsed.data);
+        const locale = await writeLocale(options, req, { collection, id, locale: parsed.locale });
+        const data = await withRichTextRestored(req, target, id, locale, requireData(parsed.data));
         if (drafts) data._status = draft ? "draft" : "published";
         const status = drafts ? { status: data._status } : {};
         const write = {
           data,
           draft,
-          locale: await writeLocale(options, req, { collection, id, locale: parsed.locale }),
+          locale,
           depth: 0,
           select: {},
           overrideAccess: false,
@@ -214,6 +260,11 @@ export function updateTool(options: McpContentToolsOptions = {}): McpTool {
           ...(errors.length ? { errors } : {}),
         });
       } catch (err) {
+        if (isSharedRowRefusal(err)) {
+          return errorResult(
+            `${err.message} To replace the rows and drop those translations on purpose, pass replaceRows: true.`,
+          );
+        }
         return errorResult(errorMessage(err));
       }
     },

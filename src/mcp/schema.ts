@@ -2,14 +2,7 @@ import { z } from "zod/v3";
 import { getBlockSchema, getEntitySchema, listReadableEntities } from "../plugin/index.js";
 import { errorResult, jsonResult, textResult, type McpTool } from "./result.js";
 import { renderSchemaTree, SCHEMA_TREE_LEGEND } from "./schemaTree.js";
-import { GLOBAL_PREFIX, errorMessage, parseTarget } from "./target.js";
-
-/** Payload's own bookkeeping collections; never content. Same list as the CLI's. */
-const INTERNAL_COLLECTIONS = new Set([
-  "payload-locked-documents",
-  "payload-preferences",
-  "payload-migrations",
-]);
+import { GLOBAL_PREFIX, INTERNAL_COLLECTIONS, errorMessage, parseTarget } from "./target.js";
 
 const readOnly = { readOnlyHint: true, destructiveHint: false, idempotentHint: true };
 

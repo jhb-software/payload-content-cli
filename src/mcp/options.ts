@@ -13,7 +13,10 @@ export interface McpContentToolsOptions {
     target: { collection: string; id?: string | number; locale?: string },
   ) => string | undefined | Promise<string | undefined>;
   /** Refuse an id before it is looked up, by returning the message to show the agent. */
-  checkId?: (collection: string, id: string | number) => string | undefined;
+  checkId?: (
+    req: PayloadRequest,
+    target: { collection: string; id: string | number },
+  ) => string | undefined | Promise<string | undefined>;
 }
 
 export function pickLocale(

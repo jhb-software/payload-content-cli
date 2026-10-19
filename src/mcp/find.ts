@@ -1,14 +1,28 @@
 import type { SelectType, Sort, Where } from "payload";
 import { z } from "zod/v3";
+import { readAtPath, searchRichText } from "../lexical/index.js";
+import { outlineRichText } from "../lexical/view.js";
 import { jsonObject, pickLocale, toObject, type McpContentToolsOptions } from "./options.js";
 import { errorResult, jsonResult, type McpTool } from "./result.js";
-import { entityConfig, errorMessage, parseTarget } from "./target.js";
+import { errorMessage, openTarget } from "./target.js";
 
 const parameters = {
   collection: z
     .string()
     .describe('Collection slug, or "globals/<slug>" for a global (e.g. "globals/footer").'),
   id: z.union([z.string(), z.number()]).optional().describe("One document by id."),
+  path: z
+    .string()
+    .optional()
+    .describe(
+      'With id or a global: only the value at this dot path, as the outlines show it, e.g. "content.3" for a node as JSON, or "layout.1" for an array row.',
+    ),
+  text: z
+    .string()
+    .optional()
+    .describe(
+      "With id or a global: find this text in the rich text (below path, if given). Answers with each match's path; text already inside a link is marked linked.",
+    ),
   where: jsonObject
     .optional()
     .describe('Filter as a Payload query, e.g. {"slug":{"equals":"about"}}.'),
@@ -45,7 +59,7 @@ export function findTool(options: McpContentToolsOptions = {}): McpTool {
   return {
     name: "find",
     description:
-      "Read documents: one by id, a page of a collection filtered by where, or a global. Use select and keep depth at 0 to keep answers small.",
+      'Read documents: one by id, a page of a collection filtered by where, or a global. Rich text shows as an outline, one line per node starting with its path ("content.3 p: …"); read a node by passing that path. Use select or path and keep depth at 0 to keep answers small.',
     annotations: {
       title: "Find content",
       readOnlyHint: true,
@@ -56,36 +70,40 @@ export function findTool(options: McpContentToolsOptions = {}): McpTool {
     handler: async (args, req) => {
       try {
         const parsed = argsSchema.parse(args);
-        const { collection, id } = parsed;
-        const target = parseTarget(collection);
-        if (!entityConfig(req, target)) return errorResult(`No ${target.kind} "${target.slug}".`);
-        if (id !== undefined && options.checkId) {
-          const refusal = options.checkId(collection, id);
-          if (refusal) return errorResult(refusal);
+        const { collection, id, path, text } = parsed;
+        const { target } = await openTarget(req, options, collection, id);
+        const one = target.kind === "global" || id !== undefined;
+        if ((path !== undefined || text !== undefined) && !one) {
+          return errorResult("path and text read one document: pass id, or address a global.");
         }
 
+        const select = toObject(parsed.select, "select") as SelectType | undefined;
         const read = {
           depth: parsed.depth ?? 0,
           draft: parsed.draft ?? true,
           // Stored values only: a fallback reads as if the field were translated.
           fallbackLocale: false as const,
           locale: await pickLocale(options, req, { collection, id, locale: parsed.locale }),
-          select: toObject(parsed.select, "select") as SelectType | undefined,
+          // A path needs only its field.
+          select: select ?? (path ? { [path.split(".")[0]]: true } : undefined),
           overrideAccess: false,
           req,
         };
 
-        if (target.kind === "global") {
-          return jsonResult(await req.payload.findGlobal({ slug: target.slug, ...read }));
-        }
-        if (id !== undefined) {
-          const doc = await req.payload.findByID({
-            collection: target.slug,
-            id,
-            disableErrors: true,
-            ...read,
-          });
-          return doc ? jsonResult(doc) : errorResult(`No ${target.slug} document with id "${id}".`);
+        if (one) {
+          const doc =
+            target.kind === "global"
+              ? await req.payload.findGlobal({ slug: target.slug, ...read })
+              : await req.payload.findByID({
+                  collection: target.slug,
+                  id: id!,
+                  disableErrors: true,
+                  ...read,
+                });
+          if (!doc) return errorResult(`No ${target.slug} document with id "${id}".`);
+          if (text !== undefined) return jsonResult(searchRichText(doc, path ?? "", text));
+          if (path !== undefined) return jsonResult(readAtPath(doc, path));
+          return jsonResult(outlineRichText(doc, ""));
         }
         const { docs, totalDocs, page, totalPages } = await req.payload.find({
           collection: target.slug,
@@ -95,7 +113,12 @@ export function findTool(options: McpContentToolsOptions = {}): McpTool {
           page: parsed.page ?? 1,
           ...read,
         });
-        return jsonResult({ docs, totalDocs, page, totalPages });
+        return jsonResult({
+          docs: docs.map((doc) => outlineRichText(doc, "")),
+          totalDocs,
+          page,
+          totalPages,
+        });
       } catch (err) {
         return errorResult(errorMessage(err));
       }

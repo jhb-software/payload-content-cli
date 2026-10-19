@@ -39,30 +39,34 @@ lean on other tools' names.
 
 ## Done
 
-- `editAtPath(doc, path, operation, value?)` in `./lexical` (`src/lexical/path.ts`,
-  compact views in `src/lexical/view.ts`): one dot path from a document to any node or
-  value inside its rich text, through blocks into nested rich text. Operations `read`,
-  `set`, `insert`, `delete`.
-- `createMcpContentTools(options?)` (`src/mcp/tools.ts`) returns every tool;
-  `updateRichTextTool` is the only other tool export. `McpContentToolsOptions`
-  (`src/mcp/options.ts`) is `resolveLocale` + `checkId`.
+- `readAtPath(doc, path)` and `editAtPath(doc, path, operation, value?)` in `./lexical`
+  (`src/lexical/path.ts`, compact views in `src/lexical/view.ts`): one dot path from a
+  document to any node or value inside its rich text, through blocks into nested rich
+  text. Outline lines start with their full path. Edits `set`, `insert`, `delete`.
+- `createMcpContentTools(options?)` (`src/mcp/tools.ts`) is the only tool export.
+  `McpContentToolsOptions` (`src/mcp/options.ts`) is `resolveLocale` + `checkId`, both
+  given the request.
 - Schema tools (`src/mcp/schema.ts`) answer as a field tree (`src/mcp/schemaTree.ts`,
   legend in the tool description), system fields hidden.
 - `find` (`src/mcp/find.ts`): drafts by default, `fallbackLocale: false`, capped limit,
-  JSON-string `where`/`select`.
+  JSON-string `where`/`select`. Rich text as outlines; `path` reads one value, `text`
+  searches rich text. Reads live here, so `updateRichText` only writes.
 - `create`/`update` (`src/mcp/write.ts`): drafts by default, `_status` set only on
   entities with drafts, lean answers, Payload validation detail in the error message.
   Update by id and `updateGlobal` start from the latest draft, so `draft:false` publishes
   it together with `data`; only bulk update by `where` discards newer drafts, so only it
-  has the `overwriteDraft` guard.
-- `updateRichText` (`src/mcp/updateRichText.ts`): drafts by default, `overwriteDraft`
-  guard (it reads the published version when publishing), refuses unknown block slugs
-  and links/uploads to missing documents.
+  has the `overwriteDraft` guard. Unchanged outlines in `data` are restored, edited ones
+  refused.
+- `updateRichText` (`src/mcp/updateRichText.ts`): `set`/`insert`/`delete`/`link`, drafts
+  by default, `overwriteDraft` guard (it reads the published version when publishing),
+  refuses unknown block slugs (by id and type) and links/uploads to missing documents,
+  starts `null` rich text at any depth along the schema.
 - Tools carry MCP `annotations`; stock `@payloadcms/plugin-mcp` drops them, so apps
   that want them patch it to forward them.
 - `preserveSharedRowsPlugin(options?)` and `ALLOW_SHARED_ROW_REPLACEMENT` in `./plugin`
   (`src/plugin/preserveSharedRows.ts`, `src/plugin/sharedRows.ts`); defaults to every
-  entity. `update` has `replaceRows` to opt out per call.
+  entity. Its refusal is transport-neutral; `update` adds the `replaceRows` hint and
+  has `replaceRows` to opt out per call.
 - `McpTool.parameters` is typed `Record<string, any>`: `@payloadcms/plugin-mcp` types it
   against its own zod 3 install, and this package's `zod/v3` shapes don't unify with it
   as types (TS2589), though they are identical at runtime. Build shapes with
@@ -85,9 +89,6 @@ lean on other tools' names.
 - The reference check only sees `{relationTo, value}` pairs (links, upload nodes,
   polymorphic relationships). A plain id in a block's upload or relationship field
   isn't checked; that needs the block schema.
-- Rich text that is `null` (never edited) can be started by path only when it is a
-  top-level field; a `null` rich-text field inside a block or array row needs a
-  whole-value `set` of `{root: {children: [...]}}` on the field.
 - Upstream: the shared-row data loss is a Payload footgun; the issue is drafted in
   `plans/payload-issue-shared-row-data-loss.md` for the author to file.
 

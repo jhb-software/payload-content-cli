@@ -8,7 +8,8 @@ import { BlocksFeature, lexicalEditor } from "@payloadcms/richtext-lexical";
 import { buildConfig, createLocalReq, getPayload, type Payload } from "payload";
 import { beforeAll, describe, expect, it } from "vitest";
 import { buildBlock, buildInternalLink, buildParagraph, buildText } from "../../lexical/nodes.js";
-import { updateRichTextTool, type McpContentToolsOptions } from "../index.js";
+import { createMcpContentTools, type McpContentToolsOptions } from "../index.js";
+import { toolNamed } from "./payload.js";
 
 const open = { read: () => true, create: () => true, update: () => true };
 
@@ -52,6 +53,20 @@ beforeAll(async () => {
           access: open,
           versions: { drafts: true },
           fields: [{ name: "content", type: "richText", localized: true, editor }],
+        },
+        {
+          slug: "guides",
+          access: open,
+          fields: [
+            {
+              name: "sections",
+              type: "array",
+              fields: [
+                { name: "heading", type: "text" },
+                { name: "body", type: "richText", editor },
+              ],
+            },
+          ],
         },
         {
           slug: "articles",
@@ -105,31 +120,143 @@ async function createPost(linkTo: string | number) {
   return post.id;
 }
 
-async function call(args: Record<string, unknown>, options?: McpContentToolsOptions) {
+async function tool(
+  name: string,
+  args: Record<string, unknown>,
+  options?: McpContentToolsOptions,
+): Promise<any> {
   const req = await createLocalReq({}, payload);
-  const response = await updateRichTextTool(options).handler(args, req);
+  const response = await toolNamed(createMcpContentTools(options), name).handler(args, req);
   return JSON.parse(response.content[0].text) as unknown;
 }
+
+const call = (args: Record<string, unknown>, options?: McpContentToolsOptions) =>
+  tool("updateRichText", args, options);
+const find = (args: Record<string, unknown>, options?: McpContentToolsOptions) =>
+  tool("find", args, options);
 
 async function readPost(id: string | number, draft: boolean, locale = "en") {
   const post = await payload.findByID({ collection: "posts", id, draft, locale, depth: 0 });
   return JSON.stringify(post.content);
 }
 
-describe("updateRichText", () => {
-  it("reads a field as an outline, then one node as compact JSON", async () => {
+describe("find", () => {
+  it("shows rich text as an outline whose lines are the paths to edit", async () => {
     const page = await payload.create({ collection: "pages", data: { title: "Safety" } });
     const id = await createPost(page.id);
 
-    expect(await call({ collection: "posts", id, path: "content", operation: "read" })).toEqual([
+    expect((await find({ collection: "posts", id })).content).toEqual([
       "content.0 p: Intro",
       "content.1 block alert [1 link]: See safety",
     ]);
-    expect(await call({ collection: "posts", id, path: "content.0", operation: "read" })).toEqual({
+  });
+
+  it("reads one node by path as compact JSON, with the rich text inside it outlined", async () => {
+    const page = await payload.create({ collection: "pages", data: { title: "Safety" } });
+    const id = await createPost(page.id);
+
+    expect(await find({ collection: "posts", id, path: "content.0" })).toEqual({
       type: "paragraph",
       version: 1,
       children: [{ type: "text", version: 1, text: "Intro" }],
     });
+    expect(await find({ collection: "posts", id, path: "content.1" })).toMatchObject({
+      fields: { blockType: "alert", body: ["content.1.fields.body.0 p [1 link]: See safety"] },
+    });
+  });
+
+  it("finds text in rich text by path, marking text that is already linked", async () => {
+    const page = await payload.create({ collection: "pages", data: { title: "Safety" } });
+    const id = await createPost(page.id);
+
+    expect(await find({ collection: "posts", id, text: "safety" })).toEqual([
+      {
+        path: "content.1.fields.body.0.children.1.children.0",
+        context: "safety",
+        linked: true,
+      },
+    ]);
+  });
+
+  it("reads the locale the resolveLocale hook picks", async () => {
+    const page = await payload.create({ collection: "pages", data: { title: "Safety" } });
+    const id = await createPost(page.id);
+
+    const outline = await find(
+      { collection: "posts", id, path: "content" },
+      { resolveLocale: () => "de" },
+    );
+
+    expect(outline).toEqual(["content.0 p: Einleitung"]);
+  });
+});
+
+describe("update with rich text as find shows it", () => {
+  it("keeps rich text sent back as an unchanged outline", async () => {
+    const page = await payload.create({ collection: "pages", data: { title: "Safety" } });
+    const id = await createPost(page.id);
+    const before = await readPost(id, true);
+    const { content } = await find({ collection: "posts", id });
+
+    const result = await tool("update", { collection: "posts", id, data: { content } });
+
+    expect(result).toEqual({ id, status: "draft" });
+    expect(await readPost(id, true)).toBe(before);
+  });
+
+  it("refuses an edited outline, pointing to the node paths instead", async () => {
+    const page = await payload.create({ collection: "pages", data: { title: "Safety" } });
+    const id = await createPost(page.id);
+    const before = await readPost(id, true);
+
+    const result = await tool("update", {
+      collection: "posts",
+      id,
+      data: { content: ["content.0 p: Changed", "content.1 block alert [1 link]: See safety"] },
+    });
+
+    expect(result).toEqual({ error: expect.stringMatching(/outline.*content\.<index>/) });
+    expect(await readPost(id, true)).toBe(before);
+  });
+});
+
+describe("updateRichText", () => {
+  it("links text to a document and answers with the link's path", async () => {
+    const page = await payload.create({ collection: "pages", data: { title: "Safety" } });
+    const intro = await payload.create({ collection: "pages", data: { title: "Intro" } });
+    const id = await createPost(page.id);
+
+    const result = await call({
+      collection: "posts",
+      id,
+      path: "content",
+      operation: "link",
+      text: "Intro",
+      value: { relationTo: "pages", value: intro.id },
+    });
+
+    expect(result).toEqual({ linked: "content.0.children.0" });
+    expect(await find({ collection: "posts", id, path: "content.0.children.0.fields" })).toEqual({
+      linkType: "internal",
+      newTab: false,
+      doc: { relationTo: "pages", value: intro.id },
+    });
+  });
+
+  it("refuses to link to a document that doesn't exist", async () => {
+    const page = await payload.create({ collection: "pages", data: { title: "Safety" } });
+    const id = await createPost(page.id);
+
+    const result = await call({
+      collection: "posts",
+      id,
+      path: "content",
+      operation: "link",
+      text: "Intro",
+      value: { relationTo: "pages", value: 999999 },
+    });
+
+    expect(result).toEqual({ error: expect.stringContaining("doesn't exist") });
   });
 
   it("retargets a link inside a block as a draft, leaving the live version and other locales alone", async () => {
@@ -295,16 +422,17 @@ describe("updateRichText", () => {
     expect(JSON.stringify(footer.content)).toContain('"text":"New"');
   });
 
-  it("reads and writes the locale the resolveLocale hook picks", async () => {
+  it("writes the locale the resolveLocale hook picks", async () => {
     const page = await payload.create({ collection: "pages", data: { title: "Safety" } });
     const id = await createPost(page.id);
 
-    const outline = await call(
-      { collection: "posts", id, path: "content", operation: "read" },
+    await call(
+      { collection: "posts", id, path: "content.0", operation: "delete" },
       { resolveLocale: () => "de" },
     );
 
-    expect(outline).toEqual(["content.0 p: Einleitung"]);
+    expect(await readPost(id, true, "de")).not.toContain("Einleitung");
+    expect(await readPost(id, true, "en")).toContain("Intro");
   });
 
   it("starts a locale's empty rich text instead of editing another locale's text through fallback", async () => {
@@ -315,10 +443,7 @@ describe("updateRichText", () => {
     });
     const id = post.id;
 
-    expect(
-      await call({ collection: "posts", id, path: "content", operation: "read", locale: "de" }),
-    ).toEqual([]);
-    await call({
+    const result = await call({
       collection: "posts",
       id,
       path: "content.0",
@@ -327,6 +452,7 @@ describe("updateRichText", () => {
       locale: "de",
     });
 
+    expect(result).toMatchObject({ count: 1 });
     expect(await readPost(id, true, "de")).toContain("Deutsch");
     expect(await readPost(id, true, "de")).not.toContain("English");
     expect(await readPost(id, true, "en")).toContain("English");
@@ -334,22 +460,69 @@ describe("updateRichText", () => {
 
   it("refuses the ids checkId rejects, before looking them up", async () => {
     const result = await call(
-      { collection: "posts", id: "post_123", path: "content", operation: "read" },
+      { collection: "posts", id: "post_123", path: "content.0", operation: "delete" },
       {
-        checkId: (_collection, id) =>
-          String(id).includes("_") ? "Use the numeric id." : undefined,
+        checkId: (_req, { id }) => (String(id).includes("_") ? "Use the numeric id." : undefined),
       },
     );
 
     expect(result).toEqual({ error: "Use the numeric id." });
   });
 
-  it("reports a path mistake with its code and what the path could have said", async () => {
+  it("reports a path mistake with what the path could have said", async () => {
     const page = await payload.create({ collection: "pages", data: { title: "Safety" } });
     const id = await createPost(page.id);
 
-    const result = await call({ collection: "posts", id, path: "content.5", operation: "read" });
+    const result = await call({ collection: "posts", id, path: "content.5", operation: "delete" });
 
-    expect(result).toEqual({ error: expect.stringMatching(/2 nodes \(0–1\).*PATH_NOT_FOUND/) });
+    expect(result).toEqual({ error: 'No "5" at content: it has 2 nodes (0–1).' });
+  });
+
+  it("refuses changing a kept block into one the field doesn't allow", async () => {
+    const page = await payload.create({ collection: "pages", data: { title: "Safety" } });
+    const id = await createPost(page.id);
+    const before = await readPost(id, true);
+
+    const byValue = await call({
+      collection: "posts",
+      id,
+      path: "content.1.fields.blockType",
+      operation: "set",
+      value: "hero",
+    });
+    const byNode = await call({
+      collection: "posts",
+      id,
+      path: "content.1",
+      operation: "set",
+      value: {
+        type: "block",
+        fields: { id: "6ad6120ac7d850432e0bcd00", blockType: "carousel" },
+      },
+    });
+
+    expect(byValue).toEqual({ error: expect.stringMatching(/"hero".*alert/) });
+    expect(byNode).toEqual({ error: expect.stringContaining('"carousel"') });
+    expect(await readPost(id, true)).toBe(before);
+  });
+
+  it("starts rich text nobody has written yet inside an array row", async () => {
+    const guide = await payload.create({
+      collection: "guides",
+      data: { sections: [{ heading: "Packing" }] } as never,
+    });
+
+    const result = await call({
+      collection: "guides",
+      id: guide.id,
+      path: "sections.0.body.0",
+      operation: "insert",
+      value: { type: "p", text: "Bring cash." },
+    });
+
+    expect(result).toMatchObject({ inserted: "sections.0.body.0 p: Bring cash.", count: 1 });
+    const saved = await payload.findByID({ collection: "guides", id: guide.id, depth: 0 });
+    expect(JSON.stringify(saved.sections)).toContain("Bring cash.");
+    expect(saved.sections?.[0]?.heading).toBe("Packing");
   });
 });

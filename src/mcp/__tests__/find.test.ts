@@ -105,10 +105,22 @@ describe("find", () => {
     });
   });
 
+  it("names the collections there are when the slug is wrong", async () => {
+    const result = await find({ collection: "post" });
+
+    expect(result).toEqual({ error: 'No collection "post". Collections: posts.' });
+  });
+
+  it("names the globals there are when the global is wrong", async () => {
+    const result = await find({ collection: "globals/header" });
+
+    expect(result).toEqual({ error: 'No global "header". Globals: globals/footer.' });
+  });
+
   it("refuses an id the app's checkId rejects, before looking it up", async () => {
     const result = await find(
       { collection: "posts", id: "gamma" },
-      { checkId: (_, id) => (typeof id === "string" ? "Pass the numeric id." : undefined) },
+      { checkId: (_, { id }) => (typeof id === "string" ? "Pass the numeric id." : undefined) },
     );
 
     expect(result).toEqual({ error: "Pass the numeric id." });

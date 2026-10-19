@@ -153,7 +153,7 @@ function viewNode(node: LexicalNode, path: string): LexicalNode {
         viewNode(child, joinPath(children, i)),
       );
     } else if (key === "fields") {
-      view.fields = viewFields(value, joinPath(path, "fields"));
+      view.fields = outlineRichText(value, joinPath(path, "fields"));
     } else {
       view[key] = value;
     }
@@ -161,12 +161,13 @@ function viewNode(node: LexicalNode, path: string): LexicalNode {
   return view as LexicalNode;
 }
 
-function viewFields(value: unknown, path: string): unknown {
+/** A value with every rich text inside it as an outline, everything else as is. */
+export function outlineRichText(value: unknown, path: string): unknown {
   if (isRichText(value)) return outline(value.root.children, path);
-  if (Array.isArray(value)) return value.map((item, i) => viewFields(item, joinPath(path, i)));
+  if (Array.isArray(value)) return value.map((item, i) => outlineRichText(item, joinPath(path, i)));
   if (isRecord(value)) {
     return Object.fromEntries(
-      Object.entries(value).map(([k, v]) => [k, viewFields(v, joinPath(path, k))]),
+      Object.entries(value).map(([k, v]) => [k, outlineRichText(v, joinPath(path, k))]),
     );
   }
   return value;
@@ -277,7 +278,7 @@ export function restoreOutlines(value: unknown, stored: unknown, path: string): 
   }
   if (Array.isArray(value)) {
     return value.map((item, i) =>
-      restoreOutlines(item, Array.isArray(stored) ? stored[i] : undefined, `${path}.${i}`),
+      restoreOutlines(item, Array.isArray(stored) ? stored[i] : undefined, joinPath(path, i)),
     );
   }
   if (isRecord(value)) {
@@ -285,7 +286,7 @@ export function restoreOutlines(value: unknown, stored: unknown, path: string): 
     return Object.fromEntries(
       Object.entries(value).map(([k, v]) => [
         k,
-        restoreOutlines(v, storedRecord[k], `${path}.${k}`),
+        restoreOutlines(v, storedRecord[k], joinPath(path, k)),
       ]),
     );
   }

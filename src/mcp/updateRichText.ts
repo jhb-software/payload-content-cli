@@ -1,10 +1,10 @@
 import type { PayloadRequest, SelectType } from "payload";
 import { z } from "zod/v3";
-import { editAtPath, LexicalError, readAtPath } from "../lexical/index.js";
+import { editAtPath, LexicalError, linkRichText } from "../lexical/index.js";
 import { getBlockSchema, getEntitySchema, type FieldSchema } from "../plugin/index.js";
-import { pickLocale, type McpContentToolsOptions } from "./options.js";
+import { pickLocale, toObject, type McpContentToolsOptions } from "./options.js";
 import { errorResult, jsonResult, type McpTool } from "./result.js";
-import { entityConfig, errorMessage, hasDrafts, parseTarget, type Target } from "./target.js";
+import { errorMessage, hasDrafts, openTarget, type Target } from "./target.js";
 
 const parameters = {
   collection: z
@@ -14,19 +14,20 @@ const parameters = {
   path: z
     .string()
     .describe(
-      'Dot path from a rich-text field, as read shows it: "content" (the field), "content.3" (a node), "content.3.children.1.fields.doc" (a link target), "content.4.fields.body.0" (a node of rich text inside a block), "sections.0.body.2" (a node in an array row).',
+      'Dot path as find\'s outlines show it: "content.3" (a node), "content.3.children.1.fields.doc" (a link target), "content.4.fields.body.0" (a node of rich text inside a block), "sections.0.body.2" (a node in an array row). For link, the rich text to search, e.g. "content".',
     ),
   operation: z
-    .enum(["read", "set", "insert", "delete"])
+    .enum(["set", "insert", "delete", "link"])
     .describe(
-      "read: a field outlines one line per node, a node shows its JSON. set: replace the value at path. insert: add a node before the index path ends in (index = node count appends). delete: remove the node at path.",
+      "set: replace the value at path. insert: add a node before the index path ends in (index = node count appends). delete: remove the node at path. link: wrap the first unlinked match of text at or below path in an internal link to value.",
     ),
   value: z
     .unknown()
     .optional()
     .describe(
-      'For set and insert. A node as read, or shorthand: {"type":"p","text":"…"}, {"type":"h2","text":"…"}, {"type":"ul","items":["…"]}, {"type":"block","fields":{"blockType":"…"}}, {"type":"upload","value":"<id>","relationTo":"media"} (relationTo defaults to media). For a value inside a node, the new value.',
+      'For set and insert: a node as find shows it, or shorthand: {"type":"p","text":"…"}, {"type":"h2","text":"…"}, {"type":"ul","items":["…"]}, {"type":"block","fields":{"blockType":"…"}}, {"type":"upload","value":"<id>","relationTo":"media"} (relationTo defaults to media). For a value inside a node, the new value. For link: {"relationTo":"pages","value":"<id>"}, optionally "newTab":true.',
     ),
+  text: z.string().optional().describe("For link: the text to wrap, as it appears."),
   locale: z
     .string()
     .optional()
@@ -49,9 +50,69 @@ const EMPTY_ROOT = {
   root: { type: "root", direction: null, format: "", indent: 0, version: 1, children: [] },
 };
 
-function isRichTextField(config: { flattenedFields?: unknown }, name: string): boolean {
-  const fields = config.flattenedFields as { name?: string; type?: string }[] | undefined;
-  return fields?.some((field) => field.name === name && field.type === "richText") ?? false;
+/** Where a path enters a block node's fields inside rich text: `….<index>.fields`. */
+async function blockFieldsAt(
+  node: unknown,
+  req: PayloadRequest,
+): Promise<FieldSchema[] | undefined> {
+  if (!isBlockNode(node)) return undefined;
+  const schema = await getBlockSchema({
+    req,
+    slugs: [String(node.fields.blockType)],
+    blocks: "inline",
+  }).catch(() => undefined);
+  return schema?.[0]?.fields;
+}
+
+/**
+ * Start the rich text a path leads into when nobody has written it yet (in
+ * this locale): Payload stores it as null, and the path can't continue through
+ * null. Follows the path along the schema — through groups, array and blocks
+ * rows, and the fields of blocks inside rich text — so rich text at any depth
+ * can be started.
+ */
+async function startEmptyRichText(
+  doc: Record<string, unknown>,
+  segments: string[],
+  fields: FieldSchema[],
+  req: PayloadRequest,
+): Promise<void> {
+  let value: unknown = doc;
+  let schema: FieldSchema[] | undefined = fields;
+  for (let i = 0; i < segments.length && schema; i++) {
+    if (!isRecord(value)) return;
+    const field: FieldSchema | undefined = schema.find((f) => f.name === segments[i]);
+    if (!field) return;
+    if (field.type === "richText") {
+      if (value[field.name] == null) {
+        value[field.name] = structuredClone(EMPTY_ROOT);
+        return;
+      }
+      // Follow the node JSON to the next block's fields, then carry on by its schema.
+      value = (value[field.name] as { root?: { children?: unknown } }).root?.children;
+      schema = undefined;
+      for (i++; i < segments.length && value !== undefined; i++) {
+        if (segments[i] === "fields" && isBlockNode(value)) {
+          schema = await blockFieldsAt(value, req);
+          value = value.fields;
+          break;
+        }
+        value = (value as Record<string, unknown> | undefined)?.[segments[i]];
+      }
+      continue;
+    }
+    value = value[field.name];
+    if (field.type === "array" || field.type === "blocks") {
+      const row = Array.isArray(value) ? value[Number(segments[++i])] : undefined;
+      value = row;
+      schema =
+        field.type === "array"
+          ? field.fields
+          : field.blocks?.find((block) => isRecord(row) && block.slug === row.blockType)?.fields;
+    } else {
+      schema = field.fields;
+    }
+  }
 }
 
 function toTime(value: unknown): number | undefined {
@@ -87,13 +148,20 @@ function isBlockNode(value: unknown): value is { type: string; fields: Record<st
   );
 }
 
-/** The ids of every block in a value, nested rich text included. */
-function blockIdsIn(value: unknown, found = new Set<string>()): Set<string> {
+/** A block as it was: its id and its type, since an edit can keep one and change the other. */
+function blockKey(node: { type: string; fields: Record<string, unknown> }): string | undefined {
+  const { id, blockType } = node.fields;
+  return typeof id === "string" ? `${node.type}:${id}:${String(blockType)}` : undefined;
+}
+
+/** Every block in a value, nested rich text included. */
+function blockKeysIn(value: unknown, found = new Set<string>()): Set<string> {
   if (Array.isArray(value)) {
-    for (const item of value) blockIdsIn(item, found);
+    for (const item of value) blockKeysIn(item, found);
   } else if (isRecord(value)) {
-    if (isBlockNode(value) && typeof value.fields.id === "string") found.add(value.fields.id);
-    for (const item of Object.values(value)) blockIdsIn(item, found);
+    const key = isBlockNode(value) ? blockKey(value) : undefined;
+    if (key) found.add(key);
+    for (const item of Object.values(value)) blockKeysIn(item, found);
   }
   return found;
 }
@@ -139,7 +207,8 @@ async function findDisallowedBlock(
           kind === "block"
             ? features?.blockNodes.block?.slugs
             : features?.inlineNodes?.inlineBlock?.slugs;
-        const isNew = !(typeof node.fields.id === "string" && existing.has(node.fields.id));
+        const key = blockKey(node);
+        const isNew = !(key && existing.has(key));
         const schema = await fieldsOfBlock(slug);
         if (isNew && features && !allowed?.includes(slug)) {
           return `${kind === "block" ? "Block" : "Inline block"} "${slug}" isn't allowed in ${path}. Allowed: ${allowed?.join(", ") || "none"}.`;
@@ -198,8 +267,8 @@ async function findAddedProblem(
   fieldName: string,
   req: PayloadRequest,
 ): Promise<string | undefined> {
-  const existing = blockIdsIn(before);
-  if ([...blockIdsIn(after)].some((id) => !existing.has(id))) {
+  const existing = blockKeysIn(before);
+  if ([...blockKeysIn(after)].some((key) => !existing.has(key))) {
     const { fields } = await getEntitySchema({
       req,
       type: target.kind,
@@ -234,22 +303,18 @@ async function findAddedProblem(
 }
 
 /**
- * The `updateRichText` MCP tool: read and edit rich text in place, addressed by
- * one dot path, without rewriting the document. Register it with
- * `@payloadcms/plugin-mcp`'s `mcp.tools`.
+ * The `updateRichText` MCP tool: edit rich text in place, addressed by one dot
+ * path from `find`'s outlines, without rewriting the document.
  *
- * Reads are compact — a field outlines one line per node, a node shows its JSON
- * without Lexical's defaults — so an agent reads only what it is about to
- * change. Writes go to the draft unless `draft: false`, which publishes and is
- * refused when it would discard newer draft changes. Block slugs and link
- * targets the edit adds are checked first, since draft writes skip Payload's
- * validation.
+ * Writes go to the draft unless `draft: false`, which publishes and is refused
+ * when it would discard newer draft changes. Block slugs and link targets the
+ * edit adds are checked first, since draft writes skip Payload's validation.
  */
 export function updateRichTextTool(options: McpContentToolsOptions = {}): McpTool {
   return {
     name: "updateRichText",
     description:
-      'Read or edit rich text in place, by path, without rewriting the document. Start with read on the field (path "content") for one outline line per node, read a node ("content.3") to see its JSON, then set, insert or delete at a path from the read. Insert and delete shift the indexes after them. Edits the draft unless draft:false.',
+      "Edit rich text in place, by path, without rewriting the document: set, insert or delete a node at a path from find's outline, or link text to a document. Insert and delete shift the indexes after them. Edits the draft unless draft:false.",
     annotations: {
       title: "Edit rich text",
       readOnlyHint: false,
@@ -261,18 +326,12 @@ export function updateRichTextTool(options: McpContentToolsOptions = {}): McpToo
       let draft = true;
       try {
         const parsed = argsSchema.parse(args);
-        const { collection, id, path, operation, value, overwriteDraft } = parsed;
+        const { collection, id, path, operation, overwriteDraft } = parsed;
         draft = parsed.draft ?? true;
 
-        const target = parseTarget(collection);
-        const config = entityConfig(req, target);
-        if (!config) return errorResult(`No ${target.kind} "${target.slug}".`);
+        const { target, config } = await openTarget(req, options, collection, id);
         if (target.kind === "collection" && id === undefined) {
           return errorResult("id is required for a collection.");
-        }
-        if (id !== undefined && options.checkId) {
-          const refusal = options.checkId(collection, id);
-          if (refusal) return errorResult(refusal);
         }
 
         // Read and write the same locale: a node read through a fallback and
@@ -281,8 +340,9 @@ export function updateRichTextTool(options: McpContentToolsOptions = {}): McpToo
         if (locale === "all")
           return errorResult('Pick one locale; "all" can\'t be edited by path.');
 
-        const field = path.split(".")[0];
-        const guardDraft = !draft && operation !== "read" && hasDrafts(config);
+        const segments = path.split(".");
+        const field = segments[0];
+        const guardDraft = !draft && hasDrafts(config);
         const select: SelectType = guardDraft
           ? { [field]: true, updatedAt: true }
           : { [field]: true };
@@ -307,13 +367,38 @@ export function updateRichTextTool(options: McpContentToolsOptions = {}): McpToo
               });
         if (!found) return errorResult(`No ${target.slug} document with id "${id}".`);
         const stored = (found as Record<string, unknown>)[field];
-        // Rich text nobody has written yet (in this locale) is null; start it empty.
-        const doc = {
-          [field]: stored == null && isRichTextField(config, field) ? EMPTY_ROOT : stored,
-        };
+        const doc: Record<string, unknown> = { [field]: structuredClone(stored) };
+        const { fields } = await getEntitySchema({
+          req,
+          type: target.kind,
+          slug: target.slug,
+          blocks: "inline",
+        });
+        await startEmptyRichText(doc, segments, fields, req);
 
-        if (operation === "read") return jsonResult(readAtPath(doc, path));
-        const { result, doc: changed } = editAtPath(doc, path, operation, value);
+        let result: Record<string, unknown>;
+        let changed: Record<string, unknown>;
+        if (operation === "link") {
+          if (!parsed.text) return errorResult("link needs text: the words to wrap.");
+          const linkTarget = toObject(parsed.value as never, "value");
+          const relationTo = linkTarget?.relationTo;
+          const value = linkTarget?.value;
+          if (
+            typeof relationTo !== "string" ||
+            (typeof value !== "string" && typeof value !== "number")
+          ) {
+            return errorResult('link needs value: {"relationTo":"<collection>","value":"<id>"}.');
+          }
+          const linked = linkRichText(doc, path, parsed.text, {
+            relationTo,
+            value,
+            ...(linkTarget?.newTab === true ? { newTab: true } : {}),
+          });
+          result = { linked: linked.path };
+          changed = linked.doc;
+        } else {
+          ({ result, doc: changed } = editAtPath(doc, path, operation, parsed.value));
+        }
 
         // A publishing write starts from the published version, so it would
         // revert any newer draft. A draft version newer than it is exactly that.
@@ -358,7 +443,7 @@ export function updateRichTextTool(options: McpContentToolsOptions = {}): McpToo
             !draft && err.code === "PATH_NOT_FOUND"
               ? " This read the published version; if the content exists only in the draft, omit draft:false."
               : "";
-          return errorResult(`${err.message} (${err.code})${hint}`);
+          return errorResult(`${err.message}${hint}`);
         }
         return errorResult(errorMessage(err));
       }

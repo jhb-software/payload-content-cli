@@ -2,8 +2,12 @@ import { LexicalError } from "./errors.js";
 import type { LexicalNode } from "./types.js";
 import { assertValidTree } from "./validate.js";
 import {
+  blockIds,
+  freshenBlockIds,
+  hydrateFields,
   hydrateNode,
   isRichText,
+  looksLikeNode,
   outlineLine,
   restoreOutlines,
   toNode,
@@ -89,8 +93,8 @@ function resolve(doc: unknown, segments: string[], operation: PathOperation): Ta
       value = value.root.children;
       inNodeList = true;
     } else if (Array.isArray(value)) {
-      // A node's `children` is a node list too.
-      inNodeList = richText !== undefined && segments[i - 1] === "children";
+      // A node's `children` is a node list too; a block's own field named `children` is not.
+      inNodeList = target.key === "children" && looksLikeNode(target.parent);
     }
 
     if (Array.isArray(value)) {
@@ -200,7 +204,15 @@ export function editAtPath<T extends object>(
     }
     const parent = target.parent as Record<string | number, unknown>;
     const restored = restoreOutlines(parseIfObject(value, target.value), target.value, path);
-    parent[target.key!] = target.inNodeList ? toNode(restored) : restored;
+    if (target.inNodeList) {
+      const node = toNode(restored);
+      const replaced = blockIds(target.value);
+      const taken = new Set([...blockIds(copy)].filter((id) => !replaced.has(id)));
+      freshenBlockIds(node, taken);
+      parent[target.key!] = node;
+    } else {
+      parent[target.key!] = hydrateFields(restored);
+    }
     assertValidTree(target.richText!.root.children);
     return { result: viewValue(parent[target.key!]), doc: copy };
   }
@@ -209,7 +221,8 @@ export function editAtPath<T extends object>(
   const index = target.key as number;
 
   if (operation === "insert") {
-    const node = hydrateNode(toNode(value));
+    const node = hydrateNode(toNode(restoreOutlines(parseIfObject(value, {}), undefined, path)));
+    freshenBlockIds(node, blockIds(copy));
     nodes.splice(index, 0, node);
     assertValidTree(target.richText!.root.children);
     const note =

@@ -306,6 +306,85 @@ describe("inserting and deleting by path", () => {
     ]);
   });
 
+  it("refuses a copied block whose nested rich text is still an outline", () => {
+    const read = editAtPath(alertDoc(), "content.1", "read").result;
+    expect(() => editAtPath(alertDoc(), "content.2", "insert", read)).toThrow(
+      /content\.2\.fields\.richText.*"root"/,
+    );
+  });
+
+  it("refuses an outline set where the stored node has no rich text to restore", () => {
+    const read = editAtPath(alertDoc(), "content.1", "read").result;
+    expect(codeOf(() => editAtPath(alertDoc(), "content.0", "set", read))).toBe("INVALID_NODE");
+  });
+
+  it("copies a block given its nested rich text as nodes, under a fresh id", () => {
+    const read = editAtPath(alertDoc(), "content.1", "read").result as {
+      fields: Record<string, unknown>;
+    };
+    read.fields.richText = { root: { children: [{ type: "p", text: "Copied" }] } };
+    const { doc } = editAtPath(alertDoc(), "content.2", "insert", read);
+
+    expect(editAtPath(doc!, "content", "read").result).toEqual([
+      "0 p: Intro",
+      "1 block alert [1 link]: See safety",
+      "2 block alert: Copied",
+    ]);
+    const copy = editAtPath(doc!, "content.2.fields", "read").result as { id: string };
+    expect(copy.id).not.toBe("alert-1");
+    expect(editAtPath(doc!, "content.2.fields.richText.0", "read").result).toEqual({
+      type: "paragraph",
+      version: 1,
+      children: [{ type: "text", version: 1, text: "Copied" }],
+    });
+  });
+
+  it("gives a block set over another node a fresh id when its id is taken", () => {
+    const read = editAtPath(alertDoc(), "content.1", "read").result as {
+      fields: Record<string, unknown>;
+    };
+    read.fields.richText = { root: { children: [{ type: "p", text: "Copied" }] } };
+    const { doc } = editAtPath(alertDoc(), "content.0", "set", read);
+    const ids = [0, 1].map(
+      (i) => (editAtPath(doc!, `content.${i}.fields`, "read").result as { id: string }).id,
+    );
+    expect(ids[1]).toBe("alert-1");
+    expect(ids[0]).not.toBe("alert-1");
+  });
+
+  it("keeps a block's id when it is set back in place", () => {
+    const read = editAtPath(alertDoc(), "content.1", "read").result;
+    const { doc } = editAtPath(alertDoc(), "content.1", "set", read);
+    expect((editAtPath(doc!, "content.1.fields", "read").result as { id: string }).id).toBe(
+      "alert-1",
+    );
+  });
+
+  it("starts a block's empty nested rich text from nodes given as shorthand", () => {
+    const doc = alertDoc();
+    (doc.content.root.children[1] as ReturnType<typeof block>).fields.richText = null;
+    const { doc: changed } = editAtPath(doc, "content.1.fields.richText", "set", {
+      root: { children: [{ type: "h2", text: "Started" }] },
+    });
+    expect(editAtPath(changed!, "content.1.fields.richText", "read").result).toEqual([
+      "0 h2: Started",
+    ]);
+    expect(editAtPath(changed!, "content.1.fields.richText.0.children.0", "read").result).toEqual({
+      type: "text",
+      version: 1,
+      text: "Started",
+    });
+  });
+
+  it("treats a block's own array field named children as data, not nodes", () => {
+    const doc = {
+      content: richText(block({ id: "b-1", blockType: "tabs", children: [{ label: "A" }] })),
+    };
+    expect(codeOf(() => editAtPath(doc, "content.0.fields.children.0", "insert", {}))).toBe(
+      "UNSUPPORTED_AT_PATH",
+    );
+  });
+
   it("only inserts into a list of nodes", () => {
     expect(
       codeOf(() =>

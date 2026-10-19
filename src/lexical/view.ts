@@ -159,7 +159,7 @@ function viewFields(value: unknown): unknown {
 }
 
 /** Lexical nodes are the objects with a string `type` and a `version`. */
-function looksLikeNode(value: unknown): value is LexicalNode {
+export function looksLikeNode(value: unknown): value is LexicalNode {
   return isRecord(value) && typeof value.type === "string" && value.version !== undefined;
 }
 
@@ -204,15 +204,30 @@ export function hydrateNode(input: LexicalNode): LexicalNode {
   return node as LexicalNode;
 }
 
-function hydrateFields(value: unknown): unknown {
+const ROOT_DEFAULTS = { type: "root", direction: "ltr", format: "", indent: 0, version: 1 };
+
+/** Rich text inside fields may be given as `{root: {children}}`, its nodes as read or as shorthand. */
+export function hydrateFields(value: unknown): unknown {
   if (isRichText(value)) {
-    return { ...value, root: { ...value.root, children: value.root.children.map(hydrateNode) } };
+    return {
+      ...value,
+      root: { ...ROOT_DEFAULTS, ...value.root, children: value.root.children.map(toNode) },
+    };
   }
   if (Array.isArray(value)) return value.map(hydrateFields);
   if (isRecord(value)) {
     return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, hydrateFields(v)]));
   }
   return value;
+}
+
+/** An outline as a read shows it: lines `0 …`, `1 …`, in order. */
+function isOutline(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.every((line, i) => typeof line === "string" && line.startsWith(`${i} `))
+  );
 }
 
 function sameOutline(value: unknown[], richText: RichTextValue): boolean {
@@ -234,6 +249,12 @@ export function restoreOutlines(value: unknown, stored: unknown, path: string): 
       `${path} is rich text shown as an outline, which can't be edited as text. Pass it back unchanged and edit its nodes at ${path}.<index>.`,
     );
   }
+  if (isOutline(value)) {
+    throw new LexicalError(
+      "INVALID_NODE",
+      `${path} is rich text shown as an outline, and there is no stored rich text here to restore it from. Pass it as {"root":{"children":[…]}} with nodes as read or shorthand.`,
+    );
+  }
   if (Array.isArray(value)) {
     return value.map((item, i) =>
       restoreOutlines(item, Array.isArray(stored) ? stored[i] : undefined, `${path}.${i}`),
@@ -249,6 +270,42 @@ export function restoreOutlines(value: unknown, stored: unknown, path: string): 
     );
   }
   return value;
+}
+
+// ── Block ids ───────────────────────────────────────────────────────
+
+function isBlockNode(value: unknown): value is LexicalNode & { fields: Record<string, unknown> } {
+  return (
+    looksLikeNode(value) &&
+    (value.type === "block" || value.type === "inlineBlock") &&
+    isRecord(value.fields)
+  );
+}
+
+function eachBlock(value: unknown, visit: (fields: Record<string, unknown>) => void): void {
+  if (Array.isArray(value)) {
+    for (const item of value) eachBlock(item, visit);
+  } else if (isRecord(value)) {
+    if (isBlockNode(value)) visit(value.fields);
+    for (const item of Object.values(value)) eachBlock(item, visit);
+  }
+}
+
+/** The ids of every block anywhere in a value, nested rich text included. */
+export function blockIds(value: unknown): Set<string> {
+  const ids = new Set<string>();
+  eachBlock(value, (fields) => {
+    if (typeof fields.id === "string") ids.add(fields.id);
+  });
+  return ids;
+}
+
+/** Give blocks whose id is already taken a new one, so a copied block doesn't share its source's id. */
+export function freshenBlockIds(value: unknown, taken: Set<string>): void {
+  eachBlock(value, (fields) => {
+    if (typeof fields.id === "string" && taken.has(fields.id)) fields.id = newId();
+    if (typeof fields.id === "string") taken.add(fields.id);
+  });
 }
 
 // ── Shorthand ───────────────────────────────────────────────────────

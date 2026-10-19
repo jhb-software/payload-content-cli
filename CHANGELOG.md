@@ -2,8 +2,8 @@
 
 ## Unreleased
 
-- feat: `editAtPath(doc, path, operation, value?)` in `./lexical` reads, sets, inserts and deletes anything inside rich text by one dot path, including rich text nested in blocks. Reads are compact — fields as one-line-per-node outlines, nodes without Lexical's default properties — and writes restore what the read left out.
-- feat: new `./mcp` entry point with `updateRichTextTool()` for `@payloadcms/plugin-mcp`: path-addressed rich-text edits with drafts by default, a guard against publishing over newer drafts, checks for unknown block slugs and missing link targets, globals, and `resolveLocale`/`checkId` options.
+- feat: `editAtPath(doc, path, operation, value?)` in `./lexical` reads, sets, inserts and deletes anything inside rich text by one dot path, including rich text nested in blocks. Reads are compact — fields as one-line-per-node outlines, nodes without Lexical's default properties — and writes restore what the read left out. Copied blocks get a new id.
+- feat: new `./mcp` entry point with `updateRichTextTool()` for `@payloadcms/plugin-mcp`: path-addressed rich-text edits with drafts by default, a guard against publishing over newer drafts, checks that added blocks are allowed in their rich-text field and link targets exist, locales read without fallback (an empty locale starts empty), globals, and `resolveLocale`/`checkId` options.
 
 ## 0.5.0
 

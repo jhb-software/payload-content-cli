@@ -164,6 +164,8 @@ const { doc: changed } = editAtPath(doc, "content.1.fields.body.0.children.1.fie
 - **`set`**: replace the value. Nodes may be given as read (defaults and unchanged outlines are restored), in full, or as shorthand: `{type: "p", text}`, `{type: "h2", text}`, `{type: "ul", items}`, `{type: "hr"}`, `{type: "block", fields}`, `{type: "upload", value}`. Returns what a read now shows.
 - **`insert`** a node before the index the path ends in (the node count appends), **`delete`** the node at the path. Both return the new count and which indexes moved.
 
+An outline only stands in for the rich text it was read from. To copy a block, or put one where a different node was, give its nested rich text as `{root: {children: [...]}}`, nodes as read or as shorthand. A copied block gets a new id.
+
 The input document is never modified; a change returns a changed copy as `doc`. Path mistakes throw `LexicalError` with `PATH_NOT_FOUND` (naming the valid range or keys) or `UNSUPPORTED_AT_PATH`.
 
 ### Add the updateRichText MCP tool
@@ -176,7 +178,7 @@ import { updateRichTextTool } from "@jhb.software/payload-content-cli/mcp";
 mcpPlugin({ mcp: { tools: [updateRichTextTool()] } });
 ```
 
-It takes `collection` (or `"globals/<slug>"`), `id`, `path`, `operation`, `value`, `locale`, `draft` and `overwriteDraft`, and runs with the request's user and access control. Edits go to the draft by default. `draft: false` publishes, and is refused when it would discard newer draft changes unless `overwriteDraft: true`. Since draft writes skip Payload's validation, block slugs and link or upload targets the edit adds are checked first.
+It takes `collection` (or `"globals/<slug>"`), `id`, `path`, `operation`, `value`, `locale`, `draft` and `overwriteDraft`, and runs with the request's user and access control. Edits go to the draft by default. `draft: false` publishes, and is refused when it would discard newer draft changes unless `overwriteDraft: true`. Since draft writes skip Payload's validation, the blocks and the link or upload targets an edit adds are checked first: each block must be one its rich-text field allows. A locale is read without fallback, so a locale with no rich text yet reads as empty and can be started with `insert` at `content.0`.
 
 Two options cover what differs between apps:
 

@@ -39,7 +39,14 @@ beforeAll(async () => {
       typescript: { outputFile: "/dev/null" },
       localization: { locales: ["en", "de"], defaultLocale: "en" },
       collections: [
-        { slug: "pages", access: open, fields: [{ name: "title", type: "text" }] },
+        {
+          slug: "pages",
+          access: open,
+          fields: [
+            { name: "title", type: "text" },
+            { name: "layout", type: "blocks", blocks: [{ slug: "hero", fields: [] }] },
+          ],
+        },
         {
           slug: "posts",
           access: open,
@@ -171,6 +178,31 @@ describe("updateRichText", () => {
     expect(result).toEqual({ error: expect.stringContaining('"carousel"') });
   });
 
+  it("refuses a block that exists in the config but not in this rich-text field", async () => {
+    const page = await payload.create({ collection: "pages", data: { title: "Safety" } });
+    const id = await createPost(page.id);
+    const before = await readPost(id, true);
+
+    const topLevel = await call({
+      collection: "posts",
+      id,
+      path: "content.0",
+      operation: "insert",
+      value: { type: "block", fields: { blockType: "hero" } },
+    });
+    const nested = await call({
+      collection: "posts",
+      id,
+      path: "content.1.fields.body.0",
+      operation: "insert",
+      value: { type: "block", fields: { blockType: "alert" } },
+    });
+
+    expect(topLevel).toEqual({ error: expect.stringMatching(/"hero".*alert/) });
+    expect(nested).toEqual({ error: expect.stringContaining('"alert"') });
+    expect(await readPost(id, true)).toBe(before);
+  });
+
   it("publishes with draft:false, but not over newer draft changes unless told to", async () => {
     const page = await payload.create({ collection: "pages", data: { title: "Safety" } });
     const id = await createPost(page.id);
@@ -232,6 +264,31 @@ describe("updateRichText", () => {
     );
 
     expect(outline).toEqual(["0 p: Einleitung"]);
+  });
+
+  it("starts a locale's empty rich text instead of editing another locale's text through fallback", async () => {
+    const post = await payload.create({
+      collection: "posts",
+      data: { content: richText(buildParagraph("English")), _status: "published" } as never,
+      locale: "en",
+    });
+    const id = post.id;
+
+    expect(
+      await call({ collection: "posts", id, path: "content", operation: "read", locale: "de" }),
+    ).toEqual([]);
+    await call({
+      collection: "posts",
+      id,
+      path: "content.0",
+      operation: "insert",
+      value: { type: "p", text: "Deutsch" },
+      locale: "de",
+    });
+
+    expect(await readPost(id, true, "de")).toContain("Deutsch");
+    expect(await readPost(id, true, "de")).not.toContain("English");
+    expect(await readPost(id, true, "en")).toContain("English");
   });
 
   it("refuses the ids checkId rejects, before looking them up", async () => {

@@ -221,7 +221,7 @@ export default buildConfig({
 });
 ```
 
-It guards every collection and global by default, and is inert without localization. Writes that keep at least one row's id, localized arrays, arrays without localized fields, and the admin panel (which sends an id with every row) pass. To replace the rows on purpose, set `context: { [ALLOW_SHARED_ROW_REPLACEMENT]: true }` on the operation; the MCP `update` tool does so with `replaceRows: true`.
+It guards every collection and global by default (a bulk update by `where` checks every matching document), and is inert without localization. Writes that keep at least one row's id, localized arrays, arrays without localized fields, and the admin panel (which sends an id with every row) pass. To replace the rows on purpose, set `context: { [ALLOW_SHARED_ROW_REPLACEMENT]: true }` on the operation; the MCP `update` tool does so with `replaceRows: true`. The refusal is a `ValidationError` whose message says the same for every transport; `isSharedRowRefusal(error)` recognises it, for adding transport-specific advice.
 
 ### Enable API key auth
 

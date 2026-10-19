@@ -8,7 +8,11 @@ import type { Field, Payload } from "payload";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createMcpContentTools } from "../../mcp/index.js";
 import { boot, call, open, toolNamed } from "../../mcp/__tests__/payload.js";
-import { ALLOW_SHARED_ROW_REPLACEMENT, preserveSharedRowsPlugin } from "../index.js";
+import {
+  ALLOW_SHARED_ROW_REPLACEMENT,
+  isSharedRowRefusal,
+  preserveSharedRowsPlugin,
+} from "../index.js";
 
 const fields: Field[] = [
   {
@@ -34,7 +38,16 @@ beforeAll(async () => {
   payload = await boot("shared-rows", {
     localization: { locales: ["en", "de"], defaultLocale: "en" },
     blocks: [{ slug: "section", fields: [{ name: "title", type: "text", localized: true }] }],
-    collections: [{ slug: "hotels", access: open, fields }],
+    collections: [
+      { slug: "hotels", access: open, fields },
+      // Sorted so the bulk test controls which document comes last.
+      {
+        slug: "rooms",
+        access: open,
+        defaultSort: "rank",
+        fields: [...fields, { name: "rank", type: "number", max: 1000 }],
+      },
+    ],
     globals: [{ slug: "nav", access: open, fields }],
     plugins: [preserveSharedRowsPlugin()],
   });
@@ -93,11 +106,24 @@ describe("preserveSharedRowsPlugin refuses", () => {
       (err: Error) => err,
     );
 
-    expect(error).toBeInstanceOf(Error);
-    expect((error as Error).message).toContain("extras");
-    expect((error as Error).message).toContain(extras.join(", "));
-    expect((error as Error).message).toContain("replaceRows");
+    expect(isSharedRowRefusal(error)).toBe(true);
+    const { message } = error as Error;
+    expect(message).toContain("extras");
+    expect(message).toContain(extras.join(", "));
+    expect(message).toContain("Send each row you keep back with its id");
+    // REST and CLI callers can't act on transport-specific advice.
+    expect(message).not.toMatch(/replaceRows|MCP|context/);
     expect(await titles(id, "de")).toEqual(["Kulinarik", "Aktivitäten"]);
+  });
+
+  it("is told apart from other validation errors", async () => {
+    const room = await payload.create({ collection: "rooms", data: {} as never });
+    const error = await payload
+      .update({ collection: "rooms", id: room.id, data: { rank: 5000 } as never })
+      .catch((err: Error) => err);
+
+    expect(error).toBeInstanceOf(Error);
+    expect(isSharedRowRefusal(error)).toBe(false);
   });
 
   it("rewriting blocks given by blockReferences without row ids", async () => {
@@ -127,6 +153,30 @@ describe("preserveSharedRowsPlugin refuses", () => {
         data: { extras: [{ item: { title: "Food" } }] } as never,
       }),
     ).rejects.toThrow(/extras/);
+  });
+
+  it("a bulk update by where whose offending document comes after the first hundred", async () => {
+    for (let rank = 0; rank < 100; rank++) {
+      await payload.create({ collection: "rooms", locale: "en", data: { rank } as never });
+    }
+    const last = await payload.create({
+      collection: "rooms",
+      locale: "en",
+      data: { rank: 100, extras: [{ item: { title: "Cuisine" } }] } as never,
+    });
+
+    await expect(
+      payload.update({
+        collection: "rooms",
+        where: { rank: { exists: true } },
+        locale: "en",
+        data: { extras: [{ item: { title: "Food" } }] } as never,
+      }),
+    ).rejects.toThrow(/extras/);
+    const stored = (await payload.findByID({ collection: "rooms", id: last.id, locale: "en" })) as {
+      extras?: Row[];
+    };
+    expect(stored.extras?.map((row) => row.item?.title)).toEqual(["Cuisine"]);
   });
 
   it("a global", async () => {

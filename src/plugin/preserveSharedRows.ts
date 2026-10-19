@@ -36,21 +36,25 @@ export interface PreserveSharedRowsPluginOptions {
   collections?: string[];
   /** Globals to guard. Default: every global. */
   globals?: string[];
-  /** Default true. */
-  enabled?: boolean;
 }
 
-/** How many documents a bulk (`where`) update checks. */
-const BULK_CHECK_LIMIT = 100;
+/** Every refusal's message starts with this. */
+const REFUSAL_PREFIX = "Refused to replace shared rows.";
+
+/**
+ * Whether `error` is this plugin's refusal, so a caller can add advice for its
+ * own transport (such as how to opt out) to the message.
+ */
+export function isSharedRowRefusal(error: unknown): error is Error {
+  return error instanceof Error && error.message.startsWith(REFUSAL_PREFIX);
+}
 
 function describe(violation: SharedRowViolation): string {
   return (
     `${violation.path}: every row was sent without an id, so all ${violation.existingIds.length} ` +
     `existing row(s) would be replaced rather than edited, discarding the translations the other ` +
     `locales hold for them. Send each row you keep back with its id ` +
-    `(${violation.existingIds.join(", ")}); rows without an id are then added. ` +
-    `To replace the rows and lose those translations on purpose, set ` +
-    `${ALLOW_SHARED_ROW_REPLACEMENT} on the operation context (the MCP update tool's replaceRows: true).`
+    `(${violation.existingIds.join(", ")}); rows without an id are then added.`
   );
 }
 
@@ -75,7 +79,7 @@ function reject(
   // ValidationError's own message only names the fields, which tells a caller
   // nothing about what to do differently, and most error paths drop
   // `data.errors`. So the instructions go into the message itself.
-  error.message = violations.map(describe).join(" ");
+  error.message = [REFUSAL_PREFIX, ...violations.map(describe)].join(" ");
   throw error;
 }
 
@@ -128,7 +132,9 @@ const collectionHook: CollectionBeforeOperationHook = async ({ args, operation, 
     const existing = await req.payload.findByID({ ...read, id, disableErrors: true });
     check(collection.fields, data, existing, req, collection.slug, id);
   } else if (where !== undefined) {
-    const { docs } = await req.payload.find({ ...read, where, limit: BULK_CHECK_LIMIT });
+    // Every matching document, reading only the fields the write touches.
+    const select = Object.fromEntries(Object.keys(data).map((key) => [key, true as const]));
+    const { docs } = await req.payload.find({ ...read, where, select, pagination: false });
     for (const doc of docs) check(collection.fields, data, doc, req, collection.slug, doc.id);
   }
   return args;
@@ -163,7 +169,6 @@ const globalHook: GlobalBeforeOperationHook = async ({ args, operation, global }
  */
 export function preserveSharedRowsPlugin(options: PreserveSharedRowsPluginOptions = {}): Plugin {
   return (config: Config): Config => {
-    if (options.enabled === false) return config;
     const guards = (list: string[] | undefined, slug: string) => !list || list.includes(slug);
     return {
       ...config,

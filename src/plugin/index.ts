@@ -34,6 +34,7 @@ export type { LexicalFeatureSummary } from "./lexical.js";
 export { SCHEMA_CONTRACT_VERSION } from "../schema-contract.js";
 export {
   ALLOW_SHARED_ROW_REPLACEMENT,
+  isSharedRowRefusal,
   preserveSharedRowsPlugin,
   type PreserveSharedRowsPluginOptions,
 } from "./preserveSharedRows.js";

@@ -23,6 +23,8 @@ High-level ideas and open questions. Concrete work lives in `plans/`.
 
 ## Ideas / Open questions
 
+- Rename the package — it has grown beyond a CLI (`./lexical`, `./plugin`, `./mcp`) into a content interface for agents. A rename costs the npm name, links and installs; decide before 1.0.
+- One way to address rich text across the CLI and the MCP tools — see `plans/015-one-rich-text-addressing-scheme.md`.
 - Programmatic library entry point — expose `pull`/`push`/`status`/`diff`/`PayloadClient` via the package root for scripts and CI. The internals are already library-shaped (functions throw `CliError` instead of exiting, `push` returns a result summary), so this is mostly deciding on and committing to a public API surface.
 - Human approval before push — commit/push model, push queue, or CMS-side review?
 - Watch mode

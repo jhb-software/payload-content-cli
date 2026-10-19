@@ -4,9 +4,9 @@
 [![npm version](https://img.shields.io/npm/v/@jhb.software/payload-content-cli.svg)](https://www.npmjs.com/package/@jhb.software/payload-content-cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A CLI for managing Payload CMS content, built for AI agents.
+Helpers that let AI agents work efficiently with Payload CMS content: a CLI, a Lexical rich-text toolkit, a schema plugin, and MCP tools.
 
-> **Beta.** APIs and command surface may change before 1.0. Feedback and bug reports are very welcome.
+> **Beta.** APIs and command surface may change before 1.0. The `./mcp` tools and `editAtPath` are experimental and may change in any minor release. Feedback and bug reports are very welcome.
 
 ## Quickstart
 
@@ -68,7 +68,7 @@ Full comparison:
 | Setup              | MCP plugin to install and configure                    | Just an API key                                        |
 | Token cost         | High                                                   | Low                                                    |
 
-The CLI and MCP aren't mutually exclusive. While the MCP plugin is a great fit for simple use cases, the CLI is a better fit for more complex use cases, especially when you need to edit content.
+The CLI and MCP aren't mutually exclusive. While the MCP plugin is a great fit for simple use cases, the CLI is a better fit for more complex use cases, especially when you need to edit content. If you run the MCP plugin, this package's `./mcp` tools close most of the gaps above: a fixed tool count, compact schemas, and path-addressed rich-text edits.
 
 ## Content sync
 

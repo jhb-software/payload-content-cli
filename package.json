@@ -1,7 +1,7 @@
 {
   "name": "@jhb.software/payload-content-cli",
   "version": "0.5.0",
-  "description": "A CLI for managing Payload CMS content, built for AI agents.",
+  "description": "Helpers that let AI agents work efficiently with Payload CMS content: a CLI, a Lexical rich-text toolkit, a schema plugin, and MCP tools.",
   "type": "module",
   "exports": {
     "./lexical": {

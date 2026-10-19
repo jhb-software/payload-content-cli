@@ -146,6 +146,8 @@ Fetching and saving stay yours, and with them the decisions the CLI can't make f
 
 #### Edit by path
 
+> Experimental: may change in any minor release.
+
 `editAtPath(doc, path, operation, value?)` addresses anything inside a richtext field with one dot path — including rich text nested in blocks — and shows it compactly, for agents. The path starts at a richtext field; a number after a richtext value indexes its top-level nodes; from there it follows the node's JSON.
 
 ```ts
@@ -169,6 +171,8 @@ An outline only stands in for the rich text it was read from. To copy a block, o
 The input document is never modified; a change returns a changed copy as `doc`. Path mistakes throw `LexicalError` with `PATH_NOT_FOUND` (naming the valid range or keys) or `UNSUPPORTED_AT_PATH`.
 
 ### Add the updateRichText MCP tool
+
+> Experimental: may change in any minor release.
 
 For a Payload app running [`@payloadcms/plugin-mcp`](https://payloadcms.com/docs/plugins/mcp), `/mcp` packages `editAtPath` as a ready tool:
 

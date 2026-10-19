@@ -32,6 +32,11 @@ export type { FieldSchema, ProjectionOptions } from "./fields.js";
 export type { JsonSchema } from "./jsonSchema.js";
 export type { LexicalFeatureSummary } from "./lexical.js";
 export { SCHEMA_CONTRACT_VERSION } from "../schema-contract.js";
+export {
+  ALLOW_SHARED_ROW_REPLACEMENT,
+  preserveSharedRowsPlugin,
+  type PreserveSharedRowsPluginOptions,
+} from "./preserveSharedRows.js";
 export type {
   EndpointSchema,
   EntitySchema,

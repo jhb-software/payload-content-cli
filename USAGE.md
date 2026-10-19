@@ -209,9 +209,23 @@ pages (collection)
 
 `find` reads the latest draft unless `draft: false`, so an agent sees its own unpublished edits. It returns what a locale stores, without fallback, so an untranslated field reads as empty rather than as another language. `where` and `select` may be objects or JSON strings (some MCP clients send nested objects as strings), `limit` is capped at 100, and `depth` defaults to 0.
 
-Writes go to the draft unless `draft: false`, which publishes (the tools set `_status` explicitly, since Payload's `draft: false` alone never publishes). Publishing one document or a global publishes its latest draft together with the changes, as the admin panel's Publish does. A bulk publish by `where` starts from the live documents instead, so it is refused when a matched document has newer draft changes, unless `overwriteDraft: true`. `data` may be an object or a JSON string; `locale: "all"` is refused for writes. Answers are lean: `{ id, status }` (`status` only on collections with drafts), `{ ids, status }` for a bulk update.
+Writes go to the draft unless `draft: false`, which publishes (the tools set `_status` explicitly, since Payload's `draft: false` alone never publishes). Publishing one document or a global publishes its latest draft together with the changes, as the admin panel's Publish does. A bulk publish by `where` starts from the live documents instead, so it is refused when a matched document has newer draft changes, unless `overwriteDraft: true`. `data` may be an object or a JSON string; `locale: "all"` is refused for writes. With [`preserveSharedRowsPlugin`](#keep-translations-of-shared-rows) installed, `replaceRows: true` lets `update` replace the rows of a shared array after a refusal. Answers are lean: `{ id, status }` (`status` only on collections with drafts), `{ ids, status }` for a bulk update.
 
 `createMcpContentTools(options)` takes the same `resolveLocale` and `checkId` options as `updateRichTextTool` (below) and hands them to every tool. To drop or replace one tool, filter the list by `name`. Tool names are stable, since `@payloadcms/plugin-mcp` keys its per-key access flags on them.
+
+### Keep translations of shared rows
+
+A non-localized array or blocks field holds one set of rows for every locale, and the localized values inside belong to each row's id. Payload treats a row sent without its id as a new row, so an API client or agent that reads a document in one locale and writes the rows back without ids replaces them, and the other locales' translations of them are gone. The edited locale looks right, so nobody notices until later. `preserveSharedRowsPlugin` from `/plugin` refuses such a write and names the ids to send back:
+
+```ts
+import { preserveSharedRowsPlugin } from "@jhb.software/payload-content-cli/plugin";
+
+export default buildConfig({
+  plugins: [preserveSharedRowsPlugin()], // or ({ collections: ["pages"], globals: ["nav"] })
+});
+```
+
+It guards every collection and global by default, and is inert without localization. Writes that keep at least one row's id, localized arrays, arrays without localized fields, and the admin panel (which sends an id with every row) pass. To replace the rows on purpose, set `context: { [ALLOW_SHARED_ROW_REPLACEMENT]: true }` on the operation; the MCP `update` tool does so with `replaceRows: true`.
 
 ### Add the updateRichText MCP tool
 

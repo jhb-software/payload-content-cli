@@ -1,5 +1,6 @@
 import type { PayloadRequest, Where } from "payload";
 import { z } from "zod/v3";
+import { ALLOW_SHARED_ROW_REPLACEMENT } from "../plugin/preserveSharedRows.js";
 import { jsonObject, pickLocale, toObject, type McpContentToolsOptions } from "./options.js";
 import { errorResult, jsonResult, type McpTool } from "./result.js";
 import { entityConfig, errorMessage, hasDrafts, parseTarget } from "./target.js";
@@ -49,6 +50,12 @@ const updateParameters = {
     .boolean()
     .optional()
     .describe("With where and draft:false, discard newer draft changes instead of refusing."),
+  replaceRows: z
+    .boolean()
+    .optional()
+    .describe(
+      "Replace the rows of a shared array or blocks field, dropping their other-locale translations. Only after a write was refused for it.",
+    ),
 };
 
 const createSchema = z.object(createParameters);
@@ -175,6 +182,7 @@ export function updateTool(options: McpContentToolsOptions = {}): McpTool {
           depth: 0,
           select: {},
           overrideAccess: false,
+          context: parsed.replaceRows ? { [ALLOW_SHARED_ROW_REPLACEMENT]: true } : undefined,
           req,
         };
 

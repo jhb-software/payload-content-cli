@@ -172,6 +172,8 @@ The input document is never modified; a change returns a changed copy as `doc`. 
 
 ### Add the MCP content tools
 
+> Experimental: may change in any minor release.
+
 For a Payload app running [`@payloadcms/plugin-mcp`](https://payloadcms.com/docs/plugins/mcp), `/mcp` ships a small, collection-agnostic set of content tools, in place of the plugin's one-tool-per-collection-and-operation set:
 
 ```ts
@@ -193,7 +195,7 @@ Every tool runs with the request's user and Payload's access control. Collection
 | `find`            | One document by id, a page of a collection filtered by `where`, or a global.                    |
 | `create`          | A document in a collection, as a draft by default. Answers with its id.                         |
 | `update`          | Some fields of a document by id, of every document a `where` matches, or of a global.           |
-| `updateRichText`  | Read and edit rich text by path (below).                                                        |
+| `updateRichText`  | Read and edit rich text in place by path (below).                                               |
 
 The schema tools answer in a tree rather than JSON, which costs an agent about half the tokens; the legend rides in the tool description, so it is paid once per session:
 
@@ -211,7 +213,24 @@ pages (collection)
 
 Writes go to the draft unless `draft: false`, which publishes (the tools set `_status` explicitly, since Payload's `draft: false` alone never publishes). Publishing one document or a global publishes its latest draft together with the changes, as the admin panel's Publish does. A bulk publish by `where` starts from the live documents instead, so it is refused when a matched document has newer draft changes, unless `overwriteDraft: true`. `data` may be an object or a JSON string; `locale: "all"` is refused for writes. With [`preserveSharedRowsPlugin`](#keep-translations-of-shared-rows) installed, `replaceRows: true` lets `update` replace the rows of a shared array after a refusal. Answers are lean: `{ id, status }` (`status` only on collections with drafts), `{ ids, status }` for a bulk update.
 
-`createMcpContentTools(options)` takes the same `resolveLocale` and `checkId` options as `updateRichTextTool` (below) and hands them to every tool. To drop or replace one tool, filter the list by `name`. Tool names are stable, since `@payloadcms/plugin-mcp` keys its per-key access flags on them.
+#### Edit rich text by path
+
+`updateRichText` packages [`editAtPath`](#edit-by-path) as a tool. It takes `collection`, `id`, `path`, `operation` (`read`, `set`, `insert`, `delete`), `value`, `locale`, `draft` and `overwriteDraft`. Edits go to the draft by default. `draft: false` publishes, and is refused when it would discard newer draft changes unless `overwriteDraft: true`. Since draft writes skip Payload's validation, the blocks and the link or upload targets an edit adds are checked first: each block must be one its rich-text field allows. A locale is read without fallback, so a locale with no rich text yet reads as empty and can be started with `insert` at `content.0`. `updateRichTextTool(options)` is also exported on its own.
+
+#### Options
+
+Two options cover what differs between apps, and every tool that takes a locale or an id uses them:
+
+```ts
+createMcpContentTools({
+  // The locale to read and write, e.g. a tenant's primary locale when the agent passes none.
+  resolveLocale: (req, { collection, id, locale }) => locale ?? primaryLocaleOf(req),
+  // Refuse an id before it is looked up, by returning the message to show.
+  checkId: (collection, id) => (isSlug(id) ? "Pass the document id, not its slug." : undefined),
+});
+```
+
+To drop or replace one tool, filter the list by `name`. Tool names are stable, since `@payloadcms/plugin-mcp` keys its per-key access flags on them. Tools carry MCP `annotations` (read-only, title), which `@payloadcms/plugin-mcp` doesn't forward to clients yet.
 
 ### Keep translations of shared rows
 
@@ -226,31 +245,6 @@ export default buildConfig({
 ```
 
 It guards every collection and global by default, and is inert without localization. Writes that keep at least one row's id, localized arrays, arrays without localized fields, and the admin panel (which sends an id with every row) pass. To replace the rows on purpose, set `context: { [ALLOW_SHARED_ROW_REPLACEMENT]: true }` on the operation; the MCP `update` tool does so with `replaceRows: true`.
-
-### Add the updateRichText MCP tool
-
-> Experimental: may change in any minor release.
-
-For a Payload app running [`@payloadcms/plugin-mcp`](https://payloadcms.com/docs/plugins/mcp), `/mcp` packages `editAtPath` as a ready tool:
-
-```ts
-import { updateRichTextTool } from "@jhb.software/payload-content-cli/mcp";
-
-mcpPlugin({ mcp: { tools: [updateRichTextTool()] } });
-```
-
-It takes `collection` (or `"globals/<slug>"`), `id`, `path`, `operation`, `value`, `locale`, `draft` and `overwriteDraft`, and runs with the request's user and access control. Edits go to the draft by default. `draft: false` publishes, and is refused when it would discard newer draft changes unless `overwriteDraft: true`. Since draft writes skip Payload's validation, the blocks and the link or upload targets an edit adds are checked first: each block must be one its rich-text field allows. A locale is read without fallback, so a locale with no rich text yet reads as empty and can be started with `insert` at `content.0`.
-
-Two options cover what differs between apps:
-
-```ts
-updateRichTextTool({
-  // The locale to read and write, e.g. a tenant's primary locale when the agent passes none.
-  resolveLocale: (req, { collection, id, locale }) => locale ?? primaryLocaleOf(req),
-  // Refuse an id before it is looked up, by returning the message to show.
-  checkId: (collection, id) => (isSlug(id) ? "Pass the document id, not its slug." : undefined),
-});
-```
 
 ### Enable API key auth
 

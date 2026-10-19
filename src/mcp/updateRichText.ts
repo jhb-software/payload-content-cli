@@ -2,23 +2,9 @@ import type { PayloadRequest, SelectType } from "payload";
 import { z } from "zod/v3";
 import { editAtPath, LexicalError } from "../lexical/index.js";
 import { getBlockSchema, getEntitySchema, type FieldSchema } from "../plugin/index.js";
+import { pickLocale, type McpContentToolsOptions } from "./options.js";
 import { errorResult, jsonResult, type McpTool } from "./result.js";
-
-export interface UpdateRichTextOptions {
-  /**
-   * Pick the locale to read and write. Receives the `locale` the agent passed,
-   * if any. Use it when the right default isn't Payload's default locale, e.g.
-   * a multi-tenant site whose tenants each have their own primary locale.
-   */
-  resolveLocale?: (
-    req: PayloadRequest,
-    target: { collection: string; id?: string | number; locale?: string },
-  ) => string | undefined | Promise<string | undefined>;
-  /** Refuse an id before it is looked up, by returning the message to show the agent. */
-  checkId?: (collection: string, id: string | number) => string | undefined;
-}
-
-const GLOBAL_PREFIX = "globals/";
+import { entityConfig, errorMessage, hasDrafts, parseTarget, type Target } from "./target.js";
 
 const parameters = {
   collection: z
@@ -58,13 +44,6 @@ const parameters = {
 };
 
 const argsSchema = z.object(parameters);
-
-type Target = { kind: "collection" | "global"; slug: string };
-
-function hasDrafts(config: { versions?: unknown }): boolean {
-  const versions = config.versions as { drafts?: unknown } | undefined;
-  return Boolean(versions?.drafts);
-}
 
 const EMPTY_ROOT = {
   root: { type: "root", direction: null, format: "", indent: 0, version: 1, children: [] },
@@ -266,11 +245,17 @@ async function findAddedProblem(
  * targets the edit adds are checked first, since draft writes skip Payload's
  * validation.
  */
-export function updateRichTextTool(options: UpdateRichTextOptions = {}): McpTool {
+export function updateRichTextTool(options: McpContentToolsOptions = {}): McpTool {
   return {
     name: "updateRichText",
     description:
       'Read or edit rich text in place, by path, without rewriting the document. Start with read on the field (path "content") for one outline line per node, read a node ("content.3") to see its JSON, then set, insert or delete at a path from the read. Insert and delete shift the indexes after them. Edits the draft unless draft:false.',
+    annotations: {
+      title: "Edit rich text",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+    },
     parameters,
     handler: async (args, req) => {
       let draft = true;
@@ -279,13 +264,8 @@ export function updateRichTextTool(options: UpdateRichTextOptions = {}): McpTool
         const { collection, id, path, operation, value, overwriteDraft } = parsed;
         draft = parsed.draft ?? true;
 
-        const target: Target = collection.startsWith(GLOBAL_PREFIX)
-          ? { kind: "global", slug: collection.slice(GLOBAL_PREFIX.length) }
-          : { kind: "collection", slug: collection };
-        const config =
-          target.kind === "global"
-            ? req.payload.globals.config.find((global) => global.slug === target.slug)
-            : req.payload.collections[target.slug]?.config;
+        const target = parseTarget(collection);
+        const config = entityConfig(req, target);
         if (!config) return errorResult(`No ${target.kind} "${target.slug}".`);
         if (target.kind === "collection" && id === undefined) {
           return errorResult("id is required for a collection.");
@@ -297,9 +277,7 @@ export function updateRichTextTool(options: UpdateRichTextOptions = {}): McpTool
 
         // Read and write the same locale: a node read through a fallback and
         // written back would store one language's text as another's.
-        const locale = options.resolveLocale
-          ? await options.resolveLocale(req, { collection, id, locale: parsed.locale })
-          : parsed.locale;
+        const locale = await pickLocale(options, req, { collection, id, locale: parsed.locale });
         if (locale === "all")
           return errorResult('Pick one locale; "all" can\'t be edited by path.');
 
@@ -382,7 +360,7 @@ export function updateRichTextTool(options: UpdateRichTextOptions = {}): McpTool
               : "";
           return errorResult(`${err.message} (${err.code})${hint}`);
         }
-        return errorResult(err instanceof Error ? err.message : String(err));
+        return errorResult(errorMessage(err));
       }
     },
   };

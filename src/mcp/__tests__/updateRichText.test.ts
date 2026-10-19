@@ -8,7 +8,7 @@ import { BlocksFeature, lexicalEditor } from "@payloadcms/richtext-lexical";
 import { buildConfig, createLocalReq, getPayload, type Payload } from "payload";
 import { beforeAll, describe, expect, it } from "vitest";
 import { buildBlock, buildInternalLink, buildParagraph, buildText } from "../../lexical/index.js";
-import { updateRichTextTool, type UpdateRichTextOptions } from "../index.js";
+import { updateRichTextTool, type McpContentToolsOptions } from "../index.js";
 
 const open = { read: () => true, create: () => true, update: () => true };
 
@@ -52,6 +52,15 @@ beforeAll(async () => {
           access: open,
           versions: { drafts: true },
           fields: [{ name: "content", type: "richText", localized: true, editor }],
+        },
+        {
+          slug: "articles",
+          access: open,
+          versions: { drafts: true },
+          fields: [
+            { name: "title", type: "text", required: true },
+            { name: "content", type: "richText", editor },
+          ],
         },
       ],
       globals: [
@@ -98,7 +107,7 @@ async function createPost(linkTo: string | number) {
   return post.id;
 }
 
-async function call(args: Record<string, unknown>, options?: UpdateRichTextOptions) {
+async function call(args: Record<string, unknown>, options?: McpContentToolsOptions) {
   const req = await createLocalReq({}, payload);
   const response = await updateRichTextTool(options).handler(args, req);
   return JSON.parse(response.content[0].text) as unknown;
@@ -250,6 +259,25 @@ describe("updateRichText", () => {
       overwriteDraft: true,
     });
     expect(await readPost(id, false)).toContain("Over it");
+  });
+
+  it("names the failing field and why when publishing an invalid document", async () => {
+    const article = await payload.create({
+      collection: "articles",
+      data: { _status: "draft" } as never,
+      draft: true,
+    });
+
+    const result = await call({
+      collection: "articles",
+      id: article.id,
+      path: "content.0",
+      operation: "insert",
+      value: { type: "p", text: "Hello" },
+      draft: false,
+    });
+
+    expect(result).toEqual({ error: expect.stringMatching(/title.*required/is) });
   });
 
   it("edits a global", async () => {

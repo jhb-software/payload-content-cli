@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- fix: `lexical link` (and `linkRichText`, the MCP `updateRichText` `link`) keeps the bold, italic or other formatting and style of the text it links.
 - fix: after `pull --draft`, `diff` and `push` compare against the latest draft instead of the published version, so documents with an unpublished draft no longer show a false conflict, and `push --dry-run` reports the conflicts a real push would hit.
 - fix: `lexical search`/`link` (and `searchRichText`, `linkRichText`, the MCP `updateRichText` `link`) accept a path to a node inside rich text, such as `content.2`, and stay within it.
 - fix: `McpTool` annotations accept `openWorldHint`, and the content tools set it to `false`, telling clients they only touch the app's own content.

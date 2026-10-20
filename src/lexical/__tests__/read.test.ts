@@ -150,6 +150,27 @@ describe("linkRichText", () => {
     ]);
   });
 
+  it("keeps the formatting of the text it links", () => {
+    const doc = {
+      intro: richText({
+        ...buildParagraph(""),
+        children: [{ ...buildText("Read the rules now."), format: 1, style: "color: red" }],
+      }),
+    };
+
+    const linked = linkRichText(doc, "intro", "rules", { relationTo: "pages", value: "rules" });
+
+    const paragraph = linked.doc.intro.root.children[0] as { children: unknown[] };
+    const [before, link, after] = paragraph.children as {
+      format?: number;
+      children?: { text: string; format: number; style: string }[];
+    }[];
+    expect(link.children).toEqual([
+      expect.objectContaining({ text: "rules", format: 1, style: "color: red" }),
+    ]);
+    expect([before.format, after.format]).toEqual([1, 1]);
+  });
+
   it("refuses a path inside a link, which would nest one link in another", () => {
     const target = { relationTo: "pages", value: "other" };
     const link = "layout.1.richText.1.fields.body.0.children.1";

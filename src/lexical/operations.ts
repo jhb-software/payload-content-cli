@@ -28,7 +28,8 @@ export function linkFirstMatch(
 
       const newNodes: LexicalNode[] = [];
       if (before) newNodes.push({ ...node, text: before });
-      newNodes.push(structuredClone(linkNode));
+      // The linked text keeps the format and style of the text it was cut from.
+      newNodes.push({ ...structuredClone(linkNode), children: [{ ...node, text: search }] });
       if (after) newNodes.push({ ...node, text: after });
 
       nodes.splice(i, 1, ...newNodes);

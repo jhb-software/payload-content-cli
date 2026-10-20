@@ -486,7 +486,7 @@ payload-content push --draft                                  # push as drafts
 payload-content push --json                                   # summary as JSON
 ```
 
-Without arguments, pushes files that changed since last pull. Detects conflicts (remote modified after your last pull) and exits with code 2 unless `--force` is set.
+Without arguments, pushes files that changed since last pull. Detects conflicts (remote modified after your last pull) and exits with code 2 unless `--force` is set; `--dry-run` reports them too. A document pulled with `--draft` or pushed with `--draft` is compared against its latest draft, so an unpublished draft isn't mistaken for a remote change, by `push` as well as by `diff`.
 
 `push` and `pull` refuse to run if the manifest's recorded server URL differs from the current `PAYLOAD_URL` — this protects you from pushing staging content to prod (or vice versa) after a profile/env switch. Pass `--allow-url-change` if the switch is intentional.
 

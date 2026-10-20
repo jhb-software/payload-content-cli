@@ -5,6 +5,7 @@ import { loadConfig, requireRemoteConfig } from "../config.js";
 import { PayloadClient } from "../client.js";
 import { pull } from "../pull.js";
 import { push } from "../push.js";
+import { diff } from "../diff.js";
 import { status } from "../status.js";
 import { loadManifest } from "../manifest.js";
 
@@ -382,6 +383,63 @@ describe.skipIf(!hasRemoteEnv)("integration", () => {
       // Restore file
       content.title = beforeDoc.title;
       await fs.writeFile(filePath, JSON.stringify(content, null, 2) + "\n");
+    });
+  });
+
+  // ─── Draft round trip ──────────────────────────────────────────────────────
+
+  describe("draft round trip", () => {
+    let postId: string;
+    let filePath: string;
+    const client = () => new PayloadClient(config);
+
+    beforeAll(async () => {
+      const docs = await client().getCollectionDocs("posts", { limit: 1, depth: 0 });
+      postId = docs.docs[0].id as string;
+      // An unpublished draft, newer than what is live: what agents leave behind.
+      await client().updateDoc(
+        "posts",
+        postId,
+        { excerpt: `draft ${Date.now()}` },
+        { draft: true },
+      );
+      await cleanup();
+      await pull(config, { collections: ["posts"], draft: true });
+      filePath = path.join(CONTENT_DIR, "collections", "posts", `${postId}.json`);
+    });
+
+    it("diff shows no conflict for a document pulled as a draft", async () => {
+      const result = await diff(config);
+
+      expect(result.unchanged).toContain(`collections/posts/${postId}.json`);
+    });
+
+    it("push --draft saves an edit to a document with an unpublished draft", async () => {
+      const content = await readJson(filePath);
+      content.excerpt = `edited draft ${Date.now()}`;
+      await fs.writeFile(filePath, JSON.stringify(content, null, 2) + "\n");
+
+      const result = await push(config, { files: [filePath], draft: true });
+
+      expect(result.conflicts).toBe(0);
+      const stored = await client().getDoc("posts", postId, { draft: true });
+      expect(stored.excerpt).toBe(content.excerpt);
+    });
+
+    it("push --dry-run reports the conflict a real push would hit", async () => {
+      await client().updateDoc(
+        "posts",
+        postId,
+        { excerpt: `remote ${Date.now()}` },
+        { draft: true },
+      );
+      const content = await readJson(filePath);
+      content.excerpt = `local ${Date.now()}`;
+      await fs.writeFile(filePath, JSON.stringify(content, null, 2) + "\n");
+
+      const result = await push(config, { files: [filePath], draft: true, dryRun: true });
+
+      expect(result.conflicts).toBe(1);
     });
   });
 

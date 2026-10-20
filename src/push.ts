@@ -40,10 +40,12 @@ async function checkConflict(
     if (entry.type === "global") {
       remoteDoc = await client.getGlobal(entry.collection, {
         locale: entry.locale,
+        draft: manifestEntry.draft,
       });
     } else {
       remoteDoc = await client.getDoc(entry.collection, entry.id!, {
         locale: entry.locale,
+        draft: manifestEntry.draft,
       });
     }
 
@@ -127,7 +129,7 @@ export async function push(config: Config, options: PushOptions = {}): Promise<P
 
     if (entry.type === "global") {
       // Conflict check
-      if (!options.force && !options.dryRun) {
+      if (!options.force) {
         const conflict = await checkConflict(client, entry, manifest, outputDir);
         if (conflict) {
           const relPath = path.relative(process.cwd(), entry.filePath);
@@ -158,6 +160,7 @@ export async function push(config: Config, options: PushOptions = {}): Promise<P
           manifest.documents[key] = {
             hash: contentHash(raw),
             updatedAt: (result.updatedAt as string) ?? null,
+            ...(options.draft ? { draft: true as const } : {}),
           };
         }
       } catch (err) {
@@ -168,7 +171,7 @@ export async function push(config: Config, options: PushOptions = {}): Promise<P
       const id = entry.id!;
 
       // Conflict check (only for existing docs)
-      if (!options.force && !options.dryRun && doc.id) {
+      if (!options.force && doc.id) {
         const conflict = await checkConflict(client, entry, manifest, outputDir);
         if (conflict) {
           const relPath = path.relative(process.cwd(), entry.filePath);
@@ -201,6 +204,7 @@ export async function push(config: Config, options: PushOptions = {}): Promise<P
             manifest.documents[key] = {
               hash: contentHash(raw),
               updatedAt: (result.updatedAt as string) ?? null,
+              ...(options.draft ? { draft: true as const } : {}),
             };
           }
         } catch (err) {

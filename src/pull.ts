@@ -92,6 +92,7 @@ async function pullCollection(
       entries[toManifestKey(outputDir, filePath)] = {
         hash: contentHash(content),
         updatedAt: (doc.updatedAt as string) ?? null,
+        ...(options.draft ? { draft: true as const } : {}),
       };
     }
   }
@@ -135,6 +136,7 @@ async function pullGlobal(
     entries[toManifestKey(outputDir, filePath)] = {
       hash: contentHash(content),
       updatedAt: (doc.updatedAt as string) ?? null,
+      ...(options.draft ? { draft: true as const } : {}),
     };
   }
 

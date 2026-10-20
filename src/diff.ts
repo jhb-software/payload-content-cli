@@ -44,10 +44,14 @@ export async function diff(config: Config): Promise<DiffResult> {
     try {
       let remoteDoc: Record<string, unknown>;
       if (parsed.type === "global") {
-        remoteDoc = await client.getGlobal(parsed.collection, { locale: parsed.locale });
+        remoteDoc = await client.getGlobal(parsed.collection, {
+          locale: parsed.locale,
+          draft: entry.draft,
+        });
       } else {
         remoteDoc = await client.getDoc(parsed.collection, parsed.id!, {
           locale: parsed.locale,
+          draft: entry.draft,
         });
       }
 

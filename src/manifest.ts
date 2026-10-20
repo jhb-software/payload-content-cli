@@ -5,6 +5,8 @@ import * as path from "node:path";
 export interface DocumentEntry {
   hash: string;
   updatedAt: string | null;
+  /** Pulled or last pushed as the latest draft; checks for remote changes read the same version. */
+  draft?: true;
 }
 
 export interface Manifest {

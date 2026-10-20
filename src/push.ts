@@ -2,7 +2,13 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { type Config, requireRemoteConfig } from "./config.js";
 import { PayloadClient, PayloadApiError } from "./client.js";
-import { loadManifest, saveManifest, contentHash, type Manifest } from "./manifest.js";
+import {
+  loadManifest,
+  saveManifest,
+  contentHash,
+  parseLocaleFilename,
+  type Manifest,
+} from "./manifest.js";
 import { parseContentPath, toManifestKey, type ContentEntry } from "./content-paths.js";
 import { status } from "./status.js";
 import { CliError } from "./errors.js";
@@ -21,6 +27,43 @@ export interface PushResult {
   created: number;
   conflicts: number;
   errors: number;
+}
+
+/**
+ * Record a pushed file in the manifest. Every locale of a document shares its
+ * `updatedAt`, so sibling locale files that were in sync with the version this
+ * push replaced move along with it rather than turning up as remote changes.
+ */
+function recordPush(
+  manifest: Manifest,
+  key: string,
+  raw: string,
+  updatedAt: string | null,
+  draft: boolean | undefined,
+): void {
+  const previous = manifest.documents[key];
+  manifest.documents[key] = {
+    hash: contentHash(raw),
+    updatedAt,
+    ...(draft ? { draft: true as const } : {}),
+  };
+  if (!previous?.updatedAt) return;
+  const dir = key.slice(0, key.lastIndexOf("/") + 1);
+  const { base, locale } = parseLocaleFilename(key.slice(dir.length));
+  if (!locale) return;
+  for (const [other, entry] of Object.entries(manifest.documents)) {
+    const name = other.slice(dir.length);
+    if (other === key || !other.startsWith(dir) || name.includes("/")) continue;
+    const sibling = parseLocaleFilename(name);
+    if (
+      sibling.base === base &&
+      sibling.locale &&
+      entry.updatedAt === previous.updatedAt &&
+      Boolean(entry.draft) === Boolean(previous.draft)
+    ) {
+      entry.updatedAt = updatedAt;
+    }
+  }
 }
 
 async function checkConflict(
@@ -156,12 +199,13 @@ export async function push(config: Config, options: PushOptions = {}): Promise<P
         progress(`  Updated global: ${entry.collection}`);
         pushed++;
         if (manifest) {
-          const key = toManifestKey(outputDir, entry.filePath);
-          manifest.documents[key] = {
-            hash: contentHash(raw),
-            updatedAt: (result.updatedAt as string) ?? null,
-            ...(options.draft ? { draft: true as const } : {}),
-          };
+          recordPush(
+            manifest,
+            toManifestKey(outputDir, entry.filePath),
+            raw,
+            (result.updatedAt as string) ?? null,
+            options.draft,
+          );
         }
       } catch (err) {
         console.error(`  Failed to update global ${entry.collection}: ${(err as Error).message}`);
@@ -200,12 +244,13 @@ export async function push(config: Config, options: PushOptions = {}): Promise<P
           progress(`  Updated ${entry.collection}/${id}`);
           pushed++;
           if (manifest) {
-            const key = toManifestKey(outputDir, entry.filePath);
-            manifest.documents[key] = {
-              hash: contentHash(raw),
-              updatedAt: (result.updatedAt as string) ?? null,
-              ...(options.draft ? { draft: true as const } : {}),
-            };
+            recordPush(
+              manifest,
+              toManifestKey(outputDir, entry.filePath),
+              raw,
+              (result.updatedAt as string) ?? null,
+              options.draft,
+            );
           }
         } catch (err) {
           if (err instanceof PayloadApiError && err.isNotFound) {

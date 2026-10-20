@@ -443,6 +443,47 @@ describe.skipIf(!hasRemoteEnv)("integration", () => {
     });
   });
 
+  describe("locale round trip", () => {
+    let postId: string;
+    const file = (locale: string) =>
+      path.join(CONTENT_DIR, "collections", "posts", `${postId}_${locale}.json`);
+
+    async function edit(locale: string) {
+      const content = await readJson(file(locale));
+      content.excerpt = `${locale} ${Date.now()}`;
+      await fs.writeFile(file(locale), JSON.stringify(content, null, 2) + "\n");
+    }
+
+    beforeAll(async () => {
+      const docs = await new PayloadClient(config).getCollectionDocs("posts", {
+        limit: 1,
+        depth: 0,
+      });
+      postId = docs.docs[0].id as string;
+      await cleanup();
+      await pull(config, { collections: ["posts"], locales: ["en", "de"] });
+    });
+
+    it("pushes edits to two locales of one document in one run", async () => {
+      await edit("en");
+      await edit("de");
+
+      const result = await push(config, { files: [file("en"), file("de")] });
+
+      expect(result.conflicts).toBe(0);
+    });
+
+    it("doesn't show a pushed locale's sibling as changed remotely", async () => {
+      await edit("en");
+      await push(config, { files: [file("en")] });
+
+      const result = await diff(config);
+
+      expect(result.remoteModified).not.toContain(`collections/posts/${postId}_de.json`);
+      expect(result.unchanged).toContain(`collections/posts/${postId}_de.json`);
+    });
+  });
+
   // ─── Schema endpoint ──────────────────────────────────────────────────────
 
   describe("schema endpoint", () => {

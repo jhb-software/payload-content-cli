@@ -334,6 +334,25 @@ describe("inserting and deleting by path", () => {
     ]);
   });
 
+  it("inserts a list of nodes at one index, in order", () => {
+    const { doc, result } = editAtPath(linksDoc(), "content.1", "insert", [
+      { type: "h2", text: "Costs" },
+      { type: "p", text: "Fees vary." },
+    ]);
+
+    expect(result).toEqual({
+      inserted: ["content.1 h2: Costs", "content.2 p: Fees vary."],
+      count: 4,
+      note: "Nodes from content.1 on moved down by 2.",
+    });
+    expect(readAtPath(doc, "content")).toEqual([
+      "content.0 p: Intro",
+      "content.1 h2: Costs",
+      "content.2 p: Fees vary.",
+      "content.3 p [3 links]: More on costs, entry and vaccinations",
+    ]);
+  });
+
   it("appends at index = count", () => {
     const { doc } = editAtPath(linksDoc(), "content.2", "insert", {
       type: "ul",

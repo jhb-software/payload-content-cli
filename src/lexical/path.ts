@@ -7,6 +7,7 @@ import {
   hydrateFields,
   hydrateNode,
   isRichText,
+  joinPath,
   looksLikeNode,
   outlineLine,
   restoreOutlines,
@@ -278,16 +279,24 @@ export function editAtPath<T extends object>(
   const index = target.key as number;
 
   if (operation === "insert") {
-    const node = hydrateNode(toNode(restoreOutlines(parseIfObject(value, {}), undefined, path)));
-    freshenBlockIds(node, blockIds(copy));
-    nodes.splice(index, 0, node);
+    const parsed = parseIfObject(value, {});
+    const many = Array.isArray(parsed) && parsed.length > 0 && parsed.every(isObject);
+    const added = (many ? parsed : [parsed]).map((item) => {
+      const node = hydrateNode(toNode(restoreOutlines(item, undefined, path)));
+      freshenBlockIds(node, blockIds(copy));
+      return node;
+    });
+    nodes.splice(index, 0, ...added);
     assertValidTree(target.richText!.root.children);
-    const shifted = index < nodes.length - 1;
+    const parentPath = path.slice(0, path.lastIndexOf("."));
+    const lines = added.map((node, i) => outlineLine(node, joinPath(parentPath, index + i)));
+    const shifted = index + added.length < nodes.length;
+    const by = added.length === 1 ? "one" : String(added.length);
     return {
       result: {
-        inserted: outlineLine(node, path),
+        inserted: many ? lines : lines[0],
         count: nodes.length,
-        ...(shifted ? { note: `Nodes from ${path} on moved down by one.` } : {}),
+        ...(shifted ? { note: `Nodes from ${path} on moved down by ${by}.` } : {}),
       },
       doc: copy,
     };

@@ -89,7 +89,7 @@ export function registerLexicalCommands(program: Command): void {
   lexical
     .command("insert")
     .description(
-      'Insert a node before the index a path ends in; the node count appends. Shorthand works: {"type":"p","text":"…"}',
+      'Insert a node, or a list of nodes, before the index a path ends in; the node count appends. Shorthand works: {"type":"p","text":"…"}',
     )
     .argument("<file>", "Path to JSON document")
     .argument("<path>", "Dot path ending in a node index, e.g. content.3")

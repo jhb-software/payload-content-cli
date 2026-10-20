@@ -26,7 +26,7 @@ const parameters = {
     .unknown()
     .optional()
     .describe(
-      'For set and insert: a node as find shows it, or shorthand: {"type":"p","text":"…"}, {"type":"h2","text":"…"}, {"type":"ul","items":["…"]}, {"type":"text","text":"…"}, {"type":"block","fields":{"blockType":"…"}}, {"type":"upload","value":"<id>"} (relationTo defaults to media). A link to a URL, in a paragraph\'s children: {"type":"link","fields":{"linkType":"custom","url":"…"},"children":[{"type":"text","text":"…"}]}. For link: {"relationTo":"pages","value":"<id>"}, optionally "newTab":true. For a value inside a node, the new value.',
+      'For set and insert: a node as find shows it (insert also takes a list of nodes), or shorthand: {"type":"p","text":"…"}, {"type":"h2","text":"…"}, {"type":"ul","items":["…"]}, {"type":"text","text":"…"}, {"type":"block","fields":{"blockType":"…"}}, {"type":"upload","value":"<id>"} (relationTo defaults to media). A link to a URL, in a paragraph\'s children: {"type":"link","fields":{"linkType":"custom","url":"…"},"children":[{"type":"text","text":"…"}]}. For link: {"relationTo":"pages","value":"<id>"}, optionally "newTab":true. For a value inside a node, the new value.',
     ),
   text: z.string().optional().describe("For link: the text to wrap, as it appears."),
   locale: z.string().optional().describe("Default: the default locale."),

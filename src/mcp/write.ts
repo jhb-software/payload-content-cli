@@ -4,7 +4,8 @@ import { restoreOutlines } from "../lexical/view.js";
 import { ALLOW_SHARED_ROW_REPLACEMENT, isSharedRowRefusal } from "../plugin/preserveSharedRows.js";
 import { jsonObject, pickLocale, toObject, type McpContentToolsOptions } from "./options.js";
 import { errorResult, jsonResult, type McpTool } from "./result.js";
-import { errorMessage, hasDrafts, openTarget, type Target } from "./target.js";
+import { findLeftOutRows, findRowFields } from "./rows.js";
+import { errorMessage, hasDrafts, openTarget, type EntityConfig, type Target } from "./target.js";
 
 const collectionArg = z
   .string()
@@ -43,7 +44,7 @@ const updateParameters = {
     .optional()
     .describe("Instead of id: update every document this Payload query matches."),
   data: jsonObject.describe(
-    "Only the fields to change. Send array and blocks rows back with their id; a row without one is a new row.",
+    "Only the fields to change. For an array or blocks field, send every row you keep, with its id; a row without one is new.",
   ),
   locale: localeArg,
   draft: z
@@ -60,7 +61,7 @@ const updateParameters = {
     .boolean()
     .optional()
     .describe(
-      "Replace the rows of a shared array or blocks field, dropping their other-locale translations. Only after a write was refused for it.",
+      "Delete the stored rows data leaves out, or replace shared rows and their translations. Only after a write was refused for it.",
     ),
 };
 
@@ -105,14 +106,22 @@ function holdsStringList(value: unknown): boolean {
  * the stored rich text. Only an unchanged outline is restored; an edited one is
  * refused, as is one where nothing is stored to restore it from.
  */
-async function withRichTextRestored(
+function withOutlinesRestored(
+  data: Record<string, unknown>,
+  stored: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  if (!holdsStringList(data)) return data;
+  return restoreOutlines(data, stored, "") as Record<string, unknown>;
+}
+
+/** The stored fields `data` writes to, from the latest draft, without locale fallback. */
+async function readStored(
   req: PayloadRequest,
   target: Target,
   id: Id | undefined,
   locale: string | undefined,
   data: Record<string, unknown>,
-): Promise<Record<string, unknown>> {
-  if (!holdsStringList(data)) return data;
+): Promise<Record<string, unknown> | undefined> {
   const read = {
     depth: 0,
     draft: true,
@@ -122,13 +131,38 @@ async function withRichTextRestored(
     overrideAccess: false,
     req,
   } as const;
-  const stored =
-    target.kind === "global"
-      ? await req.payload.findGlobal({ slug: target.slug, ...read })
-      : id !== undefined
-        ? await req.payload.findByID({ collection: target.slug, id, disableErrors: true, ...read })
-        : undefined;
-  return restoreOutlines(data, stored ?? undefined, "") as Record<string, unknown>;
+  if (target.kind === "global") return req.payload.findGlobal({ slug: target.slug, ...read });
+  if (id === undefined) return undefined;
+  const doc = await req.payload.findByID({
+    collection: target.slug,
+    id,
+    disableErrors: true,
+    ...read,
+  });
+  return doc ?? undefined;
+}
+
+/**
+ * Why `data` may not be written as sent: it leaves out stored rows, which
+ * Payload would delete, or (in a bulk update) replaces every document's rows.
+ */
+function rowsRefusal(
+  req: PayloadRequest,
+  config: EntityConfig,
+  data: Record<string, unknown>,
+  stored: Record<string, unknown> | undefined,
+  bulk: boolean,
+): string | undefined {
+  const blocks = req.payload.config.blocks ?? [];
+  if (bulk) {
+    const fields = findRowFields(config.fields, data, blocks);
+    if (fields.length === 0) return undefined;
+    return `Refused: a bulk update replaces the rows of ${fields.join(", ")} in every matched document. Update each document by id, sending every row you keep with its id, or pass replaceRows: true to replace them.`;
+  }
+  const leftOut = findLeftOutRows(config.fields, data, stored, blocks);
+  if (leftOut.length === 0) return undefined;
+  const list = leftOut.map((rows) => `${rows.path} (${rows.ids.join(", ")})`).join("; ");
+  return `Refused: this would delete the stored rows it leaves out: ${list}. An array or blocks field takes its complete list of rows: send every row you keep, with its id. To delete these rows, pass replaceRows: true.`;
 }
 
 export function createTool(options: McpContentToolsOptions = {}): McpTool {
@@ -151,13 +185,7 @@ export function createTool(options: McpContentToolsOptions = {}): McpTool {
           collection: parsed.collection,
           locale: parsed.locale,
         });
-        const data = await withRichTextRestored(
-          req,
-          target,
-          undefined,
-          locale,
-          requireData(parsed.data),
-        );
+        const data = withOutlinesRestored(requireData(parsed.data), undefined);
         // `draft: false` alone never publishes; `_status` has to say so.
         if (drafts) data._status = draft ? "draft" : "published";
 
@@ -207,7 +235,7 @@ export function updateTool(options: McpContentToolsOptions = {}): McpTool {
   return {
     name: "update",
     description:
-      "Change fields of a document by id, of every document where matches, or of a global. Only the fields in data change; saves to the draft unless draft:false.",
+      "Change fields of a document by id, of every document where matches, or of a global. Only the fields in data change; an array or blocks field takes its full list of rows. Saves to the draft unless draft:false.",
     annotations: { title: "Update content", ...writeAnnotations },
     parameters: updateParameters,
     handler: async (args, req) => {
@@ -223,7 +251,18 @@ export function updateTool(options: McpContentToolsOptions = {}): McpTool {
         const draft = parsed.draft ?? true;
         const drafts = hasDrafts(config);
         const locale = await writeLocale(options, req, { collection, id, locale: parsed.locale });
-        const data = await withRichTextRestored(req, target, id, locale, requireData(parsed.data));
+        const sent = requireData(parsed.data);
+        const bulk = target.kind === "collection" && id === undefined;
+        const blocks = req.payload.config.blocks ?? [];
+        const stored =
+          !bulk && (holdsStringList(sent) || findRowFields(config.fields, sent, blocks).length > 0)
+            ? await readStored(req, target, id, locale, sent)
+            : undefined;
+        const refusal = parsed.replaceRows
+          ? undefined
+          : rowsRefusal(req, config, sent, stored, bulk);
+        if (refusal) return errorResult(refusal);
+        const data = withOutlinesRestored(sent, stored);
         if (drafts) data._status = draft ? "draft" : "published";
         const status = drafts ? { status: data._status } : {};
         const write = {

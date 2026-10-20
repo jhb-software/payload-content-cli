@@ -8,7 +8,7 @@ export const GLOBAL_PREFIX = "globals/";
 
 export type Target = { kind: "collection" | "global"; slug: string };
 
-type EntityConfig = SanitizedCollectionConfig | SanitizedGlobalConfig;
+export type EntityConfig = SanitizedCollectionConfig | SanitizedGlobalConfig;
 
 /** A collection slug, or a global addressed as `globals/<slug>`. */
 export function parseTarget(collection: string): Target {

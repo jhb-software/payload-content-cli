@@ -19,6 +19,26 @@ beforeAll(async () => {
         ],
       },
       { slug: "authors", access: open, fields: [{ name: "name", type: "text" }] },
+      {
+        slug: "trips",
+        access: open,
+        versions: { drafts: true },
+        fields: [
+          { name: "facts", type: "array", fields: [{ name: "label", type: "text" }] },
+          {
+            name: "sections",
+            type: "blocks",
+            blocks: [
+              {
+                slug: "list",
+                fields: [
+                  { name: "items", type: "array", fields: [{ name: "label", type: "text" }] },
+                ],
+              },
+            ],
+          },
+        ],
+      },
     ],
     globals: [
       {
@@ -193,5 +213,105 @@ describe("update", () => {
     });
 
     expect(result.error).toMatch(/one locale/i);
+  });
+});
+
+type Row = { id: string; label?: string; items?: Row[] };
+
+async function trip() {
+  const created = (await payload.create({
+    collection: "trips",
+    data: {
+      facts: [{ label: "Wildlife" }, { label: "Lodges" }, { label: "Flights" }],
+      sections: [{ blockType: "list", items: [{ label: "Day 1" }, { label: "Day 2" }] }],
+    } as never,
+  })) as unknown as { id: number; facts: Row[]; sections: Row[] };
+  return created;
+}
+
+const storedTrip = async (id: number) =>
+  (await payload.findByID({ collection: "trips", id, draft: true, depth: 0 })) as unknown as {
+    facts: Row[];
+    sections: Row[];
+  };
+
+describe("update with rows", () => {
+  it("refuses rows that leave out stored ones, naming them, and keeps every row", async () => {
+    const { id, facts } = await trip();
+
+    const result = await tool("update", {
+      collection: "trips",
+      id,
+      data: { facts: [{ id: facts[0].id, label: "Big five" }] },
+    });
+
+    expect(result.error).toContain("facts");
+    expect(result.error).toContain(facts[1].id);
+    expect(result.error).toContain(facts[2].id);
+    expect((await storedTrip(id)).facts.map((row) => row.label)).toEqual([
+      "Wildlife",
+      "Lodges",
+      "Flights",
+    ]);
+  });
+
+  it("refuses leaving out rows of an array inside a block", async () => {
+    const { id, sections } = await trip();
+    const [section] = sections;
+
+    const result = await tool("update", {
+      collection: "trips",
+      id,
+      data: {
+        sections: [{ ...section, items: [section.items![0], { label: "Day 3" }] }],
+      },
+    });
+
+    expect(result.error).toContain(section.items![1].id);
+    expect((await storedTrip(id)).sections[0].items).toHaveLength(2);
+  });
+
+  it("takes every row back, edited, reordered and with a new one", async () => {
+    const { id, facts } = await trip();
+
+    const result = await tool("update", {
+      collection: "trips",
+      id,
+      data: { facts: [facts[2], { ...facts[0], label: "Big five" }, facts[1], { label: "Spa" }] },
+    });
+
+    expect(result.error).toBeUndefined();
+    expect((await storedTrip(id)).facts.map((row) => row.label)).toEqual([
+      "Flights",
+      "Big five",
+      "Lodges",
+      "Spa",
+    ]);
+  });
+
+  it("removes rows with replaceRows", async () => {
+    const { id, facts } = await trip();
+
+    await tool("update", {
+      collection: "trips",
+      id,
+      data: { facts: [facts[0]] },
+      replaceRows: true,
+    });
+
+    expect((await storedTrip(id)).facts.map((row) => row.label)).toEqual(["Wildlife"]);
+  });
+
+  it("refuses a bulk update that would replace the rows of every matched document", async () => {
+    const { id } = await trip();
+
+    const result = await tool("update", {
+      collection: "trips",
+      where: { id: { equals: id } },
+      data: { facts: [{ label: "Only" }] },
+    });
+
+    expect(result.error).toContain("replaceRows");
+    expect((await storedTrip(id)).facts).toHaveLength(3);
   });
 });

@@ -130,7 +130,7 @@ await payload.update({ collection: "posts", id, data: { content: changed.content
 
 `editAtPath(doc, path, operation, value?)` changes rich text:
 
-- **`set`**: replace the value. Nodes may be given as read (defaults and unchanged outlines are restored), in full, or as shorthand: `{type: "p", text}`, `{type: "h2", text}`, `{type: "ul", items}`, `{type: "hr"}`, `{type: "block", fields}`, `{type: "upload", value}`. Returns the node's new outline line.
+- **`set`**: replace the value. Nodes may be given as read (defaults and unchanged outlines are restored), in full, or as shorthand: `{type: "p", text}`, `{type: "h2", text}`, `{type: "ul", items}`, `{type: "hr"}`, `{type: "block", fields}`, `{type: "upload", value}`, `{type: "text", text}`. Shorthand is plain text, so it is refused over links, formatting or inline nodes; to change words, set a text node's `text`. Returns the node's new outline line.
 - **`insert`** a node before the index the path ends in (the node count appends), **`delete`** the node at the path. Both return the node's outline line, the new count, and which nodes moved.
 
 An outline only stands in for the rich text it was read from: an unchanged one is restored, an edited one is refused. To copy a block, or put one where a different node was, give its nested rich text as `{root: {children: [...]}}`, nodes as read or as shorthand. A copied block gets a new id.
@@ -576,7 +576,7 @@ payload-content lexical set page.json layout.1.richText.1 '{"type":"p","text":"R
 payload-content lexical set page.json layout.1.richText.1 --json @node.json
 ```
 
-The value is JSON-parsed unless the current value is a string. `--json` takes JSON, `@file.json`, or `-` for stdin.
+The value is JSON-parsed unless the current value is a string. `--json` takes JSON, `@file.json`, or `-` for stdin. Shorthand is refused over links or formatting; set a text node's `text` instead.
 
 ### lexical insert / delete — add or remove a node
 

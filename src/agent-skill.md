@@ -72,7 +72,7 @@ Push with `--draft` unless asked to publish. Without it, push sends each file's 
 
 ### Step 6: Use lexical subcommands for richtext
 
-Prefer `lexical` subcommands (`read`, `set`, `insert`, `delete`) over rewriting the entire Lexical tree. Run `lexical read <file>` first: it outlines every richtext field, each line starting with the node's path. Paths continue into nodes and nested rich text (`layout.1.richText.3.fields.body.0`). Copy nodes between files with `lexical read --full` piped into `lexical insert --json -`.
+Prefer `lexical` subcommands (`read`, `set`, `insert`, `delete`) over rewriting the entire Lexical tree. Run `lexical read <file>` first: it outlines every richtext field, each line starting with the node's path. Paths continue into nodes and nested rich text (`layout.1.richText.3.fields.body.0`). To change words, set a text node's `text` (`content.3.children.0.text`), which keeps links and formatting. Copy nodes between files with `lexical read --full` piped into `lexical insert --json -`.
 
 ### Step 7: Handle locales
 

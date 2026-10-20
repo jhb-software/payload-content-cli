@@ -3,6 +3,7 @@
 ## Unreleased
 
 - fix: the MCP `update` refuses data that leaves out stored array or blocks rows, which Payload would delete, and bulk updates that write rows, unless `replaceRows: true`.
+- fix: `set` (CLI, `editAtPath`, MCP) refuses shorthand that would drop links, formatting or inline nodes, pointing to the text node's `text` instead.
 - feat: the MCP schema tree names the hidden read-only fields an app maintains, which `find` returns but nothing may write, and lists the fields an app adds to rich-text links. The `updateRichText` description shows the shape of a link to a URL.
 - fix: `lexical link` (and `linkRichText`, the MCP `updateRichText` `link`) keeps the bold, italic or other formatting and style of the text it links.
 - fix: pushing one locale of a document no longer makes its other locale files look changed remotely, and edits to several locales of one document push in one run without a false conflict.

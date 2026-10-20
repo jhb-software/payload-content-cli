@@ -77,6 +77,42 @@ function parseIfObject(value: unknown, stored: unknown): unknown {
   }
 }
 
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+/** What shorthand, which only holds plain text, can't keep of a node it replaces. */
+function richContent(node: unknown): string[] {
+  const counts = { link: 0, "formatted text": 0, "inline node": 0 };
+  const walk = (value: unknown): void => {
+    if (!isObject(value)) return;
+    if (value.type === "link" || value.type === "autolink") counts.link++;
+    else if (value.type === "text") {
+      if ((typeof value.format === "number" && value.format !== 0) || value.style) {
+        counts["formatted text"]++;
+      }
+    } else if (!Array.isArray(value.children) && value.type !== "linebreak") {
+      counts["inline node"]++;
+    }
+    if (Array.isArray(value.children)) value.children.forEach(walk);
+  };
+  if (isObject(node) && Array.isArray(node.children)) node.children.forEach(walk);
+  return Object.entries(counts)
+    .filter(([, count]) => count > 0)
+    .map(([kind, count]) => `${count} ${kind}${count === 1 ? "" : "s"}`);
+}
+
+/** Refuse shorthand (`text` or `items`, no `children`) that would drop links or formatting. */
+function refuseLossyShorthand(value: unknown, stored: unknown, path: string): void {
+  if (!isObject(value) || value.children !== undefined || value.type === "text") return;
+  if (value.text === undefined && value.items === undefined) return;
+  const lost = richContent(stored);
+  if (lost.length === 0) return;
+  throw new LexicalError(
+    "UNSUPPORTED_AT_PATH",
+    `${path} holds ${lost.join(", ")}, which shorthand would drop. To change its text, set ${path}.children.0.text (or another text node's); to replace the node anyway, send it with its children.`,
+  );
+}
+
 function resolve(doc: unknown, segments: string[], operation: PathEdit | "read"): Target {
   let target: Target = { value: doc, inNodeList: false };
 
@@ -221,8 +257,10 @@ export function editAtPath<T extends object>(
       );
     }
     const parent = target.parent as Record<string | number, unknown>;
-    const restored = restoreOutlines(parseIfObject(value, target.value), target.value, path);
+    const parsed = parseIfObject(value, target.value);
+    const restored = restoreOutlines(parsed, target.value, path);
     if (target.inNodeList) {
+      refuseLossyShorthand(parsed, target.value, path);
       const node = toNode(restored);
       const replaced = blockIds(target.value);
       const taken = new Set([...blockIds(copy)].filter((id) => !replaced.has(id)));

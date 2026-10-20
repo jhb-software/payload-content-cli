@@ -97,6 +97,16 @@ const alertDoc = () => ({
   ),
 });
 
+function errorOf(fn: () => unknown): LexicalError | undefined {
+  try {
+    fn();
+  } catch (err) {
+    if (err instanceof LexicalError) return err;
+    throw err;
+  }
+  return undefined;
+}
+
 function codeOf(fn: () => unknown): string | undefined {
   try {
     fn();
@@ -260,6 +270,30 @@ describe("setting by path", () => {
       version: 1,
       children: [{ type: "text", version: 1, text: "New" }],
     });
+  });
+
+  it("refuses shorthand that would drop the links of the node it replaces, pointing to its text", () => {
+    const error = errorOf(() =>
+      editAtPath(linksDoc(), "content.1", "set", { type: "p", text: "More on costs, entry" }),
+    );
+
+    expect(error?.code).toBe("UNSUPPORTED_AT_PATH");
+    expect(error?.message).toContain("3 links");
+    expect(error?.message).toContain("content.1.children.0.text");
+  });
+
+  it("refuses shorthand that would drop formatting", () => {
+    const doc = { content: richText(paragraph({ ...text("Bold"), format: 1 })) };
+
+    expect(codeOf(() => editAtPath(doc, "content.0", "set", { type: "p", text: "Bold" }))).toBe(
+      "UNSUPPORTED_AT_PATH",
+    );
+  });
+
+  it("replaces a node holding links when given the node with its children", () => {
+    const { doc } = editAtPath(linksDoc(), "content.1", "set", paragraph(text("No links")));
+
+    expect(readAtPath(doc, "content.1")).toMatchObject({ children: [{ text: "No links" }] });
   });
 
   it("gives a link node without a version the current link version", () => {

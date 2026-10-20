@@ -20,6 +20,12 @@ beforeAll(async () => {
       },
       { slug: "authors", access: open, fields: [{ name: "name", type: "text" }] },
       {
+        slug: "notes",
+        access: open,
+        versions: { drafts: { localizeStatus: true } },
+        fields: [{ name: "title", type: "text", localized: true }],
+      },
+      {
         slug: "trips",
         access: open,
         versions: { drafts: true },
@@ -40,6 +46,7 @@ beforeAll(async () => {
         ],
       },
     ],
+    experimental: { localizeStatus: true },
     globals: [
       {
         slug: "footer",
@@ -200,6 +207,41 @@ describe("update", () => {
     const german = await payload.findByID({ collection: "posts", id, draft: true, locale: "de" });
     expect(german.title).toBe("Hallo");
     expect((await read(id, true)).title).toBe("Hello");
+  });
+
+  it("with a status per locale, publishes only the locale it writes", async () => {
+    const { id } = await payload.create({
+      collection: "notes",
+      data: { title: "Live", _status: "published" } as never,
+      locale: "en",
+    });
+    await payload.update({
+      collection: "notes",
+      id,
+      data: { title: "Live DE", _status: "published" } as never,
+      locale: "de",
+    });
+    await payload.update({
+      collection: "notes",
+      id,
+      data: { title: "Draft" },
+      draft: true,
+      locale: "en",
+    });
+
+    const result = await tool("update", {
+      collection: "notes",
+      id,
+      locale: "de",
+      data: { title: "Neu" },
+      draft: false,
+    });
+
+    expect(result).toEqual({ id, status: "published" });
+    const live = (locale: string) =>
+      payload.findByID({ collection: "notes", id, draft: false, locale, depth: 0 });
+    expect((await live("de")).title).toBe("Neu");
+    expect((await live("en")).title).toBe("Live");
   });
 
   it("refuses a locale the app doesn't have, instead of writing nothing", async () => {

@@ -105,13 +105,13 @@ describe("lexical CLI", () => {
       `${field}.0 h2: Before you go`,
       `${field}.1 p: Check the entry rules before booking.`,
       `${field}.2 block alert: Bring cash.`,
-      `${field}.3 block alert [1 link]: See visa requirements first.`,
+      `${field}.3 block alert [1 link]: See [visa requirements] first.`,
     ]);
   });
 
   it("reaches the rich text of the second of two blocks of the same type", () => {
     expect(outline(pagePath, `${field}.3.fields.body`)).toEqual([
-      `${field}.3.fields.body.0 p [1 link]: See visa requirements first.`,
+      `${field}.3.fields.body.0 p [1 link]: See [visa requirements] first.`,
     ]);
   });
 
@@ -167,7 +167,7 @@ describe("lexical CLI", () => {
 
     expect(outline(otherPath, "content")).toEqual([
       "content.0 p: Hi",
-      "content.1 block alert [1 link]: See visa requirements first.",
+      "content.1 block alert [1 link]: See [visa requirements] first.",
     ]);
   });
 
@@ -203,7 +203,7 @@ describe("lexical CLI", () => {
     ]);
     expect(result.status, result.stderr).toBe(0);
     expect(JSON.parse(result.stdout)).toMatchObject({ linked: `${field}.1.children.1` });
-    expect(outline()[1]).toBe(`${field}.1 p [1 link]: Check the entry rules before booking.`);
+    expect(outline()[1]).toBe(`${field}.1 p [1 link]: Check the [entry rules] before booking.`);
   });
 
   it("links only inside the path when one is given", async () => {

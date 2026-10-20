@@ -111,7 +111,7 @@ import { editAtPath, readAtPath } from "@jhb.software/payload-content-cli/lexica
 const doc = await payload.findByID({ collection: "posts", id, depth: 0, req });
 
 readAtPath(doc, "content");
-// → ["content.0 p: Intro", "content.1 block alert [1 link]: See safety", "content.2 ul (2 items): a; b"]
+// → ["content.0 p: Intro", "content.1 block alert [1 link]: See [safety]", "content.2 ul (2 items): a; b"]
 
 readAtPath(doc, "content.0");
 // → { type: "paragraph", version: 1, children: [{ type: "text", version: 1, text: "Intro" }] }
@@ -190,7 +190,7 @@ pages (collection)
 
 Payload's bookkeeping (`id`, timestamps, `_status`) is left out. Fields your app maintains itself, marked both hidden and read-only, are left out of the tree too, but named on a closing `read-only, in find results only:` line, since `find` returns them. Fields you add to the link feature are listed under the `✎ inline nodes: link` line.
 
-`find` reads the latest draft unless `draft: false`, so an agent sees its own unpublished edits. It returns what a locale stores, without fallback, so an untranslated field reads as empty rather than as another language. Rich text comes back as an outline, one line per node starting with its path (`"content.1 block alert [1 link]: See safety"`), the same outline `lexical read` prints. For one document, `path` reads a single value, a node as JSON without Lexical's defaults, and `text` lists where the text occurs in its rich text, marking matches already inside a link. `where` and `select` may be objects or JSON strings (some MCP clients send nested objects as strings), `limit` is capped at 100, and `depth` defaults to 0.
+`find` reads the latest draft unless `draft: false`, so an agent sees its own unpublished edits. It returns what a locale stores, without fallback, so an untranslated field reads as empty rather than as another language. Rich text comes back as an outline, one line per node starting with its path (`"content.1 block alert [1 link]: See [safety]"`), the same outline `lexical read` prints: link text in brackets, bold as `**…**`, italic as `*…*`, up to 120 characters. For one document, `path` reads a single value, a node as JSON without Lexical's defaults, and `text` lists where the text occurs in its rich text, marking matches already inside a link. `where` and `select` may be objects or JSON strings (some MCP clients send nested objects as strings), `limit` is capped at 100, and `depth` defaults to 0.
 
 Writes go to the draft unless `draft: false`, which publishes (the tools set `_status` explicitly, since Payload's `draft: false` alone never publishes). Publishing one document or a global publishes its latest draft together with the changes, as the admin panel's Publish does. A bulk publish by `where` starts from the live documents instead, so it is refused when a matched document has newer draft changes, unless `overwriteDraft: true`. `data` may be an object or a JSON string; `locale: "all"` is refused for writes. Rich text is written as a list of nodes, as read or as shorthand (`[{"type":"p","text":"…"}]`), or as `{root: {children}}`; other values are refused, as are blocks its field doesn't allow and links to documents that don't exist. Rich text sent back as the outline `find` showed is kept as stored; an edited outline is refused with a pointer to edit its nodes instead. An array or blocks field in `data` is its complete list of rows, so `update` refuses data that leaves out stored rows (Payload would delete them) and bulk updates that write rows. A row sent with only its id keeps its stored fields. `replaceRows: true` allows both, and the replacement [`preserveSharedRowsPlugin`](#keep-translations-of-shared-rows) refuses. Answers are lean: `{ id, status }` (`status` only on collections with drafts), `{ ids, status }` for a bulk update.
 
@@ -559,7 +559,7 @@ payload-content lexical read page.json
 # layout.1.richText.0 h2: Before you go
 # layout.1.richText.1 p: Check the entry rules before booking.
 # layout.1.richText.2 block alert: Bring cash.
-# layout.1.richText.3 block alert [1 link]: See visa requirements first.
+# layout.1.richText.3 block alert [1 link]: See [visa requirements] first.
 
 payload-content lexical read page.json layout.1.richText.3.fields.body   # rich text nested in the second alert
 payload-content lexical read page.json layout.1.richText.0               # a node, without Lexical's defaults

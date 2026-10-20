@@ -52,7 +52,7 @@ export function findTool(options: McpContentToolsOptions = {}): McpTool {
   return {
     name: "find",
     description:
-      'Read one document by id, a page of a collection (filtered by where), or a global. Rich text shows as an outline, one line per node starting with its path ("content.3 p: …"). Keep answers small with select or path and depth 0.',
+      'Read one document by id, a page of a collection (filtered by where), or a global. Rich text shows as an outline, one line per node starting with its path ("content.3 p: …"), links in [ ], bold **…**, italic *…*. Keep answers small with select or path and depth 0.',
     annotations: {
       title: "Find content",
       readOnlyHint: true,

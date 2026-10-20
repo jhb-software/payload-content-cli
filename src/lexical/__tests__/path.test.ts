@@ -121,13 +121,37 @@ describe("reading by path", () => {
     const result = readAtPath(linksDoc(), "content");
     expect(result).toEqual([
       "content.0 p: Intro",
-      "content.1 p [3 links]: More on costs, entry and vaccinations",
+      "content.1 p [3 links]: More on [costs], [entry] and [vaccinations]",
     ]);
+  });
+
+  it("marks links, bold and italic in a node's line, so a missing space shows", () => {
+    const doc = {
+      content: richText(
+        paragraph(
+          text("Read "),
+          { ...text("the rules"), format: 1 },
+          text(" and "),
+          link("visa info", "visa"),
+          { ...text("now"), format: 2 },
+        ),
+      ),
+    };
+
+    expect(readAtPath(doc, "content")).toEqual([
+      "content.0 p [1 link]: Read **the rules** and [visa info]*now*",
+    ]);
+  });
+
+  it("shows up to 120 characters of a node's text", () => {
+    const doc = { content: richText(paragraph(text("a".repeat(150)))) };
+
+    expect(readAtPath(doc, "content")).toEqual([`content.0 p: ${"a".repeat(119)}…`]);
   });
 
   it("outlines blocks with their slug and the text of rich text inside them", () => {
     const result = readAtPath(alertDoc(), "content");
-    expect(result).toEqual(["content.0 p: Intro", "content.1 block alert [1 link]: See safety"]);
+    expect(result).toEqual(["content.0 p: Intro", "content.1 block alert [1 link]: See [safety]"]);
   });
 
   it("returns a node without Lexical's default properties", () => {
@@ -144,7 +168,7 @@ describe("reading by path", () => {
     expect(result).toMatchObject({
       fields: {
         blockType: "alert",
-        richText: ["content.1.fields.richText.0 p [1 link]: See safety"],
+        richText: ["content.1.fields.richText.0 p [1 link]: See [safety]"],
       },
     });
   });
@@ -173,7 +197,7 @@ describe("reading by path", () => {
     expect(readAtPath(linksDoc(), "")).toEqual({
       content: [
         "content.0 p: Intro",
-        "content.1 p [3 links]: More on costs, entry and vaccinations",
+        "content.1 p [3 links]: More on [costs], [entry] and [vaccinations]",
       ],
     });
   });
@@ -330,7 +354,7 @@ describe("inserting and deleting by path", () => {
     expect(readAtPath(doc, "content")).toEqual([
       "content.0 p: Intro",
       "content.1 h2: Costs",
-      "content.2 p [3 links]: More on costs, entry and vaccinations",
+      "content.2 p [3 links]: More on [costs], [entry] and [vaccinations]",
     ]);
   });
 
@@ -349,7 +373,7 @@ describe("inserting and deleting by path", () => {
       "content.0 p: Intro",
       "content.1 h2: Costs",
       "content.2 p: Fees vary.",
-      "content.3 p [3 links]: More on costs, entry and vaccinations",
+      "content.3 p [3 links]: More on [costs], [entry] and [vaccinations]",
     ]);
   });
 
@@ -389,7 +413,7 @@ describe("inserting and deleting by path", () => {
       note: "Nodes after content.0 moved up by one.",
     });
     expect(readAtPath(doc, "content")).toEqual([
-      "content.0 p [3 links]: More on costs, entry and vaccinations",
+      "content.0 p [3 links]: More on [costs], [entry] and [vaccinations]",
     ]);
   });
 
@@ -414,7 +438,7 @@ describe("inserting and deleting by path", () => {
 
     expect(readAtPath(doc, "content")).toEqual([
       "content.0 p: Intro",
-      "content.1 block alert [1 link]: See safety",
+      "content.1 block alert [1 link]: See [safety]",
       "content.2 block alert: Copied",
     ]);
     const copy = readAtPath(doc, "content.2.fields") as { id: string };

@@ -37,7 +37,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 // ── Outline ─────────────────────────────────────────────────────────
 
-const PREVIEW_LENGTH = 80;
+const PREVIEW_LENGTH = 120;
 
 function truncate(text: string): string {
   const flat = text.replace(/\s+/g, " ").trim();
@@ -56,8 +56,22 @@ function nestedRichTexts(value: unknown, found: RichTextValue[] = []): RichTextV
   return found;
 }
 
+const BOLD = 1;
+const ITALIC = 2;
+
+/** A text node's text, bold as `**…**` and italic as `*…*`, whitespace kept outside the marks. */
+function markedText(node: LexicalNode & { text: string }): string {
+  const format = typeof node.format === "number" ? node.format : 0;
+  const mark = (format & BOLD ? "**" : "") + (format & ITALIC ? "*" : "");
+  const [, before, core, after] = /^(\s*)(.*?)(\s*)$/s.exec(node.text)!;
+  return mark && core
+    ? `${before}${mark}${core}${[...mark].reverse().join("")}${after}`
+    : node.text;
+}
+
 function nodeText(node: LexicalNode): string {
-  if (typeof node.text === "string") return node.text;
+  if (typeof node.text === "string") return markedText(node as LexicalNode & { text: string });
+  if (isLinkNode(node) && hasChildren(node)) return `[${node.children.map(nodeText).join("")}]`;
   if (node.type === "linebreak") return " ";
   if (node.type === "list" && hasChildren(node)) {
     return node.children.map(nodeText).join("; ");

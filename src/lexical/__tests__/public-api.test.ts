@@ -40,7 +40,7 @@ describe("lexical entry point", () => {
     expect(linked.path).toBe("content.1.children.1");
     expect(readAtPath(linked.doc, "content")).toEqual([
       "content.0 p: first",
-      "content.1 p [1 link]: see the docs",
+      "content.1 p [1 link]: see the [docs]",
       "content.2 p: second",
     ]);
     expect(linked.doc.title).toBe("A post");

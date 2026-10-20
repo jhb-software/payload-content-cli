@@ -145,7 +145,7 @@ describe("linkRichText", () => {
     const linked = linkRichText(doc, "intro.1", "rules", { relationTo: "pages", value: "rules" });
 
     expect(linked.path).toBe("intro.1.children.1");
-    expect(linked.outline).toBe("intro.1 p [1 link]: Read the rules.");
+    expect(linked.outline).toBe("intro.1 p [1 link]: Read the [rules].");
     expect(extractRichTextLinks(linked.doc, "intro").map((link) => link.path)).toEqual([
       "intro.1.children.1",
     ]);

@@ -147,7 +147,7 @@ describe("find", () => {
 
     expect((await find({ collection: "posts", id })).content).toEqual([
       "content.0 p: Intro",
-      "content.1 block alert [1 link]: See safety",
+      "content.1 block alert [1 link]: See [safety]",
     ]);
   });
 
@@ -161,7 +161,7 @@ describe("find", () => {
       children: [{ type: "text", version: 1, text: "Intro" }],
     });
     expect(await find({ collection: "posts", id, path: "content.1" })).toMatchObject({
-      fields: { blockType: "alert", body: ["content.1.fields.body.0 p [1 link]: See safety"] },
+      fields: { blockType: "alert", body: ["content.1.fields.body.0 p [1 link]: See [safety]"] },
     });
   });
 
@@ -212,7 +212,7 @@ describe("update with rich text as find shows it", () => {
     const result = await tool("update", {
       collection: "posts",
       id,
-      data: { content: ["content.0 p: Changed", "content.1 block alert [1 link]: See safety"] },
+      data: { content: ["content.0 p: Changed", "content.1 block alert [1 link]: See [safety]"] },
     });
 
     expect(result).toEqual({ error: expect.stringMatching(/outline.*content\.<index>/) });
@@ -303,7 +303,7 @@ describe("updateRichText", () => {
 
     expect(result).toEqual({
       linked: "content.0.children.0",
-      outline: "content.0 p [1 link]: Intro",
+      outline: "content.0 p [1 link]: [Intro]",
     });
     expect(await find({ collection: "posts", id, path: "content.0.children.0.fields" })).toEqual({
       linkType: "internal",

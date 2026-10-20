@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- feat: `./mcp` exports `jsonResult`, `textResult`, `errorResult`, `parseTarget` and `openTarget` for an app's own tools, and `./lexical` exports the `LexicalLinkNode` and `RichTextValue` types.
 - feat: `preserveSharedRowsPlugin()` only hooks collections and globals with a shared array or blocks field, so the others no longer pay an extra read per write, and it runs after the app's other plugins, guarding the collections they add.
 
 ## 0.6.0-beta.0

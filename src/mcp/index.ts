@@ -11,3 +11,8 @@
 export { createMcpContentTools } from "./tools.js";
 export type { McpContentToolsOptions } from "./options.js";
 export type { McpTool, McpToolResult } from "./result.js";
+
+// For an app's own tools: the same answers, and the same `globals/<slug>` addressing.
+export { errorResult, jsonResult, textResult } from "./result.js";
+export { openTarget, parseTarget } from "./target.js";
+export type { Target } from "./target.js";

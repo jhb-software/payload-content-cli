@@ -29,6 +29,27 @@ export interface LexicalRoot {
   version?: number;
 }
 
+/** A link or autolink, internal (to a document) or custom (to a URL). */
+export interface LexicalLinkNode extends LexicalElementNode {
+  type: "link" | "autolink";
+  fields: {
+    linkType?: "internal" | "custom";
+    url?: string;
+    newTab?: boolean;
+    /** The linked document: its id, or the document itself when read with depth. */
+    doc?: {
+      relationTo: string;
+      value: string | number | { id: string | number; [key: string]: unknown };
+    } | null;
+    [key: string]: unknown;
+  };
+}
+
+/** What a rich-text field stores. */
+export interface RichTextValue {
+  root: LexicalRoot;
+}
+
 // ── Node predicates ─────────────────────────────────────────────────
 
 export function isTextNode(node: LexicalNode): node is LexicalTextNode {
@@ -36,7 +57,7 @@ export function isTextNode(node: LexicalNode): node is LexicalTextNode {
 }
 
 /** True for both manually created "link" nodes and auto-detected "autolink" nodes. */
-export function isLinkNode(node: LexicalNode): boolean {
+export function isLinkNode(node: LexicalNode): node is LexicalLinkNode {
   return node.type === "link" || node.type === "autolink";
 }
 

@@ -145,6 +145,8 @@ Alongside them, each covering every rich text at or below a path (`""` for the w
 - `extractRichTextLinks(doc, path)` — internal links and their targets.
 - `diffRichText(source, target, path)` — links and blocks only one locale variant has.
 
+For walking rich text yourself, the module exports its node types: `LexicalRoot`, `LexicalNode`, `LexicalElementNode`, `LexicalTextNode`, `LexicalLinkNode` (`link`/`autolink`, with `fields.linkType`, `url` and `doc`), and `RichTextValue`, what a rich-text field stores (`{ root }`).
+
 Fetching and saving stay yours, and with them the decisions the CLI can't make for you: access control (`overrideAccess: false`), which locale, and whether the write is a draft.
 
 ### Add the MCP content tools
@@ -211,6 +213,27 @@ createMcpContentTools({
 ```
 
 An unknown collection or global is answered with the ones the agent may use. To drop or replace one tool, filter the list by `name`. Tool names are stable, since `@payloadcms/plugin-mcp` keys its per-key access flags on them. Tools carry MCP `annotations` (read-only, title), which `@payloadcms/plugin-mcp` doesn't forward to clients yet.
+
+Your own tools can answer and address entities the same way. `/mcp` exports `jsonResult`, `textResult` and `errorResult` (the `{ error }` shape the content tools use), `parseTarget(collection)`, which turns `"globals/<slug>"` into `{ kind: "global", slug }`, and `openTarget(req, options, collection, id?)`, which also answers an unknown slug with the valid ones and runs `checkId`:
+
+```ts
+import { errorResult, jsonResult, openTarget, type McpTool } from "@jhb.software/payload-content-cli/mcp";
+import { z } from "zod/v3";
+
+const healthTool: McpTool = {
+  name: "health",
+  description: "Health report of a collection or global.",
+  parameters: { collection: z.string() },
+  handler: async (args, req) => {
+    try {
+      const { target } = await openTarget(req, {}, String(args.collection));
+      return jsonResult(await reportFor(req, target));
+    } catch (err) {
+      return errorResult(err instanceof Error ? err.message : String(err));
+    }
+  },
+};
+```
 
 ### Keep translations of shared rows
 

@@ -19,7 +19,14 @@
  * to Payload or the network.
  */
 
-export type { LexicalElementNode, LexicalNode, LexicalRoot, LexicalTextNode } from "./types.js";
+export type {
+  LexicalElementNode,
+  LexicalLinkNode,
+  LexicalNode,
+  LexicalRoot,
+  LexicalTextNode,
+  RichTextValue,
+} from "./types.js";
 
 // One dot path from the document down to any value inside its rich text.
 export { editAtPath, readAtPath } from "./path.js";

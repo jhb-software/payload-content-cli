@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.0-beta.1
 
 - feat: the MCP `find` takes a list of paths, answering with their values keyed by path.
 - feat: outlines (CLI `lexical read`, `readAtPath`, MCP `find`) show link text in brackets and bold and italic text as `**…**` and `*…*`, up to 120 characters of a node's text instead of 80, and no longer a link count.

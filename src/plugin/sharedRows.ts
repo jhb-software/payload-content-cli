@@ -83,6 +83,31 @@ function hasLocalizedDescendant(fields: Field[], configBlocks: Block[]): boolean
   return result;
 }
 
+/**
+ * Whether `fields` hold a shared array or blocks field anywhere, i.e. whether a
+ * write to them can drop translations at all.
+ */
+export function hasSharedRows(fields: Field[], configBlocks: Block[] = []): boolean {
+  return fields.some((field) => {
+    if (fieldAffectsData(field) && field.localized) return false;
+    switch (field.type) {
+      case "array":
+      case "blocks":
+        return hasLocalizedDescendant([field], configBlocks);
+      case "tabs":
+        return field.tabs.some(
+          (tab) => !(tabHasName(tab) && tab.localized) && hasSharedRows(tab.fields, configBlocks),
+        );
+      case "group":
+      case "row":
+      case "collapsible":
+        return hasSharedRows(field.fields, configBlocks);
+      default:
+        return false;
+    }
+  });
+}
+
 function walk(
   fields: Field[],
   data: Data,

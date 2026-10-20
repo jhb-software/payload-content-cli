@@ -22,6 +22,7 @@ import { ValidationError } from "payload";
 import {
   containsObjectArray,
   findDroppedSharedRows,
+  hasSharedRows,
   type SharedRowViolation,
 } from "./sharedRows.js";
 
@@ -166,7 +167,9 @@ const globalHook: GlobalBeforeOperationHook = async ({ args, operation, global }
 /**
  * Refuses an update that sends every row of a shared array or blocks field
  * without its id, which would replace the rows and discard the other locales'
- * translations of them. Inert without localization.
+ * translations of them. Inert without localization, and on collections and
+ * globals without a shared field. Runs after the app's other plugins, so it
+ * also guards the collections they add.
  *
  * @example
  * ```ts
@@ -174,12 +177,14 @@ const globalHook: GlobalBeforeOperationHook = async ({ args, operation, global }
  * ```
  */
 export function preserveSharedRowsPlugin(options: PreserveSharedRowsPluginOptions = {}): Plugin {
-  return (config: Config): Config => {
-    const guards = (list: string[] | undefined, slug: string) => !list || list.includes(slug);
+  const plugin: Plugin = (config: Config): Config => {
+    const configBlocks = config.blocks as Block[] | undefined;
+    const guards = (list: string[] | undefined, slug: string, fields: Field[]) =>
+      (!list || list.includes(slug)) && hasSharedRows(fields, configBlocks);
     return {
       ...config,
       collections: (config.collections ?? []).map((collection) =>
-        guards(options.collections, collection.slug)
+        guards(options.collections, collection.slug, collection.fields)
           ? {
               ...collection,
               hooks: {
@@ -191,7 +196,7 @@ export function preserveSharedRowsPlugin(options: PreserveSharedRowsPluginOption
           : collection,
       ),
       globals: (config.globals ?? []).map((global) =>
-        guards(options.globals, global.slug)
+        guards(options.globals, global.slug, global.fields)
           ? {
               ...global,
               hooks: {
@@ -203,4 +208,7 @@ export function preserveSharedRowsPlugin(options: PreserveSharedRowsPluginOption
       ),
     };
   };
+  // Payload runs plugins by ascending order (default 0).
+  plugin.order = 1000;
+  return plugin;
 }

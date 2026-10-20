@@ -54,10 +54,27 @@ beforeAll(async () => {
         fields: [...fields, { name: "rank", type: "number", max: 1000 }],
       },
     ],
-    globals: [{ slug: "nav", access: open, fields }],
-    plugins: [preserveSharedRowsPlugin()],
+    globals: [
+      { slug: "nav", access: open, fields },
+      { slug: "status", access: open, fields: [linksOnly] },
+    ],
+    plugins: [
+      preserveSharedRowsPlugin(),
+      // Listed after the guard, as apps do with plugins that add collections.
+      (config) => ({
+        ...config,
+        collections: [
+          ...(config.collections ?? []),
+          { slug: "suites", access: open, fields },
+          // Rows, but nothing localized in them: no translations to lose.
+          { slug: "reports", access: open, fields: [linksOnly] },
+        ],
+      }),
+    ],
   });
 });
+
+const linksOnly: Field = { name: "links", type: "array", fields: [{ name: "url", type: "text" }] };
 
 type Row = { id: string; item?: { title?: string }; title?: string };
 
@@ -199,6 +216,35 @@ describe("preserveSharedRowsPlugin refuses", () => {
         data: { extras: [{ item: { title: "Food" } }] } as never,
       }),
     ).rejects.toThrow(/extras/);
+  });
+
+  it("on a collection a plugin listed after it adds", async () => {
+    const suite = await payload.create({
+      collection: "suites",
+      locale: "en",
+      data: { extras: [{ item: { title: "Cuisine" } }] } as never,
+    });
+
+    await expect(
+      payload.update({
+        collection: "suites",
+        id: suite.id,
+        locale: "en",
+        data: { extras: [{ item: { title: "Food" } }] } as never,
+      }),
+    ).rejects.toThrow(/extras/);
+  });
+});
+
+describe("preserveSharedRowsPlugin costs nothing", () => {
+  // Its hook reads the stored document on every write with rows.
+  it("where no rows hold translations", () => {
+    const hooked = [
+      payload.collections.reports.config,
+      payload.globals.config.find((global) => global.slug === "status")!,
+    ].filter((entity) => (entity.hooks?.beforeOperation ?? []).length > 0);
+
+    expect(hooked.map((entity) => entity.slug)).toEqual([]);
   });
 });
 

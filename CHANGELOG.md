@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- feat: `preserveSharedRowsPlugin()` only hooks collections and globals with a shared array or blocks field, so the others no longer pay an extra read per write, and it runs after the app's other plugins, guarding the collections they add.
+
 ## 0.6.0-beta.0
 
 - **breaking:** the `lexical` commands address rich text by one dot path (`layout.1.richText.3.fields.body.0`), through array rows and nested blocks: `read [path]`, `set`, `insert`, `delete`, `search [path]`, `link [path] --text`, `diff [path]`. `list`, `get`, `add`, `replace`, `remove`, `--field`, `--at`, `link --search`/`--label` and the node flags are removed.

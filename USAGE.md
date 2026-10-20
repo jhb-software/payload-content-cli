@@ -212,7 +212,16 @@ createMcpContentTools({
 });
 ```
 
-An unknown collection or global is answered with the ones the agent may use. To drop or replace one tool, filter the list by `name`. Tool names are stable, since `@payloadcms/plugin-mcp` keys its per-key access flags on them. Tools carry MCP `annotations` (read-only, title), which `@payloadcms/plugin-mcp` doesn't forward to clients yet.
+An unknown collection or global is answered with the ones the agent may use. To drop or replace one tool, filter the list by `name`. Tool names are stable, since `@payloadcms/plugin-mcp` keys its per-key access flags on them. Tools carry MCP `annotations` (`readOnlyHint`, `title`), so clients can run the read tools without asking for confirmation. `@payloadcms/plugin-mcp` forwards them from v4 on. On 3.x, patch it (`pnpm patch @payloadcms/plugin-mcp`) to pass them on in the custom-tool registration in `dist/mcp/getMcpHandler.js`:
+
+```diff
+ registerTool(isToolEnabled, tool.name, () => server.registerTool(tool.name, {
+     description: tool.description,
+-    inputSchema: tool.parameters
++    inputSchema: tool.parameters,
++    ...tool.annotations && { annotations: tool.annotations }
+ }, payloadToolHandler(tool.handler)), payload, useVerboseLogs);
+```
 
 Your own tools can answer and address entities the same way. `/mcp` exports `jsonResult`, `textResult` and `errorResult` (the `{ error }` shape the content tools use), `parseTarget(collection)`, which turns `"globals/<slug>"` into `{ kind: "global", slug }`, and `openTarget(req, options, collection, id?)`, which also answers an unknown slug with the valid ones and runs `checkId`:
 

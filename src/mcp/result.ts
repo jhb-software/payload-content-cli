@@ -16,8 +16,8 @@ export interface McpTool {
   parameters: Record<string, any>;
   /**
    * MCP tool hints (`readOnlyHint`, …) that let a client decide how much
-   * confirmation a call needs. Stock `@payloadcms/plugin-mcp` doesn't pass them
-   * on yet; they take effect once it does (or with a patch that forwards them).
+   * confirmation a call needs. `@payloadcms/plugin-mcp` passes them on from v4;
+   * on 3.x only with a patch (see USAGE.md).
    */
   annotations?: {
     title?: string;

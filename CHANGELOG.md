@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- fix: the MCP `find` refuses `path` and `text` with `locale: "all"`, which read one locale, instead of finding nothing at a path that lacks the locale segment.
 - feat: `insert` (CLI, `editAtPath`, MCP `updateRichText`) takes a list of nodes, inserting them in order at one index.
 - fix: the MCP `create` and `update` take rich text as a list of nodes, shorthand included, or `{root: {children}}`, and refuse other values, blocks the field doesn't allow and links to missing documents, instead of saving them unchecked into a draft.
 - feat: `lexical search`/`link` (and `searchRichText`, `linkRichText`, the MCP `updateRichText` `link`) accept a path to a node or text node inside rich text, such as `content.2`, and stay within it. `link` answers with the node's outline line.

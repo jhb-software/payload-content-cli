@@ -99,6 +99,14 @@ describe("find", () => {
     expect(result).toEqual({ error: 'Unknown locale "fr". Use one of: en, de.' });
   });
 
+  it('refuses path and text with locale "all", which read one locale', async () => {
+    const { id } = await publishedPost("all-locales", "Hello");
+
+    const result = await find({ collection: "posts", id, locale: "all", path: "title" });
+
+    expect(result).toEqual({ error: expect.stringMatching(/one locale/) });
+  });
+
   it("reads a global addressed as globals/<slug>", async () => {
     await payload.updateGlobal({ slug: "footer", data: { note: "Hello" } as never });
 

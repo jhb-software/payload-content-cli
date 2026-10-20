@@ -72,12 +72,16 @@ export function findTool(options: McpContentToolsOptions = {}): McpTool {
         }
 
         const select = toObject(parsed.select, "select") as SelectType | undefined;
+        const locale = await pickLocale(options, req, { collection, id, locale: parsed.locale });
+        if (locale === "all" && (path !== undefined || text !== undefined)) {
+          return errorResult('path and text read one locale; pass one instead of "all".');
+        }
         const read = {
           depth: parsed.depth ?? 0,
           draft: parsed.draft ?? true,
           // Stored values only: a fallback reads as if the field were translated.
           fallbackLocale: false as const,
-          locale: await pickLocale(options, req, { collection, id, locale: parsed.locale }),
+          locale,
           // A path needs only its field.
           select: select ?? (path ? { [path.split(".")[0]]: true } : undefined),
           overrideAccess: false,

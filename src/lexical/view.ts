@@ -3,6 +3,7 @@ import { LexicalError } from "./errors.js";
 import { buildHeading, buildHorizontalRule, buildList } from "./nodes.js";
 import type { LexicalNode } from "./types.js";
 import { hasChildren, isLinkNode } from "./types.js";
+import { assertValidTree } from "./validate.js";
 
 /**
  * The compact views `editAtPath` shows an agent, and their inverse.
@@ -240,6 +241,33 @@ export function hydrateFields(value: unknown): unknown {
     return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, hydrateFields(v)]));
   }
   return value;
+}
+
+/**
+ * A whole rich-text value as an agent writes it: a list of nodes, or
+ * `{root: {children}}`, with nodes as read or as shorthand. Anything else is
+ * refused, since a draft write would store it unchecked.
+ */
+export function toRichText(value: unknown, path: string): unknown {
+  if (value === null || value === undefined) return value;
+  const children = isRichText(value)
+    ? value.root.children
+    : Array.isArray(value) && value.every(isRecord)
+      ? value
+      : undefined;
+  if (!children) {
+    throw new LexicalError(
+      "INVALID_NODE",
+      `${path} is rich text, which this value isn't. Pass its nodes as a list, e.g. [{"type":"p","text":"…"}], or as {"root":{"children":[…]}}.`,
+    );
+  }
+  const root = isRichText(value) ? value.root : {};
+  const richText = {
+    ...(isRichText(value) ? value : {}),
+    root: { ...ROOT_DEFAULTS, ...root, children: children.map(toNode) },
+  };
+  assertValidTree(richText.root.children);
+  return richText;
 }
 
 /** An outline as a read shows it: lines `<path>.0 …`, `<path>.1 …`, in order. */

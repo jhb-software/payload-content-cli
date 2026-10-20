@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- fix: the MCP `create` and `update` take rich text as a list of nodes, shorthand included, or `{root: {children}}`, and refuse other values, blocks the field doesn't allow and links to missing documents, instead of saving them unchecked into a draft.
 - feat: `lexical search`/`link` (and `searchRichText`, `linkRichText`, the MCP `updateRichText` `link`) accept a path to a node or text node inside rich text, such as `content.2`, and stay within it. `link` answers with the node's outline line.
 - feat: the MCP schema tree names the hidden read-only fields an app maintains, which `find` returns but nothing may write, and the fields an app adds to rich-text links.
 - feat: `./mcp` exports `jsonResult`, `textResult`, `errorResult`, `parseTarget` and `openTarget` for an app's own tools, and `./lexical` exports the `LexicalLinkNode` and `RichTextValue` types.

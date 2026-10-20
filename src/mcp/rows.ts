@@ -23,7 +23,7 @@ const isObject = (value: unknown): value is Data =>
 const rowId = (row: unknown): string | number | undefined =>
   isObject(row) && (typeof row.id === "string" || typeof row.id === "number") ? row.id : undefined;
 
-function rowFields(
+export function rowFields(
   field: Extract<Field, { type: "array" | "blocks" }>,
   configBlocks: Block[],
   blockType: unknown,

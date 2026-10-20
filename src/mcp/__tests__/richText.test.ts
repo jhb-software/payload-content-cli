@@ -220,6 +220,72 @@ describe("update with rich text as find shows it", () => {
   });
 });
 
+describe("create and update with rich text", () => {
+  it("update takes a rich-text field as a list of nodes, shorthand included", async () => {
+    const id = await createPost(1);
+
+    const result = await tool("update", {
+      collection: "posts",
+      id,
+      data: {
+        content: [
+          { type: "h2", text: "Visa" },
+          { type: "p", text: "Apply early." },
+        ],
+      },
+    });
+
+    expect(result).toEqual({ id, status: "draft" });
+    expect((await find({ collection: "posts", id })).content).toEqual([
+      "content.0 h2: Visa",
+      "content.1 p: Apply early.",
+    ]);
+    const stored = await payload.findByID({ collection: "posts", id, draft: true, locale: "en" });
+    expect(stored.content).toMatchObject({
+      root: { type: "root", children: [{ type: "heading", tag: "h2" }, { type: "paragraph" }] },
+    });
+  });
+
+  it("create takes rich text as {root:{children}} with shorthand nodes", async () => {
+    const result = await tool("create", {
+      collection: "articles",
+      data: { title: "Visa", content: { root: { children: [{ type: "p", text: "Hi" }] } } },
+    });
+
+    const stored = await payload.findByID({ collection: "articles", id: result.id, draft: true });
+    expect(stored.content).toMatchObject({
+      root: {
+        type: "root",
+        version: 1,
+        children: [{ type: "paragraph", children: [{ type: "text", text: "Hi", format: 0 }] }],
+      },
+    });
+  });
+
+  it("refuses a rich-text value that isn't Lexical, leaving the stored text alone", async () => {
+    const id = await createPost(1);
+    const before = await readPost(id, true);
+
+    const result = await tool("update", {
+      collection: "posts",
+      id,
+      data: { content: "Apply early." },
+    });
+
+    expect(result).toEqual({ error: expect.stringMatching(/content is rich text/) });
+    expect(await readPost(id, true)).toBe(before);
+  });
+
+  it("refuses a block the rich-text field doesn't allow", async () => {
+    const result = await tool("create", {
+      collection: "articles",
+      data: { title: "Visa", content: [{ type: "block", fields: { blockType: "hero" } }] },
+    });
+
+    expect(result).toEqual({ error: expect.stringMatching(/"hero".*alert/) });
+  });
+});
+
 describe("updateRichText", () => {
   it("links text to a document and answers with the link's path and its node's outline", async () => {
     const page = await payload.create({ collection: "pages", data: { title: "Safety" } });

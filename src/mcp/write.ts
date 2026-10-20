@@ -4,6 +4,8 @@ import { restoreOutlines } from "../lexical/view.js";
 import { ALLOW_SHARED_ROW_REPLACEMENT, isSharedRowRefusal } from "../plugin/preserveSharedRows.js";
 import { jsonObject, pickLocale, toObject, type McpContentToolsOptions } from "./options.js";
 import { errorResult, jsonResult, type McpTool } from "./result.js";
+import { hydrateRichText, objectsIn, richTextFieldsIn } from "./richTextData.js";
+import { findAddedProblem } from "./richTextChecks.js";
 import { findLeftOutRows, findRowFields } from "./rows.js";
 import { errorMessage, hasDrafts, openTarget, type EntityConfig, type Target } from "./target.js";
 
@@ -26,7 +28,7 @@ const writeAnnotations = {
 const createParameters = {
   collection: z.string().describe("Collection slug."),
   data: jsonObject.describe(
-    "Field values. Read the entity schema first; leave out virtual (read-only) fields.",
+    "Field values. Read the entity schema first; leave out virtual (read-only) fields. Rich text: a list of nodes, as find shows them or as updateRichText shorthand.",
   ),
   locale: localeArg,
   draft: z
@@ -44,7 +46,7 @@ const updateParameters = {
     .optional()
     .describe("Instead of id: update every document this Payload query matches."),
   data: jsonObject.describe(
-    "Only the fields to change. For an array or blocks field, send every row you keep, with its id; a row without one is new.",
+    "Only the fields to change. For an array or blocks field, send every row you keep, with its id (an id alone keeps the row as stored); a row without one is new. Rich text: a list of nodes, as for create.",
   ),
   locale: localeArg,
   draft: z
@@ -165,6 +167,27 @@ function rowsRefusal(
   return `Refused: this would delete the stored rows it leaves out: ${list}. An array or blocks field takes its complete list of rows: send every row you keep, with its id. To delete these rows, pass replaceRows: true.`;
 }
 
+/**
+ * Turn the rich text in `data` into Lexical, in place, and say what it adds
+ * that a draft write wouldn't catch: a block its field doesn't allow, or a
+ * link to a document that doesn't exist.
+ */
+async function prepareRichText(
+  req: PayloadRequest,
+  target: Target,
+  config: EntityConfig,
+  data: Record<string, unknown>,
+  stored: Record<string, unknown> | undefined,
+): Promise<string | undefined> {
+  const blocks = req.payload.config.blocks ?? [];
+  const fields = hydrateRichText(config.fields, data, blocks, objectsIn(stored));
+  for (const field of fields) {
+    const problem = await findAddedProblem(stored?.[field], data[field], target, field, req);
+    if (problem) return problem;
+  }
+  return undefined;
+}
+
 export function createTool(options: McpContentToolsOptions = {}): McpTool {
   return {
     name: "create",
@@ -186,6 +209,8 @@ export function createTool(options: McpContentToolsOptions = {}): McpTool {
           locale: parsed.locale,
         });
         const data = withOutlinesRestored(requireData(parsed.data), undefined);
+        const problem = await prepareRichText(req, target, config, data, undefined);
+        if (problem) return errorResult(problem);
         // `draft: false` alone never publishes; `_status` has to say so.
         if (drafts) data._status = draft ? "draft" : "published";
 
@@ -255,7 +280,10 @@ export function updateTool(options: McpContentToolsOptions = {}): McpTool {
         const bulk = target.kind === "collection" && id === undefined;
         const blocks = req.payload.config.blocks ?? [];
         const stored =
-          !bulk && (holdsStringList(sent) || findRowFields(config.fields, sent, blocks).length > 0)
+          !bulk &&
+          (holdsStringList(sent) ||
+            findRowFields(config.fields, sent, blocks).length > 0 ||
+            richTextFieldsIn(config.fields, sent, blocks).length > 0)
             ? await readStored(req, target, id, locale, sent)
             : undefined;
         const refusal = parsed.replaceRows
@@ -263,6 +291,8 @@ export function updateTool(options: McpContentToolsOptions = {}): McpTool {
           : rowsRefusal(req, config, sent, stored, bulk);
         if (refusal) return errorResult(refusal);
         const data = withOutlinesRestored(sent, stored);
+        const problem = await prepareRichText(req, target, config, data, stored);
+        if (problem) return errorResult(problem);
         if (drafts) data._status = draft ? "draft" : "published";
         const status = drafts ? { status: data._status } : {};
         const write = {

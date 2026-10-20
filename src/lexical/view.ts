@@ -85,19 +85,6 @@ function nodeText(node: LexicalNode): string {
   return "";
 }
 
-function countLinks(node: LexicalNode): number {
-  let count = isLinkNode(node) ? 1 : 0;
-  if (hasChildren(node)) {
-    for (const child of node.children) count += countLinks(child);
-  }
-  if (node.fields !== undefined) {
-    for (const value of nestedRichTexts(node.fields)) {
-      for (const child of value.root.children) count += countLinks(child);
-    }
-  }
-  return count;
-}
-
 function label(node: LexicalNode): string {
   const fields = isRecord(node.fields) ? node.fields : {};
   switch (node.type) {
@@ -128,14 +115,12 @@ export function joinPath(path: string, key: string | number): string {
 }
 
 /**
- * One line per node: its path, kind, link count and a text preview — e.g.
- * `content.1 p [3 links]: More on …` — so the path can be used as it is.
+ * One line per node: its path, kind and a text preview — e.g.
+ * `content.1 p: More on [costs] …` — so the path can be used as it is.
  */
 export function outlineLine(node: LexicalNode, path: string): string {
-  const links = countLinks(node);
-  const linkNote = links > 0 ? ` [${links} ${links === 1 ? "link" : "links"}]` : "";
   const text = truncate(nodeText(node));
-  return `${path} ${label(node)}${linkNote}${text ? `: ${text}` : ""}`;
+  return `${path} ${label(node)}${text ? `: ${text}` : ""}`;
 }
 
 /** The outline of the rich text at `path`. */

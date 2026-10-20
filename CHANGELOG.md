@@ -3,7 +3,7 @@
 ## Unreleased
 
 - feat: the MCP `find` takes a list of paths, answering with their values keyed by path.
-- feat: outlines (CLI `lexical read`, `readAtPath`, MCP `find`) show link text in brackets and bold and italic text as `**…**` and `*…*`, and up to 120 characters of a node's text instead of 80.
+- feat: outlines (CLI `lexical read`, `readAtPath`, MCP `find`) show link text in brackets and bold and italic text as `**…**` and `*…*`, up to 120 characters of a node's text instead of 80, and no longer a link count.
 - fix: the MCP `find` refuses `path` and `text` with `locale: "all"`, which read one locale, instead of finding nothing at a path that lacks the locale segment.
 - feat: `insert` (CLI, `editAtPath`, MCP `updateRichText`) takes a list of nodes, inserting them in order at one index.
 - fix: the MCP `create` and `update` take rich text as a list of nodes, shorthand included, or `{root: {children}}`, and refuse other values, blocks the field doesn't allow and links to missing documents, instead of saving them unchecked into a draft.

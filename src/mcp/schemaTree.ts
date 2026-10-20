@@ -14,6 +14,7 @@ export const SCHEMA_TREE_LEGEND = [
   "  → a | b         target collections of a relationship or upload",
   "  (localized)     differs per locale",
   "  (virtual)       read-only, never write it",
+  "  read-only: a, b fields find returns but nothing writes, named on the last line",
   "  [when …]        applies only while the rule on sibling fields holds",
   "  filter: {…}     only related documents matching this query",
   "  = value         default",
@@ -34,7 +35,7 @@ export function renderSchemaTree(slug: string, kind: SchemaKind, fields: FieldSc
   const maintained: string[] = [];
   renderFields(fields, 1, "", lines, maintained);
   // Fields the app maintains itself: never written, but find returns them.
-  if (maintained.length) lines.push(`  read-only, in find results only: ${maintained.join(", ")}`);
+  if (maintained.length) lines.push(`  read-only: ${maintained.join(", ")}`);
   return lines.join("\n");
 }
 

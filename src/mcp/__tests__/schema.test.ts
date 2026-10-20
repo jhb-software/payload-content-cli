@@ -145,9 +145,7 @@ describe("getEntitySchema", () => {
   it("names the fields an app maintains, which find returns but nothing may write", async () => {
     const tree = (await call(payload, getEntitySchema, { collection: "products" })) as string;
 
-    expect(tree.split("\n").at(-1)).toBe(
-      "  read-only, in find results only: price, meta.alternatePaths",
-    );
+    expect(tree.split("\n").at(-1)).toBe("  read-only: price, meta.alternatePaths");
     expect(tree).not.toMatch(/createdAt|updatedAt|\bid\b/);
   });
 

@@ -78,7 +78,7 @@ mcpPlugin({ collections: {}, mcp: { tools: [...createMcpContentTools()] } });
 
 `listEntities`, `getEntitySchema`, `getBlockSchema`, `find`, `create`, `update` and `updateRichText` cover every collection and global, run with the request's user and Payload's access control, and save drafts unless told to publish. The helpers behind them are exported for your own tools, so these answer and address globals the same way.
 
-They are aligned with the CLI, so an agent that knows one knows the other. Rich text reads as the same outline in both, one line per node, each starting with its path (`content.3 block alert [1 link]: See [safety]`), and `updateRichText` and the `lexical` commands edit and link at those paths with the same engine. The schema tools answer from the same projection the CLI's `_schema.json` comes from. Most differences come from where each runs: the CLI calls the REST API and can work on pulled files, while the MCP tools run inside Payload and read without locale fallback. See [USAGE.md](USAGE.md#add-the-mcp-content-tools).
+They are aligned with the CLI, so an agent that knows one knows the other. Rich text reads as the same outline in both, one line per node, each starting with its path (`content.3 block alert: See [safety]`), and `updateRichText` and the `lexical` commands edit and link at those paths with the same engine. The schema tools answer from the same projection the CLI's `_schema.json` comes from. Most differences come from where each runs: the CLI calls the REST API and can work on pulled files, while the MCP tools run inside Payload and read without locale fallback. See [USAGE.md](USAGE.md#add-the-mcp-content-tools).
 
 ## Content sync
 

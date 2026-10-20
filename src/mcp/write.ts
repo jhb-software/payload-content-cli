@@ -62,9 +62,7 @@ const updateParameters = {
   replaceRows: z
     .boolean()
     .optional()
-    .describe(
-      "Delete the stored rows data leaves out, or replace shared rows and their translations. Only after a write was refused for it.",
-    ),
+    .describe("Allow a write that drops stored rows. Only after a refusal names it."),
 };
 
 const createSchema = z.object(createParameters);

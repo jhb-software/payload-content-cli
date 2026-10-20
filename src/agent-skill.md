@@ -68,13 +68,21 @@ Read `_schema.json` files to understand field types. Fields with `virtual: true`
 
 Use `--dry-run` on push to preview changes before committing them.
 
+Push with `--draft` unless asked to publish. Without it, push sends each file's `_status` as is, so an edit to a published document goes live. Pull with `--draft` to edit the latest draft rather than the published version.
+
 ### Step 6: Use lexical subcommands for richtext
 
 Prefer `lexical` subcommands (`read`, `set`, `insert`, `delete`) over rewriting the entire Lexical tree. Run `lexical read <file>` first: it outlines every richtext field, each line starting with the node's path. Paths continue into nodes and nested rich text (`layout.1.richText.3.fields.body.0`). Copy nodes between files with `lexical read --full` piped into `lexical insert --json -`.
 
 ### Step 7: Handle locales
 
-Pull multiple locales (`--locale en de`), use `lexical diff` to compare, and `lexical link --from <file> --link <path>` to sync links between locale files.
+Pull with `--locale <codes...>` to get one file per locale (`<doc>_<locale>.json`), edit each file, and push them together.
+
+To carry rich-text changes from one locale's file to another's:
+
+- `lexical diff <source> <target>` lists the links and blocks only one side has.
+- `lexical link <target> --text "<text>" --from <source> --link <path>` links text to the same document as a link in the source.
+- `lexical read <source> <path> --full` piped into `lexical insert <target> <path> --json -` copies a node.
 
 ## Output
 

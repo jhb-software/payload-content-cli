@@ -137,7 +137,7 @@ An outline only stands in for the rich text it was read from: an unchanged one i
 
 The input document is never modified; a change returns a changed copy as `doc`, validated first. Failures throw `LexicalError` with a `code` — `PATH_NOT_FOUND` (naming the valid range or keys), `UNSUPPORTED_AT_PATH`, `INVALID_NODE`, `INVALID_TREE`, `TEXT_NOT_FOUND` — all meaning the input was wrong, so a tool can relay the message instead of reporting a fault.
 
-Alongside them, each covering every rich text at or below a path (`""` for the whole document) and naming full dot paths in their results:
+Alongside them, each covering every rich text at or below a path (`""` for the whole document, or a node such as `content.2` for just that node) and naming full dot paths in their results:
 
 - `richTextPaths(doc, { nested? })` — every rich-text value's path, fields in array rows included.
 - `searchRichText(doc, path, text)` — matches, those inside a link marked `linked`.

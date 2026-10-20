@@ -15,6 +15,7 @@ import type { LinkTarget } from "./nodes.js";
 import { extractLinks, linkFirstMatch, searchText } from "./operations.js";
 import type { ExtractedLink, SearchMatch } from "./operations.js";
 import { valueAtPath } from "./path.js";
+import { hasChildren, isLinkNode, type LexicalNode } from "./types.js";
 import { assertValidTree } from "./validate.js";
 import { hydrateNode, isRichText, type RichTextValue } from "./view.js";
 
@@ -49,10 +50,23 @@ export function richTextPaths(doc: object, options: RichTextPathsOptions = {}): 
   return found;
 }
 
-/** Every rich text at or below `path`, nested rich text included. */
+const isLexicalNode = (value: unknown): value is LexicalNode =>
+  typeof value === "object" && value !== null && typeof (value as LexicalNode).type === "string";
+
+/**
+ * Every rich text at or below `path`, nested rich text included. A path to a
+ * node with children, such as a paragraph, covers just that node's children.
+ */
 function sections(doc: object, path: string): RichTextSection[] {
+  const value = valueAtPath(doc, path);
+  if (isLexicalNode(value) && hasChildren(value)) {
+    if (isLinkNode(value)) {
+      throw new LexicalError("UNSUPPORTED_AT_PATH", `${path} is a link; pass the node holding it.`);
+    }
+    return [{ path: `${path}.children`, children: value.children }];
+  }
   const paths: string[] = [];
-  collectPaths(valueAtPath(doc, path), path, true, paths);
+  collectPaths(value, path, true, paths);
   if (paths.length === 0) {
     throw new LexicalError("PATH_NOT_FOUND", `No rich text at ${path || "the document"}.`);
   }

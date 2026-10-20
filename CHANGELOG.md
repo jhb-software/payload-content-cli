@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- fix: `lexical search`/`link` (and `searchRichText`, `linkRichText`, the MCP `updateRichText` `link`) accept a path to a node inside rich text, such as `content.2`, and stay within it.
 - fix: `McpTool` annotations accept `openWorldHint`, and the content tools set it to `false`, telling clients they only touch the app's own content.
 - feat: `./mcp` exports `jsonResult`, `textResult`, `errorResult`, `parseTarget` and `openTarget` for an app's own tools, and `./lexical` exports the `LexicalLinkNode` and `RichTextValue` types.
 - feat: `preserveSharedRowsPlugin()` only hooks collections and globals with a shared array or blocks field, so the others no longer pay an extra read per write, and it runs after the app's other plugins, guarding the collections they add.

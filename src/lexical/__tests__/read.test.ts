@@ -89,6 +89,12 @@ describe("searchRichText", () => {
     expect(searchRichText(page(), "layout", "entry")).toHaveLength(1);
   });
 
+  it("searches one node of a rich text, by its path", () => {
+    const matches = searchRichText(page(), "layout.1.richText.0", "entry");
+
+    expect(matches.map((match) => match.path)).toEqual(["layout.1.richText.0.children.0"]);
+  });
+
   it("refuses a path with no rich text at or below it", () => {
     expect(() => searchRichText(page(), "title", "x")).toThrow(/No rich text at title/);
     expect(codeOf(() => searchRichText(page(), "title", "x"))).toBe("PATH_NOT_FOUND");
@@ -128,6 +134,27 @@ describe("linkRichText", () => {
   it("searches the whole document when the path is empty", () => {
     const linked = linkRichText(page(), "", "Welcome", { relationTo: "pages", value: "home" });
     expect(linked.path).toBe("intro.0.children.0");
+  });
+
+  it("links within the node at the path, leaving an earlier match alone", () => {
+    const doc = {
+      ...page(),
+      intro: richText(buildParagraph("Our rules apply."), buildParagraph("Read the rules.")),
+    };
+
+    const linked = linkRichText(doc, "intro.1", "rules", { relationTo: "pages", value: "rules" });
+
+    expect(linked.path).toBe("intro.1.children.1");
+    expect(extractRichTextLinks(linked.doc, "intro").map((link) => link.path)).toEqual([
+      "intro.1.children.1",
+    ]);
+  });
+
+  it("refuses a path inside a link, which would nest one link in another", () => {
+    const target = { relationTo: "pages", value: "other" };
+    const link = "layout.1.richText.1.fields.body.0.children.1";
+
+    expect(codeOf(() => linkRichText(page(), link, "visa", target))).toBe("UNSUPPORTED_AT_PATH");
   });
 
   it("refuses text that isn't there unlinked", () => {

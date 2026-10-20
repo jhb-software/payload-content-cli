@@ -3,6 +3,11 @@
 - This project is in beta-phase. Breaking changes are fine. Prioritize an ergonomic API over backwards compatibility.
 - Don't add features that aren't needed right now. Keep the scope tight.
 
+## Design
+
+- Progressive disclosure: a cheap overview first (outlines, schema trees), detail on request (`path`, `getBlockSchema`).
+- Deep modules: prefer widening an existing parameter over a new tool, option or flag. Keep the public surface small.
+
 ## Plans
 
 - Plans are tracked in the `plans/` folder as markdown files with `title`, `type`, and `status` frontmatter.

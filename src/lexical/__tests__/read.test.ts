@@ -145,8 +145,28 @@ describe("linkRichText", () => {
     const linked = linkRichText(doc, "intro.1", "rules", { relationTo: "pages", value: "rules" });
 
     expect(linked.path).toBe("intro.1.children.1");
+    expect(linked.outline).toBe("intro.1 p [1 link]: Read the rules.");
     expect(extractRichTextLinks(linked.doc, "intro").map((link) => link.path)).toEqual([
       "intro.1.children.1",
+    ]);
+  });
+
+  it("links within the text node at the path, leaving the same text in a sibling alone", () => {
+    const doc = {
+      intro: richText({
+        ...buildParagraph(""),
+        children: [buildText("Our rules. "), buildText("Read the rules.")],
+      }),
+    };
+
+    const linked = linkRichText(doc, "intro.0.children.1", "rules", {
+      relationTo: "pages",
+      value: "rules",
+    });
+
+    expect(linked.path).toBe("intro.0.children.2");
+    expect(searchRichText(linked.doc, "intro.0.children.0", "rules")).toEqual([
+      { path: "intro.0.children.0", context: "Our rules. " },
     ]);
   });
 

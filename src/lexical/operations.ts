@@ -12,8 +12,11 @@ export function linkFirstMatch(
   base: string,
   search: string,
   linkNode: LexicalNode,
+  /** Only look at the node at this index. */
+  only?: number,
 ): string | undefined {
-  for (let i = 0; i < nodes.length; i++) {
+  const end = only === undefined ? nodes.length : Math.min(only + 1, nodes.length);
+  for (let i = only ?? 0; i < end; i++) {
     const node = nodes[i];
 
     // Skip existing link/autolink nodes

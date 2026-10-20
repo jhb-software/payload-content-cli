@@ -137,11 +137,11 @@ An outline only stands in for the rich text it was read from: an unchanged one i
 
 The input document is never modified; a change returns a changed copy as `doc`, validated first. Failures throw `LexicalError` with a `code` — `PATH_NOT_FOUND` (naming the valid range or keys), `UNSUPPORTED_AT_PATH`, `INVALID_NODE`, `INVALID_TREE`, `TEXT_NOT_FOUND` — all meaning the input was wrong, so a tool can relay the message instead of reporting a fault.
 
-Alongside them, each covering every rich text at or below a path (`""` for the whole document, or a node such as `content.2` for just that node) and naming full dot paths in their results:
+Alongside them, each covering every rich text at or below a path (`""` for the whole document, a node such as `content.2` for just that node, or a text node such as `content.2.children.1`) and naming full dot paths in their results:
 
 - `richTextPaths(doc, { nested? })` — every rich-text value's path, fields in array rows included.
 - `searchRichText(doc, path, text)` — matches, those inside a link marked `linked`.
-- `linkRichText(doc, path, text, { relationTo, value, newTab? })` — wrap the first unlinked match in an internal link; returns a changed copy and the new link's path.
+- `linkRichText(doc, path, text, { relationTo, value, newTab? })` — wrap the first unlinked match in an internal link; returns a changed copy, the link's path and its node's outline line.
 - `extractRichTextLinks(doc, path)` — internal links and their targets.
 - `diffRichText(source, target, path)` — links and blocks only one locale variant has.
 
@@ -198,7 +198,7 @@ To keep answers lean, `create`, `update` and `updateRichText` write with `select
 
 #### Edit rich text by path
 
-`updateRichText` packages [`editAtPath`](#edit-richtext-from-your-own-code) and `linkRichText` as a tool, on the paths `find` shows. It takes `collection`, `id`, `path`, `operation` (`set`, `insert`, `delete`, `link`), `value`, `text` (for `link`), `locale`, `draft` and `overwriteDraft`. `link` wraps the first unlinked match of `text` at or below `path` in an internal link to `value` (`{ relationTo, value }`) and answers with the new link's path. Edits go to the draft by default. `draft: false` publishes, and is refused when it would discard newer draft changes unless `overwriteDraft: true`. Since draft writes skip Payload's validation, the blocks and the link or upload targets an edit adds are checked first: each block must be one its rich-text field allows, also when an edit keeps a block's id but changes its type. A locale is read without fallback; rich text nobody has written yet in it, at any depth (an array row, a block), is started empty, so `insert` at `content.0` or `sections.0.body.0` begins it.
+`updateRichText` packages [`editAtPath`](#edit-richtext-from-your-own-code) and `linkRichText` as a tool, on the paths `find` shows. It takes `collection`, `id`, `path`, `operation` (`set`, `insert`, `delete`, `link`), `value`, `text` (for `link`), `locale`, `draft` and `overwriteDraft`. `link` wraps the first unlinked match of `text` at or below `path` in an internal link to `value` (`{ relationTo, value }`) and answers with the link's path and its node's outline line. Edits go to the draft by default. `draft: false` publishes, and is refused when it would discard newer draft changes unless `overwriteDraft: true`. Since draft writes skip Payload's validation, the blocks and the link or upload targets an edit adds are checked first: each block must be one its rich-text field allows, also when an edit keeps a block's id but changes its type. A locale is read without fallback; rich text nobody has written yet in it, at any depth (an array row, a block), is started empty, so `insert` at `content.0` or `sections.0.body.0` begins it.
 
 #### Options
 
@@ -608,7 +608,7 @@ payload-content lexical link page.json layout.1.richText --text "TypeScript" --r
 payload-content lexical link page_en.json --from page_de.json --link layout.1.richText.3.fields.body.0.children.1
 ```
 
-Links the first unlinked match at or below the path, or anywhere in the file without one, and prints the new link's path. With `--from`, the link's own text is searched unless `--text` is given.
+Links the first unlinked match at or below the path, or anywhere in the file without one, and prints the link's path and its node's outline line. With `--from`, the link's own text is searched unless `--text` is given.
 
 ### lexical diff — compare two files
 

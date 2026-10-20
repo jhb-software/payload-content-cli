@@ -178,7 +178,9 @@ export function registerLexicalCommands(program: Command): void {
 
           const linked = linkRichText(await readDocument(file), path ?? "", text, target);
           await writeDocument(file, linked.doc);
-          console.log(JSON.stringify({ linked: linked.path, text, ...target }));
+          console.log(
+            JSON.stringify({ linked: linked.path, outline: linked.outline, text, ...target }),
+          );
         },
       ),
     );

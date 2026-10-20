@@ -221,7 +221,7 @@ describe("update with rich text as find shows it", () => {
 });
 
 describe("updateRichText", () => {
-  it("links text to a document and answers with the link's path", async () => {
+  it("links text to a document and answers with the link's path and its node's outline", async () => {
     const page = await payload.create({ collection: "pages", data: { title: "Safety" } });
     const intro = await payload.create({ collection: "pages", data: { title: "Intro" } });
     const id = await createPost(page.id);
@@ -235,7 +235,10 @@ describe("updateRichText", () => {
       value: { relationTo: "pages", value: intro.id },
     });
 
-    expect(result).toEqual({ linked: "content.0.children.0" });
+    expect(result).toEqual({
+      linked: "content.0.children.0",
+      outline: "content.0 p [1 link]: Intro",
+    });
     expect(await find({ collection: "posts", id, path: "content.0.children.0.fields" })).toEqual({
       linkType: "internal",
       newTab: false,

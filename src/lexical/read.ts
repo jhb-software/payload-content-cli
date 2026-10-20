@@ -17,7 +17,7 @@ import type { ExtractedLink, SearchMatch } from "./operations.js";
 import { valueAtPath } from "./path.js";
 import { hasChildren, isLinkNode, type LexicalNode } from "./types.js";
 import { assertValidTree } from "./validate.js";
-import { hydrateNode, isRichText, type RichTextValue } from "./view.js";
+import { hydrateNode, isRichText, outlineLine, type RichTextValue } from "./view.js";
 
 export interface RichTextPathsOptions {
   /** Also list rich text nested inside nodes, such as a block's body. Default: false. */
@@ -53,12 +53,27 @@ export function richTextPaths(doc: object, options: RichTextPathsOptions = {}): 
 const isLexicalNode = (value: unknown): value is LexicalNode =>
   typeof value === "object" && value !== null && typeof (value as LexicalNode).type === "string";
 
+/** A list of nodes to search; `only` narrows it to the node at that index. */
+type Section = RichTextSection & { only?: number };
+
 /**
  * Every rich text at or below `path`, nested rich text included. A path to a
- * node with children, such as a paragraph, covers just that node's children.
+ * node with children, such as a paragraph, covers just that node's children;
+ * a path to a text node covers just that node.
  */
-function sections(doc: object, path: string): RichTextSection[] {
+function sections(doc: object, path: string): Section[] {
   const value = valueAtPath(doc, path);
+  const inList = /^(.+\.children)\.(\d+)$/.exec(path);
+  if (isLexicalNode(value) && value.type === "text" && inList) {
+    const [, listPath, index] = inList;
+    return [
+      {
+        path: listPath,
+        children: valueAtPath(doc, listPath) as LexicalNode[],
+        only: Number(index),
+      },
+    ];
+  }
   if (isLexicalNode(value) && hasChildren(value)) {
     if (isLinkNode(value)) {
       throw new LexicalError("UNSUPPORTED_AT_PATH", `${path} is a link; pass the node holding it.`);
@@ -79,18 +94,23 @@ function sections(doc: object, path: string): RichTextSection[] {
 /** Text containing `search`, with the path of each text node it's in; matches inside a link say `linked`. */
 export function searchRichText(doc: object, path: string, search: string): SearchMatch[] {
   return sections(doc, path).flatMap((section) =>
-    searchText(section.children, section.path, search),
+    searchText(section.children, section.path, search).filter(
+      (match) => section.only === undefined || match.path === `${section.path}.${section.only}`,
+    ),
   );
 }
 
 /** Every internal link, with its text and target document. */
 export function extractRichTextLinks(doc: object, path: string): ExtractedLink[] {
-  return sections(doc, path).flatMap((section) => extractLinks(section.children, section.path));
+  return sections(doc, path)
+    .filter((section) => section.only === undefined)
+    .flatMap((section) => extractLinks(section.children, section.path));
 }
 
 /**
  * Link the first unlinked occurrence of `text` to a document. Returns a
- * changed copy and the path of the new link; the document is not modified.
+ * changed copy, the path of the new link and the outline line of the node
+ * holding it; the document is not modified.
  * Throws `TEXT_NOT_FOUND` when there is no unlinked match.
  */
 export function linkRichText<T extends object>(
@@ -98,14 +118,19 @@ export function linkRichText<T extends object>(
   path: string,
   text: string,
   target: LinkTarget,
-): { doc: T; path: string } {
+): { doc: T; path: string; outline: string } {
   const copy = structuredClone(doc);
   const link = hydrateNode(buildInternalLink(text, target));
   for (const section of sections(copy, path)) {
-    const at = linkFirstMatch(section.children, section.path, text, link);
+    const at = linkFirstMatch(section.children, section.path, text, link, section.only);
     if (at) {
       assertValidTree(section.children);
-      return { doc: copy, path: at };
+      const holder = at.replace(/\.children\.\d+$/, "");
+      return {
+        doc: copy,
+        path: at,
+        outline: outlineLine(valueAtPath(copy, holder) as LexicalNode, holder),
+      };
     }
   }
   throw new LexicalError("TEXT_NOT_FOUND", `No unlinked "${text}" in ${path || "the document"}.`);

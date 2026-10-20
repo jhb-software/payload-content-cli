@@ -14,18 +14,18 @@ const parameters = {
   path: z
     .string()
     .describe(
-      'Dot path from find\'s outline: "content.3" (a node), "content.3.children.1.fields.doc" (a link target), "content.4.fields.body.0" (rich text in a block), "sections.0.body.2" (rich text in an array row). For link: the rich text to search, e.g. "content".',
+      'Dot path from find\'s outline: "content.3" (a node), "content.3.children.1.fields.doc" (a link target), "content.4.fields.body.0" (rich text in a block), "sections.0.body.2" (rich text in an array row), "content.3.children.2" (inline). For link: the rich text or node to search, e.g. "content".',
     ),
   operation: z
     .enum(["set", "insert", "delete", "link"])
     .describe(
-      "set: replace the value at path. insert: add a node before the index path ends in (the node count appends). delete: remove the node. link: wrap the first unlinked match of text in a link to value.",
+      "set: replace the value at path; to change words, set a text node's text (content.3.children.0.text). insert: add a node before the index path ends in (the node count appends), e.g. a text node into a paragraph's children. delete: remove the node. link: wrap the first unlinked match of text in a link to value.",
     ),
   value: z
     .unknown()
     .optional()
     .describe(
-      'For set and insert: a node as find shows it, or shorthand: {"type":"p","text":"…"}, {"type":"h2","text":"…"}, {"type":"ul","items":["…"]}, {"type":"block","fields":{"blockType":"…"}}, {"type":"upload","value":"<id>"} (relationTo defaults to media). A link to a URL, in a paragraph\'s children: {"type":"link","fields":{"linkType":"custom","url":"…"},"children":[{"type":"text","text":"…"}]}. For link: {"relationTo":"pages","value":"<id>"}, optionally "newTab":true. For a value inside a node, the new value.',
+      'For set and insert: a node as find shows it, or shorthand: {"type":"p","text":"…"}, {"type":"h2","text":"…"}, {"type":"ul","items":["…"]}, {"type":"text","text":"…"}, {"type":"block","fields":{"blockType":"…"}}, {"type":"upload","value":"<id>"} (relationTo defaults to media). A link to a URL, in a paragraph\'s children: {"type":"link","fields":{"linkType":"custom","url":"…"},"children":[{"type":"text","text":"…"}]}. For link: {"relationTo":"pages","value":"<id>"}, optionally "newTab":true. For a value inside a node, the new value.',
     ),
   text: z.string().optional().describe("For link: the text to wrap, as it appears."),
   locale: z.string().optional().describe("Default: the default locale."),
@@ -390,7 +390,7 @@ export function updateRichTextTool(options: McpContentToolsOptions = {}): McpToo
             value,
             ...(linkTarget?.newTab === true ? { newTab: true } : {}),
           });
-          result = { linked: linked.path };
+          result = { linked: linked.path, outline: linked.outline };
           changed = linked.doc;
         } else {
           ({ result, doc: changed } = editAtPath(doc, path, operation, parsed.value));

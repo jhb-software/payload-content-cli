@@ -15,20 +15,18 @@ const parameters = {
     .string()
     .optional()
     .describe(
-      'With id or a global: only the value at this dot path, as the outlines show it, e.g. "content.3" for a node as JSON, or "layout.1" for an array row.',
+      'With id or a global: only the value at this dot path from the outline, e.g. "content.3" or "layout.1".',
     ),
   text: z
     .string()
     .optional()
     .describe(
-      "With id or a global: find this text in the rich text (below path, if given). Answers with each match's path; text already inside a link is marked linked.",
+      "With id or a global: the paths where this text occurs in rich text (below path, if given); matches inside a link are marked linked.",
     ),
   where: jsonObject
     .optional()
     .describe('Filter as a Payload query, e.g. {"slug":{"equals":"about"}}.'),
-  select: jsonObject
-    .optional()
-    .describe('Only these fields, e.g. {"title":true}. Keeps the answer small.'),
+  select: jsonObject.optional().describe('Only these fields, e.g. {"title":true}.'),
   sort: z.string().optional().describe('Field to sort by; "-" for descending, e.g. "-createdAt".'),
   limit: z.number().int().min(1).max(100).optional().describe("Documents per page, default 10."),
   page: z.number().int().min(1).optional().describe("Page, default 1."),
@@ -43,14 +41,9 @@ const parameters = {
     .string()
     .optional()
     .describe(
-      'Locale to read, default the default locale; "all" for every locale. Values are as stored: an untranslated field is empty.',
+      'Default: the default locale; "all" for every locale. No fallback: an untranslated field is empty.',
     ),
-  draft: z
-    .boolean()
-    .optional()
-    .describe(
-      "Default true: the latest draft, including unpublished changes. false: what is live.",
-    ),
+  draft: z.boolean().optional().describe("Default true: the latest draft. false: what is live."),
 };
 
 const argsSchema = z.object(parameters);
@@ -59,7 +52,7 @@ export function findTool(options: McpContentToolsOptions = {}): McpTool {
   return {
     name: "find",
     description:
-      'Read documents: one by id, a page of a collection filtered by where, or a global. Rich text shows as an outline, one line per node starting with its path ("content.3 p: …"); read a node by passing that path. Use select or path and keep depth at 0 to keep answers small.',
+      'Read one document by id, a page of a collection (filtered by where), or a global. Rich text shows as an outline, one line per node starting with its path ("content.3 p: …"). Keep answers small with select or path and depth 0.',
     annotations: {
       title: "Find content",
       readOnlyHint: true,

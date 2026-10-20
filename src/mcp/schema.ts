@@ -14,8 +14,7 @@ const readOnly = {
 export function listEntitiesTool(): McpTool {
   return {
     name: "listEntities",
-    description:
-      "List the collections and globals you may read, and the site's locales. Start here to discover what content exists.",
+    description: "List the collections and globals you may read, and the locales. Start here.",
     annotations: { title: "List entities", ...readOnly },
     parameters: {},
     handler: async (_args, req) => {
@@ -44,7 +43,7 @@ const entityArgs = z.object({
 export function getEntitySchemaTool(): McpTool {
   return {
     name: "getEntitySchema",
-    description: `Get the fields of a collection or global, as a tree. Read it before creating or updating content. Blocks are listed by slug; resolve the ones you need with the block schema tool. Payload's bookkeeping (timestamps, _status, row ids) is left out.\n\n${SCHEMA_TREE_LEGEND}`,
+    description: `Get the fields of a collection or global as a tree. Read it before writing. Blocks are listed by slug; resolve them with the block schema tool.\n\n${SCHEMA_TREE_LEGEND}`,
     annotations: { title: "Get entity schema", ...readOnly },
     parameters: entityArgs.shape,
     handler: async (args, req) => {
@@ -75,7 +74,7 @@ export function getBlockSchemaTool(): McpTool {
   return {
     name: "getBlockSchema",
     description:
-      "Get the fields of blocks by slug, in the same tree format as entity schemas, for blocks fields and rich-text blocks alike. Blocks nested inside are listed by slug again.",
+      "Get the fields of blocks by slug, as a tree like the entity schema. Nested blocks are listed by slug again.",
     annotations: { title: "Get block schema", ...readOnly },
     parameters: blockArgs.shape,
     handler: async (args, req) => {

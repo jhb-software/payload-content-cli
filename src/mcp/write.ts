@@ -13,7 +13,7 @@ const collectionArg = z
 const localeArg = z
   .string()
   .optional()
-  .describe("Locale to write, default the default locale. Localized fields only change in it.");
+  .describe("Default: the default locale. Localized fields change only in it.");
 
 const writeAnnotations = {
   readOnlyHint: false,
@@ -32,7 +32,7 @@ const createParameters = {
     .boolean()
     .optional()
     .describe(
-      "Default true: an unpublished draft, required fields not yet enforced. false publishes it — only if the user asked.",
+      "Default true: an unpublished draft, required fields not enforced. false publishes — only if the user asked.",
     ),
 };
 
@@ -50,7 +50,7 @@ const updateParameters = {
     .boolean()
     .optional()
     .describe(
-      "Default true: save to the draft. false publishes the latest draft together with these changes — only if the user asked.",
+      "Default true: save to the draft. false publishes the latest draft with these changes — only if the user asked.",
     ),
   overwriteDraft: z
     .boolean()
@@ -207,7 +207,7 @@ export function updateTool(options: McpContentToolsOptions = {}): McpTool {
   return {
     name: "update",
     description:
-      "Change fields of a document by id, of every document a where clause matches, or of a global. Saves to the draft unless draft:false. Only the fields in data change.",
+      "Change fields of a document by id, of every document where matches, or of a global. Only the fields in data change; saves to the draft unless draft:false.",
     annotations: { title: "Update content", ...writeAnnotations },
     parameters: updateParameters,
     handler: async (args, req) => {

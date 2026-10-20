@@ -91,6 +91,14 @@ describe("find", () => {
     expect(german.title ?? null).toBeNull();
   });
 
+  it("refuses a locale the app doesn't have, naming the ones it has", async () => {
+    const { id } = await publishedPost("locale", "Hello");
+
+    const result = await find({ collection: "posts", id, locale: "fr" });
+
+    expect(result).toEqual({ error: 'Unknown locale "fr". Use one of: en, de.' });
+  });
+
   it("reads a global addressed as globals/<slug>", async () => {
     await payload.updateGlobal({ slug: "footer", data: { note: "Hello" } as never });
 

@@ -214,7 +214,7 @@ createMcpContentTools({
 });
 ```
 
-An unknown collection or global is answered with the ones the agent may use. To drop or replace one tool, filter the list by `name`. Tool names are stable, since `@payloadcms/plugin-mcp` keys its per-key access flags on them. Tools carry MCP `annotations` (`readOnlyHint`, `title`), so clients can run the read tools without asking for confirmation. `@payloadcms/plugin-mcp` forwards them from v4 on. On 3.x, patch it (`pnpm patch @payloadcms/plugin-mcp`) to pass them on in the custom-tool registration in `dist/mcp/getMcpHandler.js`:
+An unknown collection, global or locale is answered with the ones the agent may use. To drop or replace one tool, filter the list by `name`. Tool names are stable, since `@payloadcms/plugin-mcp` keys its per-key access flags on them. Tools carry MCP `annotations` (`readOnlyHint`, `title`), so clients can run the read tools without asking for confirmation. `@payloadcms/plugin-mcp` forwards them from v4 on. On 3.x, patch it (`pnpm patch @payloadcms/plugin-mcp`) to pass them on in the custom-tool registration in `dist/mcp/getMcpHandler.js`:
 
 ```diff
  registerTool(isToolEnabled, tool.name, () => server.registerTool(tool.name, {

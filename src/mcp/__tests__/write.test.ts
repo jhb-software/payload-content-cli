@@ -202,6 +202,19 @@ describe("update", () => {
     expect((await read(id, true)).title).toBe("Hello");
   });
 
+  it("refuses a locale the app doesn't have, instead of writing nothing", async () => {
+    const id = await publishedPost("Hello");
+
+    const result = await tool("update", {
+      collection: "posts",
+      id,
+      locale: "fr",
+      data: { title: "Bonjour" },
+    });
+
+    expect(result).toEqual({ error: 'Unknown locale "fr". Use one of: en, de.' });
+  });
+
   it('refuses locale "all", which takes values per locale', async () => {
     const id = await publishedPost("Hello");
 

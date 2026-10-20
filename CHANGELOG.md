@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- fix: the MCP tools refuse a locale the app doesn't have, naming the ones it has, instead of reading nothing and dropping writes without an error.
 - fix: the MCP `update` refuses data that leaves out stored array or blocks rows, which Payload would delete, and bulk updates that write rows, unless `replaceRows: true`.
 - fix: `set` (CLI, `editAtPath`, MCP) refuses shorthand that would drop links, formatting or inline nodes, pointing to the text node's `text` instead.
 - feat: `link` (CLI, `linkRichText`, MCP) answers with its node's outline line, and `link`/`search` accept a text-node path.

@@ -2,18 +2,17 @@
 
 ## Unreleased
 
-- fix: the MCP tools refuse a locale the app doesn't have, naming the ones it has, instead of reading nothing and dropping writes without an error.
-- fix: the MCP `update` refuses data that leaves out stored array or blocks rows, which Payload would delete, and bulk updates that write rows, unless `replaceRows: true`.
-- fix: `set` (CLI, `editAtPath`, MCP) refuses shorthand that would drop links, formatting or inline nodes, pointing to the text node's `text` instead.
-- feat: `link` (CLI, `linkRichText`, MCP) answers with its node's outline line, and `link`/`search` accept a text-node path.
-- feat: the MCP schema tree names the hidden read-only fields an app maintains, which `find` returns but nothing may write, and lists the fields an app adds to rich-text links. The `updateRichText` description shows the shape of a link to a URL.
-- fix: `lexical link` (and `linkRichText`, the MCP `updateRichText` `link`) keeps the bold, italic or other formatting and style of the text it links.
-- fix: pushing one locale of a document no longer makes its other locale files look changed remotely, and edits to several locales of one document push in one run without a false conflict.
-- fix: after `pull --draft`, `diff` and `push` compare against the latest draft instead of the published version, so documents with an unpublished draft no longer show a false conflict, and `push --dry-run` reports the conflicts a real push would hit.
-- fix: `lexical search`/`link` (and `searchRichText`, `linkRichText`, the MCP `updateRichText` `link`) accept a path to a node inside rich text, such as `content.2`, and stay within it.
-- fix: `McpTool` annotations accept `openWorldHint`, and the content tools set it to `false`, telling clients they only touch the app's own content.
+- feat: `lexical search`/`link` (and `searchRichText`, `linkRichText`, the MCP `updateRichText` `link`) accept a path to a node or text node inside rich text, such as `content.2`, and stay within it. `link` answers with the node's outline line.
+- feat: the MCP schema tree names the hidden read-only fields an app maintains, which `find` returns but nothing may write, and the fields an app adds to rich-text links.
 - feat: `./mcp` exports `jsonResult`, `textResult`, `errorResult`, `parseTarget` and `openTarget` for an app's own tools, and `./lexical` exports the `LexicalLinkNode` and `RichTextValue` types.
-- feat: `preserveSharedRowsPlugin()` only hooks collections and globals with a shared array or blocks field, so the others no longer pay an extra read per write, and it runs after the app's other plugins, guarding the collections they add.
+- feat: `preserveSharedRowsPlugin()` only hooks collections and globals with a shared array or blocks field, and runs after the app's other plugins, guarding the collections they add.
+- fix: `lexical link` (and `linkRichText`, the MCP `updateRichText` `link`) keeps the formatting and style of the text it links.
+- fix: `set` (CLI, `editAtPath`, MCP) refuses shorthand that would drop links, formatting or inline nodes, pointing to the text node's `text` instead.
+- fix: the MCP `update` refuses data that leaves out stored array or blocks rows, which Payload would delete, and bulk updates that write rows, unless `replaceRows: true`.
+- fix: the MCP tools refuse a locale the app doesn't have, naming the ones it has, instead of reading nothing and dropping writes without an error.
+- fix: `McpTool` annotations accept `openWorldHint`, and the content tools set it to `false`.
+- fix: after `pull --draft`, `diff` and `push` compare against the latest draft instead of the published version, so an unpublished draft no longer shows a false conflict, and `push --dry-run` reports the conflicts a real push would hit.
+- fix: pushing one locale of a document no longer makes its other locale files look changed remotely, and edits to several locales of one document push in one run without a false conflict.
 
 ## 0.6.0-beta.0
 

@@ -178,6 +178,8 @@ const globalHook: GlobalBeforeOperationHook = async ({ args, operation, global }
  */
 export function preserveSharedRowsPlugin(options: PreserveSharedRowsPluginOptions = {}): Plugin {
   const plugin: Plugin = (config: Config): Config => {
+    // Payload drops `localized` without localization only after plugins run.
+    if (!config.localization) return config;
     const configBlocks = config.blocks as Block[] | undefined;
     const guards = (list: string[] | undefined, slug: string, fields: Field[]) =>
       (!list || list.includes(slug)) && hasSharedRows(fields, configBlocks);

@@ -4,7 +4,12 @@ import { errorResult, jsonResult, textResult, type McpTool } from "./result.js";
 import { renderSchemaTree, SCHEMA_TREE_LEGEND } from "./schemaTree.js";
 import { GLOBAL_PREFIX, INTERNAL_COLLECTIONS, errorMessage, parseTarget } from "./target.js";
 
-const readOnly = { readOnlyHint: true, destructiveHint: false, idempotentHint: true };
+const readOnly = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: false,
+};
 
 export function listEntitiesTool(): McpTool {
   return {

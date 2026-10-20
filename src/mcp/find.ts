@@ -65,6 +65,7 @@ export function findTool(options: McpContentToolsOptions = {}): McpTool {
       readOnlyHint: true,
       destructiveHint: false,
       idempotentHint: true,
+      openWorldHint: false,
     },
     parameters,
     handler: async (args, req) => {

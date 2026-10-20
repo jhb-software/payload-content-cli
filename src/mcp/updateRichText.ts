@@ -320,6 +320,7 @@ export function updateRichTextTool(options: McpContentToolsOptions = {}): McpToo
       readOnlyHint: false,
       destructiveHint: false,
       idempotentHint: false,
+      openWorldHint: false,
     },
     parameters,
     handler: async (args, req) => {

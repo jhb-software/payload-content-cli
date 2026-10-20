@@ -24,6 +24,7 @@ export interface McpTool {
     readOnlyHint?: boolean;
     destructiveHint?: boolean;
     idempotentHint?: boolean;
+    openWorldHint?: boolean;
   };
   handler: (args: Record<string, unknown>, req: PayloadRequest) => Promise<McpToolResult>;
 }

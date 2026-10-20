@@ -15,7 +15,12 @@ const localeArg = z
   .optional()
   .describe("Locale to write, default the default locale. Localized fields only change in it.");
 
-const writeAnnotations = { readOnlyHint: false, destructiveHint: false, idempotentHint: false };
+const writeAnnotations = {
+  readOnlyHint: false,
+  destructiveHint: false,
+  idempotentHint: false,
+  openWorldHint: false,
+};
 
 const createParameters = {
   collection: z.string().describe("Collection slug."),

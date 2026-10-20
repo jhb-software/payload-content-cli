@@ -142,3 +142,11 @@ describe("getBlockSchema", () => {
     expect(result.error).toMatch(/"nope"/);
   });
 });
+
+describe("tool annotations", () => {
+  it("tell clients no tool reaches beyond the app's own content", () => {
+    const openWorld = tools.filter((tool) => tool.annotations?.openWorldHint !== false);
+
+    expect(openWorld.map((tool) => tool.name)).toEqual([]);
+  });
+});

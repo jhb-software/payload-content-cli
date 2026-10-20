@@ -1,4 +1,4 @@
-import { BlocksFeature, lexicalEditor } from "@payloadcms/richtext-lexical";
+import { BlocksFeature, LinkFeature, lexicalEditor } from "@payloadcms/richtext-lexical";
 import type { Payload } from "payload";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createMcpContentTools } from "../index.js";
@@ -64,6 +64,41 @@ beforeAll(async () => {
           },
         ],
       },
+      {
+        slug: "products",
+        access: open,
+        fields: [
+          {
+            name: "body",
+            type: "richText",
+            editor: lexicalEditor({
+              features: [
+                LinkFeature({
+                  fields: ({ defaultFields }) => [
+                    ...defaultFields,
+                    { name: "rel", type: "select", options: ["nofollow", "sponsored"] },
+                  ],
+                }),
+              ],
+            }),
+          },
+          // Maintained by the app: hidden and read-only, yet find returns them.
+          { name: "price", type: "number", admin: { hidden: true, readOnly: true } },
+          {
+            name: "meta",
+            type: "group",
+            fields: [
+              { name: "title", type: "text" },
+              {
+                name: "alternatePaths",
+                type: "array",
+                admin: { hidden: true, readOnly: true },
+                fields: [{ name: "path", type: "text" }],
+              },
+            ],
+          },
+        ],
+      },
       { slug: "authors", access: open, fields: [{ name: "name", type: "text" }] },
       { slug: "secrets", access: { read: () => false }, fields: [{ name: "x", type: "text" }] },
     ],
@@ -76,7 +111,7 @@ describe("listEntities", () => {
     const result = await call(payload, listEntities, {}, { id: 1, collection: "users" });
 
     expect(result).toEqual({
-      collections: ["pages", "authors", "users"],
+      collections: ["pages", "products", "authors", "users"],
       globals: ["globals/footer"],
       locales: ["en", "de"],
       defaultLocale: "en",
@@ -105,6 +140,24 @@ describe("getEntitySchema", () => {
         "    url: text",
       ].join("\n"),
     );
+  });
+
+  it("names the fields an app maintains, which find returns but nothing may write", async () => {
+    const tree = (await call(payload, getEntitySchema, { collection: "products" })) as string;
+
+    expect(tree.split("\n").at(-1)).toBe(
+      "  read-only, in find results only: price, meta.alternatePaths",
+    );
+    expect(tree).not.toMatch(/createdAt|updatedAt|\bid\b/);
+  });
+
+  it("lists the fields a link takes beyond the built-in ones", async () => {
+    const tree = (await call(payload, getEntitySchema, { collection: "products" })) as string;
+
+    expect(tree).toContain(
+      ["    ✎ inline nodes: link", "        rel: select (nofollow | sponsored)"].join("\n"),
+    );
+    expect(tree).not.toMatch(/linkType|newTab/);
   });
 
   it("reads a global addressed as globals/<slug>", async () => {

@@ -22,23 +22,49 @@ export const SCHEMA_TREE_LEGEND = [
 
 export type SchemaKind = "collection" | "global" | "block";
 
+/** Payload's own bookkeeping, which an agent neither reads nor writes. */
+const BOOKKEEPING = new Set(["id", "createdAt", "updatedAt", "_status", "blockName"]);
+
+/** The fields every link has; the tree lists only those an app adds. */
+const BUILT_IN_LINK_FIELDS = new Set(["text", "linkType", "url", "doc", "newTab"]);
+
 /** Expects blocks as slugs (`blocks: "reference"`), as the schema tools request them. */
 export function renderSchemaTree(slug: string, kind: SchemaKind, fields: FieldSchema[]): string {
   const lines = [`${slug} (${kind})`];
-  renderFields(fields, 1, lines);
+  const maintained: string[] = [];
+  renderFields(fields, 1, "", lines, maintained);
+  // Fields the app maintains itself: never written, but find returns them.
+  if (maintained.length) lines.push(`  read-only, in find results only: ${maintained.join(", ")}`);
   return lines.join("\n");
 }
 
-function renderFields(fields: FieldSchema[], level: number, lines: string[]): void {
+function renderFields(
+  fields: FieldSchema[],
+  level: number,
+  path: string,
+  lines: string[],
+  maintained: string[],
+): void {
   const indent = "  ".repeat(level);
   for (const field of fields) {
-    // Bookkeeping Payload manages itself: timestamps, _status, row ids, blockName.
-    if (field.system) continue;
+    if (field.system) {
+      if (!BOOKKEEPING.has(field.name)) maintained.push(path + field.name);
+      continue;
+    }
     lines.push(indent + fieldLine(field));
     if (field.lexicalFeatures) {
-      for (const line of lexicalLines(field.lexicalFeatures)) lines.push(`${indent}  ✎ ${line}`);
+      const linkFields: string[] = [];
+      const custom = field.lexicalFeatures.inlineNodes?.link?.fields?.filter(
+        (linkField) => !BUILT_IN_LINK_FIELDS.has(linkField.name),
+      );
+      if (custom) renderFields(custom, level + 3, "", linkFields, maintained);
+      for (const line of lexicalLines(field.lexicalFeatures)) {
+        lines.push(`${indent}  ✎ ${line}`);
+        if (line.startsWith("inline nodes:")) lines.push(...linkFields);
+      }
     }
-    if (field.fields) renderFields(field.fields, level + 1, lines);
+    if (field.fields)
+      renderFields(field.fields, level + 1, `${path}${field.name}.`, lines, maintained);
   }
 }
 

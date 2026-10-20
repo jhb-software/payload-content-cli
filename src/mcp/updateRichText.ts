@@ -14,30 +14,25 @@ const parameters = {
   path: z
     .string()
     .describe(
-      'Dot path as find\'s outlines show it: "content.3" (a node), "content.3.children.1.fields.doc" (a link target), "content.4.fields.body.0" (a node of rich text inside a block), "sections.0.body.2" (a node in an array row). For link, the rich text to search, e.g. "content".',
+      'Dot path from find\'s outline: "content.3" (a node), "content.3.children.1.fields.doc" (a link target), "content.4.fields.body.0" (rich text in a block), "sections.0.body.2" (rich text in an array row). For link: the rich text to search, e.g. "content".',
     ),
   operation: z
     .enum(["set", "insert", "delete", "link"])
     .describe(
-      "set: replace the value at path. insert: add a node before the index path ends in (index = node count appends). delete: remove the node at path. link: wrap the first unlinked match of text at or below path in an internal link to value.",
+      "set: replace the value at path. insert: add a node before the index path ends in (the node count appends). delete: remove the node. link: wrap the first unlinked match of text in a link to value.",
     ),
   value: z
     .unknown()
     .optional()
     .describe(
-      'For set and insert: a node as find shows it, or shorthand: {"type":"p","text":"…"}, {"type":"h2","text":"…"}, {"type":"ul","items":["…"]}, {"type":"block","fields":{"blockType":"…"}}, {"type":"upload","value":"<id>","relationTo":"media"} (relationTo defaults to media). For a value inside a node, the new value. For link: {"relationTo":"pages","value":"<id>"}, optionally "newTab":true.',
+      'For set and insert: a node as find shows it, or shorthand: {"type":"p","text":"…"}, {"type":"h2","text":"…"}, {"type":"ul","items":["…"]}, {"type":"block","fields":{"blockType":"…"}}, {"type":"upload","value":"<id>"} (relationTo defaults to media). A link to a URL, in a paragraph\'s children: {"type":"link","fields":{"linkType":"custom","url":"…"},"children":[{"type":"text","text":"…"}]}. For link: {"relationTo":"pages","value":"<id>"}, optionally "newTab":true. For a value inside a node, the new value.',
     ),
   text: z.string().optional().describe("For link: the text to wrap, as it appears."),
-  locale: z
-    .string()
-    .optional()
-    .describe("Locale to read and write. Defaults to the default locale."),
+  locale: z.string().optional().describe("Default: the default locale."),
   draft: z
     .boolean()
     .optional()
-    .describe(
-      "Default true: read and write the draft. false writes and publishes the live version — only if the user asked.",
-    ),
+    .describe("Default true: edit the draft. false publishes — only if the user asked."),
   overwriteDraft: z
     .boolean()
     .optional()
@@ -314,7 +309,7 @@ export function updateRichTextTool(options: McpContentToolsOptions = {}): McpToo
   return {
     name: "updateRichText",
     description:
-      "Edit rich text in place, by path, without rewriting the document: set, insert or delete a node at a path from find's outline, or link text to a document. Insert and delete shift the indexes after them. Edits the draft unless draft:false.",
+      "Edit rich text in place by path: set, insert or delete a node from find's outline, or link text to a document. Insert and delete shift later indexes. Edits the draft unless draft:false.",
     annotations: {
       title: "Edit rich text",
       readOnlyHint: false,

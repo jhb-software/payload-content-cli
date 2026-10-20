@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- feat: the MCP schema tree names the hidden read-only fields an app maintains, which `find` returns but nothing may write, and lists the fields an app adds to rich-text links. The `updateRichText` description shows the shape of a link to a URL.
 - fix: `lexical link` (and `linkRichText`, the MCP `updateRichText` `link`) keeps the bold, italic or other formatting and style of the text it links.
 - fix: pushing one locale of a document no longer makes its other locale files look changed remotely, and edits to several locales of one document push in one run without a false conflict.
 - fix: after `pull --draft`, `diff` and `push` compare against the latest draft instead of the published version, so documents with an unpublished draft no longer show a false conflict, and `push --dry-run` reports the conflicts a real push would hit.

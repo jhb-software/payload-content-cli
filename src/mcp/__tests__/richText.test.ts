@@ -165,6 +165,21 @@ describe("find", () => {
     });
   });
 
+  it("reads several paths at once, keyed by path", async () => {
+    const id = await createPost(1);
+
+    const result = await find({
+      collection: "posts",
+      id,
+      path: ["content.0.children.0.text", "content.1.fields.style"],
+    });
+
+    expect(result).toEqual({
+      "content.0.children.0.text": "Intro",
+      "content.1.fields.style": "warning",
+    });
+  });
+
   it("finds text in rich text by path, marking text that is already linked", async () => {
     const page = await payload.create({ collection: "pages", data: { title: "Safety" } });
     const id = await createPost(page.id);

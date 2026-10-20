@@ -12,10 +12,10 @@ const parameters = {
     .describe('Collection slug, or "globals/<slug>" for a global (e.g. "globals/footer").'),
   id: z.union([z.string(), z.number()]).optional().describe("One document by id."),
   path: z
-    .string()
+    .union([z.string(), z.array(z.string())])
     .optional()
     .describe(
-      'With id or a global: only the value at this dot path from the outline, e.g. "content.3" or "layout.1".',
+      'With id or a global: only the value at this dot path from the outline, e.g. "content.3" or "layout.1". A list reads several, keyed by path.',
     ),
   text: z
     .string()
@@ -65,6 +65,7 @@ export function findTool(options: McpContentToolsOptions = {}): McpTool {
       try {
         const parsed = argsSchema.parse(args);
         const { collection, id, path, text } = parsed;
+        const paths = path === undefined ? [] : Array.isArray(path) ? path : [path];
         const { target } = await openTarget(req, options, collection, id);
         const one = target.kind === "global" || id !== undefined;
         if ((path !== undefined || text !== undefined) && !one) {
@@ -83,7 +84,11 @@ export function findTool(options: McpContentToolsOptions = {}): McpTool {
           fallbackLocale: false as const,
           locale,
           // A path needs only its field.
-          select: select ?? (path ? { [path.split(".")[0]]: true } : undefined),
+          select:
+            select ??
+            (paths.length
+              ? Object.fromEntries(paths.map((p) => [p.split(".")[0], true]))
+              : undefined),
           overrideAccess: false,
           req,
         };
@@ -99,7 +104,15 @@ export function findTool(options: McpContentToolsOptions = {}): McpTool {
                   ...read,
                 });
           if (!doc) return errorResult(`No ${target.slug} document with id "${id}".`);
-          if (text !== undefined) return jsonResult(searchRichText(doc, path ?? "", text));
+          if (text !== undefined) {
+            const matches = (paths.length ? paths : [""]).flatMap((p) =>
+              searchRichText(doc, p, text),
+            );
+            return jsonResult(matches);
+          }
+          if (Array.isArray(path)) {
+            return jsonResult(Object.fromEntries(path.map((p) => [p, readAtPath(doc, p)])));
+          }
           if (path !== undefined) return jsonResult(readAtPath(doc, path));
           return jsonResult(outlineRichText(doc, ""));
         }

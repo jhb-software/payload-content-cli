@@ -207,6 +207,7 @@ Two options cover what differs between apps, and every tool that takes a locale 
 ```ts
 createMcpContentTools({
   // The locale to read and write, e.g. a tenant's primary locale when the agent passes none.
+  // Throw to refuse one, e.g. a locale a tenant doesn't serve; the agent gets the message.
   resolveLocale: (req, { collection, id, locale }) => locale ?? primaryLocaleOf(req),
   // Refuse an id before it is looked up, by returning the message to show.
   checkId: (req, { collection, id }) =>

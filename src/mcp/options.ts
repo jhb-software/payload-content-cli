@@ -7,6 +7,7 @@ export interface McpContentToolsOptions {
    * Pick the locale to read and write. Receives the `locale` the agent passed,
    * if any. Use it when the right default isn't Payload's default locale, e.g.
    * a multi-tenant site whose tenants each have their own primary locale.
+   * Throw to refuse a locale; the agent gets the message.
    */
   resolveLocale?: (
     req: PayloadRequest,

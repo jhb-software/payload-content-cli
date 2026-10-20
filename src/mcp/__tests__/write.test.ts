@@ -244,6 +244,21 @@ describe("update", () => {
     expect((await live("en")).title).toBe("Live");
   });
 
+  it("answers with the message of a locale the app's resolveLocale refuses", async () => {
+    const id = await publishedPost("Hello");
+    const resolveLocale = () => {
+      throw new Error("This site doesn't serve de.");
+    };
+
+    const result = await tool(
+      "update",
+      { collection: "posts", id, locale: "de", data: { title: "Hallo" } },
+      { resolveLocale },
+    );
+
+    expect(result).toEqual({ error: "This site doesn't serve de." });
+  });
+
   it("refuses a locale the app doesn't have, instead of writing nothing", async () => {
     const id = await publishedPost("Hello");
 

@@ -833,7 +833,7 @@ program
           "Plugin: not installed — pull still works, but without _schema.json, _jsonschema.json, virtual-field stripping, or custom endpoint metadata.",
         );
         console.log(
-          "  Install: import { contentCliPlugin } from 'payload-content-cli/plugin' and add contentCliPlugin() to plugins in payload.config.ts.",
+          "  Install: import { contentCliPlugin } from '@jhb.software/payload-content-cli/plugin' and add contentCliPlugin() to plugins in payload.config.ts.",
         );
       }
     }),

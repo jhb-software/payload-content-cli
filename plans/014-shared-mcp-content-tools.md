@@ -89,6 +89,11 @@ lean on other tools' names.
 - The reference check only sees `{relationTo, value}` pairs (links, upload nodes,
   polymorphic relationships). A plain id in a block's upload or relationship field
   isn't checked; that needs the block schema.
+- No way to keep collections away from the tools. An admin MCP user sees `users`,
+  `oauth-tokens`, API-key collections etc. in every tool; only `payload-*` is filtered.
+  Access control is the boundary, but an include/exclude option applied to every tool
+  would keep plumbing collections out of an agent's reach and context. Add when a
+  second app asks for it.
 - Upstream: the shared-row data loss is a Payload footgun; the issue is drafted in
   `plans/payload-issue-shared-row-data-loss.md` for the author to file.
 

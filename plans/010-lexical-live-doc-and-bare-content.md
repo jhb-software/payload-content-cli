@@ -42,7 +42,11 @@ Internally: fetch the doc (selecting the path's first segment, no locale fallbac
 
 `--override-lock` should be a flag on the writing commands too — default off (fail loudly on lock conflict), opt-in for AFK agents. Matches the pattern already used by `update`.
 
-### 2. Bare-content files
+### 2. Start an empty rich-text field
+
+`lexical insert doc.json content.0 '[…]'` on a new document fails with `No "content" in the document`, as the field is absent or null. The MCP `updateRichText` starts it (`startEmptyRichText` in `src/mcp/updateRichText.ts`); do the same for an insert at index 0. This is the "create a draft, then fill its body" flow.
+
+### 3. Bare-content files
 
 When the file itself is rich text, paths start at its top-level nodes: `3`, `3.children.0`, `3.fields.body.0`. `read` without a path outlines it; `link`, `search` and `diff` without a path use it.
 

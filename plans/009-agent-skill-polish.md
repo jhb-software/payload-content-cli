@@ -26,7 +26,7 @@ Add a short reference under the lexical subcommands section with three or four e
 - An h2 heading
 - A list item (ordered + unordered)
 
-The point is to give agents the exact field shapes (`type`, `direction`, `indent`, `version`, `textFormat`, `format`, `mode`, etc.) so hand-edits stop being guesswork until plan 008 (Markdown input) lands. Once 008 ships, this section can shrink — most agents won't need to author Lexical directly anymore.
+The point is to give agents the exact field shapes (`type`, `direction`, `indent`, `version`, `textFormat`, `format`, `mode`, etc.) so hand-edits stop being guesswork until plan 017 (rich-text shorthand in `create`/`update`) lands. Once 017 ships, this section can shrink — most agents won't need to author Lexical directly anymore.
 
 ### 2. Explicit `--override-lock` guidance
 
@@ -51,5 +51,5 @@ And mention the bare-content-file workaround (wrap in `{"content": <tree>}` befo
 
 ## Out of scope
 
-- Code changes to the CLI itself (covered by plans 008, 010, 011)
+- Code changes to the CLI itself (covered by plans 010, 011, 017)
 - Upstream PR to `@payloadcms/plugin-cloud-storage` `getIncomingFiles.js` (`data.mimeType` should fall back to `file.mimetype`) — worth filing but not blocking on

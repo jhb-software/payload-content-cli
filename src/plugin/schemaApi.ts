@@ -191,6 +191,42 @@ export async function getEntitySchema({
   };
 }
 
+const LISTED_SLUGS = 30;
+
+/** Normalise a slug or a block's config name (`CodeBlock`, `code-block`) to compare them. */
+const slugKey = (name: string) =>
+  name
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "")
+    .replace(/block$/, "");
+
+/**
+ * Agents guess a block's config or interface name (`CodeBlock` for `code`), so
+ * suggest the slug each name matches, and list the slugs when one matches none.
+ */
+function slugHint(unknown: string[], slugs: string[]): string {
+  const close = (name: string) =>
+    slugs.find((slug) => slug.toLowerCase() === name.toLowerCase()) ??
+    slugs.find((slug) => slugKey(slug) === slugKey(name));
+  const hints: string[] = [];
+  const meant = unknown.flatMap((name) => {
+    const slug = close(name);
+    return slug ? [`"${name}" → "${slug}"`] : [];
+  });
+  if (meant.length > 0) hints.push(`Did you mean ${meant.join(", ")}?`);
+  if (meant.length < unknown.length) {
+    const sorted = [...slugs].sort();
+    const listed = sorted.slice(0, LISTED_SLUGS).join(", ");
+    const more = sorted.length > LISTED_SLUGS ? ` and ${sorted.length - LISTED_SLUGS} more` : "";
+    hints.push(`Valid slugs: ${listed}${more}.`);
+  }
+  hints.push(
+    "A field allows only some: see a blocks field's blockSlugs, or" +
+      " lexicalFeatures.blockNodes.block.slugs (and inlineNodes.inlineBlock.slugs) in the entity schema.",
+  );
+  return hints.join(" ");
+}
+
 /**
  * Resolve the field schema of one or more top-level (richText-referenced) blocks
  * by slug.
@@ -230,13 +266,7 @@ export async function getBlockSchema({
     const quoted = unknown.map((slug) => `"${slug}"`).join(", ");
     const named =
       unknown.length === 1 ? `No block with slug ${quoted}` : `No blocks with slugs ${quoted}`;
-    // Point the caller at where valid slugs come from: a blocks field's
-    // blockSlugs, or the block slugs a richText field exposes.
-    throw new Error(
-      `${named}. Valid slugs are listed under a blocks field's blockSlugs, or under` +
-        ` lexicalFeatures.blockNodes.block.slugs (and inlineNodes.inlineBlock.slugs)` +
-        ` in the entity schema.`,
-    );
+    throw new Error(`${named}. ${slugHint(unknown, Object.keys(blocksBySlug))}`);
   }
   return slugs.map((slug) => ({
     slug,

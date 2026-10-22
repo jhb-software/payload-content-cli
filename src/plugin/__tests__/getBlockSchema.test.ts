@@ -160,9 +160,14 @@ describe("getBlockSchema", () => {
     );
   });
 
-  it("points the caller at where valid slugs come from", async () => {
-    const req = mockReq([{ slug: "cta", fields: [] }]);
-    await expect(getBlockSchema({ req, slugs: ["nope"] })).rejects.toThrow(/in the entity schema/);
+  it("suggests the slug that differs only in case over a looser match", async () => {
+    const req = mockReq([
+      { slug: "card", fields: [] },
+      { slug: "cardBlock", fields: [] },
+    ]);
+    await expect(getBlockSchema({ req, slugs: ["CardBlock"] })).rejects.toThrow(
+      /"CardBlock" → "cardBlock"/,
+    );
   });
 
   it("does not gate on access — blocks resolve even without a user", async () => {

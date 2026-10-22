@@ -192,6 +192,27 @@ describe("getBlockSchema", () => {
 
     expect(result.error).toMatch(/"nope"/);
   });
+
+  it("suggests the slug an agent meant by a block's config name", async () => {
+    const result = await call(payload, getBlockSchema, { slugs: ["HeroBlock"] });
+
+    expect(result.error).toMatch(/"HeroBlock" → "hero"/);
+    expect(result.error).toMatch(/blockSlugs/);
+  });
+
+  it("still lists the valid slugs when only some names are close", async () => {
+    const result = await call(payload, getBlockSchema, { slugs: ["HeroBlock", "nope"] });
+
+    expect(result.error).toMatch(/"HeroBlock" → "hero"/);
+    expect(result.error).toMatch(/Valid slugs: alert, cta, hero\./);
+  });
+
+  it("lists the valid slugs, and where a field's own are, when nothing is close", async () => {
+    const result = await call(payload, getBlockSchema, { slugs: ["nope"] });
+
+    expect(result.error).toMatch(/Valid slugs: alert, cta, hero\./);
+    expect(result.error).toMatch(/blockSlugs/);
+  });
 });
 
 describe("tool annotations", () => {

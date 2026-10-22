@@ -455,13 +455,21 @@ describe.skipIf(!hasRemoteEnv)("integration", () => {
     }
 
     beforeAll(async () => {
-      const docs = await new PayloadClient(config).getCollectionDocs("posts", {
-        limit: 1,
-        depth: 0,
-      });
-      postId = docs.docs[0].id as string;
+      const client = new PayloadClient(config);
+      const slug = `round-trip-${Date.now()}`;
+      const post = await client.createDoc("posts", { title: "Title", slug }, { locale: "en" });
+      postId = post.id as string;
+      await client.updateDoc("posts", postId, { title: "Titel", slug }, { locale: "de" });
       await cleanup();
-      await pull(config, { collections: ["posts"], locales: ["en", "de"] });
+      await pull(config, {
+        collections: ["posts"],
+        locales: ["en", "de"],
+        where: { id: { equals: postId } },
+      });
+    });
+
+    afterAll(async () => {
+      await new PayloadClient(config).deleteDoc("posts", postId);
     });
 
     it("pushes edits to two locales of one document in one run", async () => {
@@ -481,6 +489,62 @@ describe.skipIf(!hasRemoteEnv)("integration", () => {
 
       expect(result.remoteModified).not.toContain(`collections/posts/${postId}_de.json`);
       expect(result.unchanged).toContain(`collections/posts/${postId}_de.json`);
+    });
+  });
+
+  describe("untranslated locale round trip", () => {
+    it("answers a write in a locale with that locale's own values", async () => {
+      const client = new PayloadClient(config);
+      const post = await client.createDoc(
+        "posts",
+        { title: "English title", slug: `own-values-${Date.now()}` },
+        { locale: "en" },
+      );
+      const id = post.id as string;
+      try {
+        const answer = await client.updateDoc(
+          "posts",
+          id,
+          { excerpt: "Kurz" },
+          { locale: "de", draft: true },
+        );
+
+        expect(answer.excerpt).toBe("Kurz");
+        expect(answer.title ?? null).toBeNull();
+      } finally {
+        await client.deleteDoc("posts", id);
+      }
+    });
+
+    it("doesn't push the default locale's text into a locale that lacks it", async () => {
+      const client = new PayloadClient(config);
+      const post = await client.createDoc(
+        "posts",
+        { title: "English title", slug: `untranslated-${Date.now()}`, excerpt: "English excerpt" },
+        { locale: "en" },
+      );
+      const id = post.id as string;
+      try {
+        await cleanup();
+        await pull(config, {
+          collections: ["posts"],
+          locales: ["de"],
+          where: { id: { equals: id } },
+        });
+        const file = path.join(CONTENT_DIR, "collections", "posts", `${id}_de.json`);
+        const content = await readJson(file);
+        content.title = "Deutscher Titel";
+        content.slug = `deutscher-titel-${Date.now()}`;
+        await fs.writeFile(file, JSON.stringify(content, null, 2) + "\n");
+
+        await push(config, { files: [file] });
+
+        const de = await client.getDoc("posts", id, { locale: "de", fallbackLocale: "none" });
+        expect(de.title).toBe("Deutscher Titel");
+        expect(de.excerpt ?? null).toBeNull();
+      } finally {
+        await client.deleteDoc("posts", id);
+      }
     });
   });
 

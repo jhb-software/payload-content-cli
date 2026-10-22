@@ -162,7 +162,10 @@ program
   .option("--sort <field>", "Sort field (prefix - for desc)")
   .option("--depth <n>", "Relationship population depth")
   .option("--locale <code>", "Locale for localized fields")
-  .option("--fallback-locale <code>", "Fallback locale if primary unavailable")
+  .option(
+    "--fallback-locale <code>",
+    "Show this locale's value for untranslated fields (default: none)",
+  )
   .option("--draft", "Include draft documents")
   .option("--trash", "Include soft-deleted documents")
   .option("--joins <json>", "Join field options as JSON")
@@ -221,7 +224,10 @@ program
   .option("--data <json>", "Document data as JSON string")
   .option("--file <path>", "Read document data from a JSON file")
   .option("--locale <code>", "Locale for localized fields")
-  .option("--fallback-locale <code>", "Fallback locale if primary unavailable")
+  .option(
+    "--fallback-locale <code>",
+    "Show this locale's value for untranslated fields (default: none)",
+  )
   .option("--depth <n>", "Relationship population depth in response")
   .option("--select <json>", "Fields to include/exclude as JSON")
   .option("--populate <json>", "Populate options as JSON")
@@ -255,7 +261,10 @@ program
     'Update multiple documents matching this filter (e.g. \'{"status":{"equals":"draft"}}\')',
   )
   .option("--locale <code>", "Locale for localized fields")
-  .option("--fallback-locale <code>", "Fallback locale if primary unavailable")
+  .option(
+    "--fallback-locale <code>",
+    "Show this locale's value for untranslated fields (default: none)",
+  )
   .option("--depth <n>", "Relationship population depth in response")
   .option("--select <json>", "Fields to include/exclude as JSON")
   .option("--populate <json>", "Populate options as JSON")
@@ -389,7 +398,10 @@ program
   .option("--sort <field>", "Sort field (prefix - for desc)")
   .option("--depth <n>", "Relationship population depth")
   .option("--locale <code>", "Locale for localized fields")
-  .option("--fallback-locale <code>", "Fallback locale if primary unavailable")
+  .option(
+    "--fallback-locale <code>",
+    "Show this locale's value for untranslated fields (default: none)",
+  )
   .option("--select <json>", "Fields to include/exclude as JSON")
   .option("--populate <json>", "Populate options as JSON")
   .option("--page <n>", "Page number for pagination")
@@ -490,7 +502,10 @@ program
   .option("--filename <name>", "Override the filename sent to Payload")
   .option("--select <json>", "Fields to include/exclude as JSON")
   .option("--locale <code>", "Locale for localized fields")
-  .option("--fallback-locale <code>", "Fallback locale if primary unavailable")
+  .option(
+    "--fallback-locale <code>",
+    "Show this locale's value for untranslated fields (default: none)",
+  )
   .option("--depth <n>", "Relationship population depth in response")
   .option("--populate <json>", "Populate options as JSON")
   .option("--draft", "Create as draft")

@@ -233,7 +233,11 @@ export class PayloadClient {
     if (options.draft) params.draft = "true";
     if (options.depth !== undefined) params.depth = String(options.depth);
     if (options.locale !== undefined) params.locale = options.locale;
-    if (options.fallbackLocale !== undefined) params["fallback-locale"] = options.fallbackLocale;
+    // A locale's own values only, so what is read and written back stays that
+    // locale's: with fallback, an untranslated field carries the default
+    // locale's text as if it were a translation.
+    const fallbackLocale = options.fallbackLocale ?? (options.locale ? "none" : undefined);
+    if (fallbackLocale !== undefined) params["fallback-locale"] = fallbackLocale;
     if (options.trash) params.trash = "true";
     if (options.select) {
       Object.assign(params, flattenToQueryParams("select", options.select));

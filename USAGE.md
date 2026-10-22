@@ -336,6 +336,8 @@ payload-content find posts --local --where '{"slug":{"equals":"hello"}}' --selec
 
 Flags: `--where`, `--select`, `--limit`, `--page`, `--sort`, `--depth`, `--locale`, `--fallback-locale`, `--draft`, `--trash`, `--joins`, `--populate`, `--pagination` / `--no-pagination`, `--local`, `--json` (with `--local`).
 
+With `--locale`, every command reads what that locale stores, without fallback, so an untranslated field is empty rather than the default locale's text, and the result can be written back as is. `--fallback-locale <code>` shows that locale's value instead. `pull --locale` reads the same way, so a locale file lacks the required fields nobody has translated yet: `push` then fails on them until they are filled in, or saves with `--draft`.
+
 In `--local` mode only `--where` and `--select` are applied; other flags are ignored because the search runs against pulled JSON files, not the API. Local `--where` supports only the `equals` (exact match), `like`, and `contains` (case-insensitive substring) operators — any other operator is rejected with an error. Drop `--local` for full operator support.
 
 ### create — create a document

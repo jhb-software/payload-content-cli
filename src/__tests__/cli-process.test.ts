@@ -197,6 +197,37 @@ describe.skipIf(!hasRemoteEnv)("cli (remote)", () => {
       expect(parsed.pushed).toBe(0);
     });
   });
+
+  it("find --locale leaves an untranslated field empty instead of showing the default locale's text", () => {
+    const created = runCLI([
+      "create",
+      "posts",
+      "--locale",
+      "en",
+      "--data",
+      JSON.stringify({ title: "English title", slug: `find-fallback-${Date.now()}` }),
+    ]);
+    expect(created.status, created.stderr).toBe(0);
+    const id = JSON.parse(created.stdout).id as string;
+    try {
+      const german = runCLI(["find", "posts", id, "--locale", "de"]);
+      const withFallback = runCLI([
+        "find",
+        "posts",
+        id,
+        "--locale",
+        "de",
+        "--fallback-locale",
+        "en",
+      ]);
+
+      expect(JSON.parse(german.stdout).title ?? null).toBeNull();
+      expect(JSON.parse(withFallback.stdout).title).toBe("English title");
+    } finally {
+      runCLI(["delete", "posts", id]);
+    }
+  });
+
 });
 
 describe("cli (local-only)", () => {

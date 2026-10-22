@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- fix: commands with `--locale` read without fallback, so writing the result back no longer stores the default locale's text as a translation. Untranslated required fields now fail on `push` instead; re-pull locale files pulled with earlier versions.
+
 ## 0.6.0-beta.1
 
 - feat: the MCP `find` takes a list of paths, answering with their values keyed by path.

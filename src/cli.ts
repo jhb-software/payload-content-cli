@@ -684,9 +684,12 @@ program
   .option("--json", "Emit the result summary as JSON (progress moves to stderr)")
   .action(
     wrapAction(async (opts: Record<string, unknown>) => {
-      if ((opts.locale as string[] | undefined)?.includes("all")) {
+      const all = (opts.locale as string[] | undefined)?.find(
+        (locale) => locale === "all" || locale === "*",
+      );
+      if (all) {
         throw new CliError(
-          '--locale "all" is not supported. Specify individual locales (e.g. --locale en de).',
+          `--locale "${all}" is not supported. Specify individual locales (e.g. --locale en de).`,
         );
       }
 

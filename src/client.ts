@@ -1,6 +1,8 @@
 import { extname } from "node:path";
 import type { Config } from "./config.js";
 import type { SelectExcludeType, SelectIncludeType, SelectType } from "./select.js";
+import { CliError } from "./errors.js";
+import { localeProblem } from "./locales.js";
 import { SCHEMA_CONTRACT_VERSION, type SchemaResponse } from "./schema-contract.js";
 
 const MIME_TYPES: Record<string, string> = {
@@ -127,6 +129,8 @@ function requestNeverSent(err: unknown): boolean {
 export class PayloadClient {
   private baseUrl: string;
   private headers: Record<string, string>;
+  private schema?: Promise<SchemaResponse | null>;
+  private localesUnknown = false;
 
   constructor(config: RemoteConfig) {
     this.baseUrl = `${config.payloadUrl.replace(/\/$/, "")}/api`;
@@ -145,6 +149,7 @@ export class PayloadClient {
       formData?: FormData;
     },
   ): Promise<T> {
+    if (options?.params?.locale) await this.checkLocale(options.params.locale);
     const url = new URL(`${this.baseUrl}${path}`);
     if (options?.params) {
       for (const [key, value] of Object.entries(options.params)) {
@@ -411,7 +416,40 @@ export class PayloadClient {
     return { collections, globals };
   }
 
-  async getSchema(): Promise<SchemaResponse | null> {
+  /**
+   * Refuse a locale the app doesn't have: Payload reads the default locale
+   * instead and drops writes to it, without an error. Needs the plugin's
+   * schema; without it, or with another contract version, the locale is sent
+   * unchecked.
+   */
+  private async checkLocale(locale: string): Promise<void> {
+    if (this.localesUnknown) return;
+    let schema: SchemaResponse | null;
+    try {
+      schema = await this.getSchema();
+    } catch (err) {
+      // The check is a convenience: a schema endpoint the key may not read,
+      // or one that is down, must not block the request itself. A refusal
+      // won't change within a run, so it isn't asked again.
+      if (err instanceof PayloadApiError && !err.isRetryable) this.localesUnknown = true;
+      return;
+    }
+    if (schema?.version !== SCHEMA_CONTRACT_VERSION) return;
+    // The locale may come from --locale or a pulled file's name.
+    const problem = localeProblem(locale, schema.localization?.locales ?? null, "the locale");
+    if (problem) throw new CliError(problem);
+  }
+
+  getSchema(): Promise<SchemaResponse | null> {
+    // Only a successful answer is kept, so a failed fetch can be retried.
+    this.schema ??= this.fetchSchema().catch((err) => {
+      this.schema = undefined;
+      throw err;
+    });
+    return this.schema;
+  }
+
+  private async fetchSchema(): Promise<SchemaResponse | null> {
     try {
       const schema = await this.request<SchemaResponse>("/content-cli/schema");
       if (schema.version !== SCHEMA_CONTRACT_VERSION) {

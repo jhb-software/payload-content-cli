@@ -1,5 +1,6 @@
 import type { PayloadRequest } from "payload";
 import { z } from "zod/v3";
+import { localeProblem } from "../locales.js";
 
 /** The hooks for what differs between apps. Every content tool takes the same ones. */
 export interface McpContentToolsOptions {
@@ -21,8 +22,8 @@ export interface McpContentToolsOptions {
 }
 
 /**
- * The locale to read or write. An unknown one is refused: Payload would read
- * nothing in it and drop what is written to it, without an error.
+ * The locale to read or write, with `*` read as `"all"` as Payload does. One
+ * the app doesn't have is refused (see `localeProblem`).
  */
 export async function pickLocale(
   options: McpContentToolsOptions,
@@ -30,13 +31,18 @@ export async function pickLocale(
   target: { collection: string; id?: string | number; locale?: string },
 ): Promise<string | undefined> {
   const locale = options.resolveLocale ? await options.resolveLocale(req, target) : target.locale;
-  const codes = req.payload.config.localization
-    ? req.payload.config.localization.localeCodes
-    : undefined;
-  if (locale && locale !== "all" && codes && !codes.includes(locale)) {
-    throw new Error(`Unknown locale "${locale}". Use one of: ${codes.join(", ")}.`);
+  if (!locale) return undefined;
+  const localization = req.payload.config.localization;
+  const fromHook = locale !== target.locale;
+  // Without localization, Payload reads and writes the one value either way.
+  if (!localization && fromHook) return undefined;
+  const problem = localeProblem(locale, localization ? localization.localeCodes : null, "locale");
+  if (problem && fromHook) {
+    // The app's own hook picked it; the agent can't fix that.
+    throw new Error(`The app's resolveLocale picked "${locale}", which this app doesn't have.`);
   }
-  return locale;
+  if (problem) throw new Error(problem);
+  return locale === "*" ? "all" : locale;
 }
 
 /**

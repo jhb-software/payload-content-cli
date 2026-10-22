@@ -107,6 +107,14 @@ describe("find", () => {
     expect(result).toEqual({ error: expect.stringMatching(/one locale/) });
   });
 
+  it('reads every locale with "*", as Payload does', async () => {
+    const { id } = await publishedPost("star-locale", "Hello");
+
+    const result = await find({ collection: "posts", id, locale: "*", select: { title: true } });
+
+    expect(result).toMatchObject({ title: { en: "Hello" } });
+  });
+
   it("reads a global addressed as globals/<slug>", async () => {
     await payload.updateGlobal({ slug: "footer", data: { note: "Hello" } as never });
 
@@ -157,5 +165,16 @@ describe("find", () => {
     );
 
     expect(result.title).toBe("Hallo");
+  });
+
+  it("blames the app's resolveLocale, not the agent, for a locale it swapped in", async () => {
+    const post = await publishedPost("zeta", "Hello");
+
+    const result = await find(
+      { collection: "posts", id: post.id, locale: "de" },
+      { resolveLocale: () => "fr" },
+    );
+
+    expect(result.error).toMatch(/resolveLocale picked "fr"/);
   });
 });

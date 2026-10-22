@@ -228,6 +228,13 @@ describe.skipIf(!hasRemoteEnv)("cli (remote)", () => {
     }
   });
 
+  it("refuses an unknown locale instead of answering in the default one", () => {
+    const result = runCLI(["find", "posts", "--locale", "fr", "--limit", "1"]);
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toMatch(/Unknown locale "fr"\. Use one of: en, de/);
+  });
 });
 
 describe("cli (local-only)", () => {
@@ -235,6 +242,12 @@ describe("cli (local-only)", () => {
     const result = runCLI(["find", "posts", "--where", "title=Welcome"]);
     expect(result.status).toBe(1);
     expect(result.stderr).toMatch(/--where must be valid JSON/);
+  });
+
+  it("pull names the all-locales value the user typed when refusing it", () => {
+    const result = runCLI(["pull", "--locale", "en", "*"]);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/--locale "\*" is not supported/);
   });
 });
 

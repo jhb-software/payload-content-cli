@@ -52,4 +52,33 @@ describe("an app without localization", () => {
       facts: [{ label: "Wildlife" }, { label: "Camps" }],
     });
   });
+
+  it("refuses a locale instead of ignoring it", async () => {
+    const trip = await payload.create({ collection: "trips", data: { title: "Safari" } as never });
+
+    const read = await tool("find", { collection: "trips", id: trip.id, locale: "fr" });
+    const written = await tool("update", {
+      collection: "trips",
+      id: trip.id,
+      locale: "fr",
+      data: { title: "Le safari" },
+    });
+
+    expect(read.error).toContain("no locales");
+    expect(written.error).toContain("no locales");
+    const stored = await payload.findByID({ collection: "trips", id: trip.id, draft: true });
+    expect(stored).toMatchObject({ title: "Safari" });
+  });
+
+  it("reads normally when the app's resolveLocale picks a locale", async () => {
+    const trip = await payload.create({ collection: "trips", data: { title: "Safari" } as never });
+
+    const result = await call(
+      payload,
+      toolNamed(createMcpContentTools({ resolveLocale: () => "en" }), "find"),
+      { collection: "trips", id: trip.id },
+    );
+
+    expect(result).toMatchObject({ title: "Safari" });
+  });
 });

@@ -46,7 +46,7 @@ const updateParameters = {
     .optional()
     .describe("Instead of id: update every document this Payload query matches."),
   data: jsonObject.describe(
-    "Only the fields to change. For an array or blocks field, send every row you keep, with its id (an id alone keeps the row as stored); a row without one is new. Rich text: a list of nodes, as for create.",
+    "Only the fields to change. For an array or blocks field, send every row you keep, with its id; a row without one is new. A stored row sent as just its id stays as stored, and may leave out blockType. To change a nested row, send each enclosing row as its id plus the field that holds the change. Rich text: a list of nodes, as for create.",
   ),
   locale: localeArg,
   draft: z

@@ -88,7 +88,7 @@ beforeAll(async () => {
 
 const linksOnly: Field = { name: "links", type: "array", fields: [{ name: "url", type: "text" }] };
 
-type Row = { id: string; item?: { title?: string }; title?: string };
+type Row = { id: string; item?: { title?: string }; title?: string; text?: string };
 
 /** A hotel with two extras and a section, each titled in English and German. */
 async function hotel() {
@@ -381,5 +381,49 @@ describe("the update tool", () => {
 
     expect(await call(payload, update, { ...args, replaceRows: true })).toEqual({ id });
     expect(await titles(id, "en")).toEqual(["Food"]);
+  });
+
+  it("adds a row inside a block from rows sent as ids alone, keeping every translation", async () => {
+    const created = await payload.create({
+      collection: "hotels",
+      locale: "en",
+      data: { sections: [{ blockType: "section", title: "Rooms", points: [{ text: "Pool" }] }] },
+    });
+    const [section] = (created as unknown as { sections: (Row & { points: Row[] })[] }).sections;
+    const [pool] = section.points;
+    await payload.update({
+      collection: "hotels",
+      id: created.id,
+      locale: "de",
+      data: {
+        sections: [{ id: section.id, title: "Zimmer", points: [{ id: pool.id, text: "Pool DE" }] }],
+      } as never,
+    });
+
+    const result = await call(payload, update, {
+      collection: "hotels",
+      id: created.id,
+      locale: "en",
+      data: { sections: [{ id: section.id, points: [{ id: pool.id }, { text: "Spa" }] }] },
+    });
+
+    expect(result).toEqual({ id: created.id });
+    const read = async (locale: "en" | "de") =>
+      (
+        (await payload.findByID({
+          collection: "hotels",
+          id: created.id,
+          locale,
+          fallbackLocale: false,
+          depth: 0,
+        })) as unknown as { sections: (Row & { points: Row[] })[] }
+      ).sections[0];
+    expect(await read("en")).toMatchObject({
+      title: "Rooms",
+      points: [{ text: "Pool" }, { text: "Spa" }],
+    });
+    const de = await read("de");
+    expect(de.title).toBe("Zimmer");
+    expect(de.points.map((point) => point.text ?? null)).toEqual(["Pool DE", null]);
   });
 });

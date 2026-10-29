@@ -5,6 +5,7 @@
 - fix: commands with `--locale` read without fallback, so writing the result back no longer stores the default locale's text as a translation. Untranslated required fields now fail on `push` instead; re-pull locale files pulled with earlier versions.
 - fix: a locale the app doesn't have (`--locale` with the plugin installed, MCP `locale`) is refused, instead of silently reading and writing the default locale.
 - feat: `getBlockSchema` suggests the slug meant for an unknown one (`CodeBlock` → `code`).
+- fix: the MCP `find` reads a field a locale has no value for as `null`, `updateRichText` starts rich text inside one, and a path naming a field that doesn't exist lists the fields that do.
 
 ## 0.6.0-beta.1
 

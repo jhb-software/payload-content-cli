@@ -4,6 +4,7 @@ import { editAtPath, LexicalError, linkRichText } from "../lexical/index.js";
 import { getBlockSchema, getEntitySchema, type FieldSchema } from "../plugin/index.js";
 import { pickLocale, toObject, type McpContentToolsOptions } from "./options.js";
 import { errorResult, jsonResult, type McpTool } from "./result.js";
+import { explainMissingPath } from "./missingPath.js";
 import { findAddedProblem, isBlockNode, isRecord } from "./richTextChecks.js";
 import { errorMessage, hasDrafts, openTarget } from "./target.js";
 
@@ -63,9 +64,9 @@ async function blockFieldsAt(
 /**
  * Start the rich text a path leads into when nobody has written it yet (in
  * this locale): Payload stores it as null, and the path can't continue through
- * null. Follows the path along the schema — through groups, array and blocks
- * rows, and the fields of blocks inside rich text — so rich text at any depth
- * can be started.
+ * null. Follows the path along the schema — through groups, named tabs
+ * (started too when missing), array and blocks rows, and the fields of blocks
+ * inside rich text — so rich text at any depth can be started.
  */
 async function startEmptyRichText(
   doc: Record<string, unknown>,
@@ -97,7 +98,8 @@ async function startEmptyRichText(
       }
       continue;
     }
-    value = value[field.name];
+    const record = value;
+    value = record[field.name];
     if (field.type === "array" || field.type === "blocks") {
       const row = Array.isArray(value) ? value[Number(segments[++i])] : undefined;
       value = row;
@@ -106,6 +108,12 @@ async function startEmptyRichText(
           ? field.fields
           : field.blocks?.find((block) => isRecord(row) && block.slug === row.blockType)?.fields;
     } else {
+      // Payload reads a localized named tab without a value in this locale back
+      // as undefined, and the groups inside it too: start them, so the rich
+      // text inside can be started.
+      if (value == null && (field.type === "tab" || field.type === "group")) {
+        value = record[field.name] = {};
+      }
       schema = field.fields;
     }
   }
@@ -194,26 +202,36 @@ export function updateRichTextTool(options: McpContentToolsOptions = {}): McpToo
 
         let result: Record<string, unknown>;
         let changed: Record<string, unknown>;
-        if (operation === "link") {
-          if (!parsed.text) return errorResult("link needs text: the words to wrap.");
-          const linkTarget = toObject(parsed.value as never, "value");
-          const relationTo = linkTarget?.relationTo;
-          const value = linkTarget?.value;
-          if (
-            typeof relationTo !== "string" ||
-            (typeof value !== "string" && typeof value !== "number")
-          ) {
-            return errorResult('link needs value: {"relationTo":"<collection>","value":"<id>"}.');
+        try {
+          if (operation === "link") {
+            if (!parsed.text) return errorResult("link needs text: the words to wrap.");
+            const linkTarget = toObject(parsed.value as never, "value");
+            const relationTo = linkTarget?.relationTo;
+            const value = linkTarget?.value;
+            if (
+              typeof relationTo !== "string" ||
+              (typeof value !== "string" && typeof value !== "number")
+            ) {
+              return errorResult('link needs value: {"relationTo":"<collection>","value":"<id>"}.');
+            }
+            const linked = linkRichText(doc, path, parsed.text, {
+              relationTo,
+              value,
+              ...(linkTarget?.newTab === true ? { newTab: true } : {}),
+            });
+            result = { linked: linked.path, outline: linked.outline };
+            changed = linked.doc;
+          } else {
+            ({ result, doc: changed } = editAtPath(doc, path, operation, parsed.value));
           }
-          const linked = linkRichText(doc, path, parsed.text, {
-            relationTo,
-            value,
-            ...(linkTarget?.newTab === true ? { newTab: true } : {}),
-          });
-          result = { linked: linked.path, outline: linked.outline };
-          changed = linked.doc;
-        } else {
-          ({ result, doc: changed } = editAtPath(doc, path, operation, parsed.value));
+        } catch (err) {
+          // The stored keys alone make a field this locale has no value for read like a typo.
+          const missing =
+            err instanceof LexicalError && err.code === "PATH_NOT_FOUND"
+              ? explainMissingPath(doc, path, fields)
+              : undefined;
+          // Not a LexicalError: a name the schema lacks isn't in the draft either.
+          throw missing && !missing.empty ? new Error(missing.message) : err;
         }
 
         // A publishing write starts from the published version, so it would

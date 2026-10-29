@@ -1,7 +1,9 @@
 import type { SelectType, Sort, Where } from "payload";
 import { z } from "zod/v3";
-import { readAtPath, searchRichText } from "../lexical/index.js";
+import { LexicalError, readAtPath, searchRichText } from "../lexical/index.js";
 import { outlineRichText } from "../lexical/view.js";
+import { getEntitySchema, type FieldSchema } from "../plugin/index.js";
+import { explainMissingPath } from "./missingPath.js";
 import { jsonObject, pickLocale, toObject, type McpContentToolsOptions } from "./options.js";
 import { errorResult, jsonResult, type McpTool } from "./result.js";
 import { errorMessage, openTarget } from "./target.js";
@@ -26,7 +28,7 @@ const parameters = {
   where: jsonObject
     .optional()
     .describe('Filter as a Payload query, e.g. {"slug":{"equals":"about"}}.'),
-  select: jsonObject.optional().describe('Only these fields, e.g. {"title":true}.'),
+  select: jsonObject.optional().describe('Only these fields, e.g. {"title":true}. Not with path.'),
   sort: z.string().optional().describe('Field to sort by; "-" for descending, e.g. "-createdAt".'),
   limit: z.number().int().min(1).max(100).optional().describe("Documents per page, default 10."),
   page: z.number().int().min(1).optional().describe("Page, default 1."),
@@ -84,11 +86,9 @@ export function findTool(options: McpContentToolsOptions = {}): McpTool {
           fallbackLocale: false as const,
           locale,
           // A path needs only its field.
-          select:
-            select ??
-            (paths.length
-              ? Object.fromEntries(paths.map((p) => [p.split(".")[0], true]))
-              : undefined),
+          select: paths.length
+            ? (Object.fromEntries(paths.map((p) => [p.split(".")[0], true])) as SelectType)
+            : select,
           overrideAccess: false,
           req,
         };
@@ -104,16 +104,42 @@ export function findTool(options: McpContentToolsOptions = {}): McpTool {
                   ...read,
                 });
           if (!doc) return errorResult(`No ${target.slug} document with id "${id}".`);
+
+          // A path the stored document lacks: a field with no value in this
+          // locale reads as empty, anything else is explained by the schema.
+          let fields: FieldSchema[] | undefined;
+          const atPath = async <T>(p: string, readPath: () => T, empty: T): Promise<T> => {
+            try {
+              return readPath();
+            } catch (err) {
+              if (!(err instanceof LexicalError) || err.code !== "PATH_NOT_FOUND") throw err;
+              fields ??= (
+                await getEntitySchema({
+                  req,
+                  type: target.kind,
+                  slug: target.slug,
+                  blocks: "inline",
+                })
+              ).fields;
+              const missing = explainMissingPath(doc, p, fields);
+              if (missing?.empty) return empty;
+              throw missing ? new Error(missing.message) : err;
+            }
+          };
+
           if (text !== undefined) {
-            const matches = (paths.length ? paths : [""]).flatMap((p) =>
-              searchRichText(doc, p, text),
-            );
+            const matches = [];
+            for (const p of paths.length ? paths : [""]) {
+              matches.push(...(await atPath(p, () => searchRichText(doc, p, text), [])));
+            }
             return jsonResult(matches);
           }
-          if (Array.isArray(path)) {
-            return jsonResult(Object.fromEntries(path.map((p) => [p, readAtPath(doc, p)])));
+          if (path !== undefined) {
+            const values: Record<string, unknown> = {};
+            for (const p of paths)
+              values[p] = (await atPath(p, () => readAtPath(doc, p), null)) ?? null;
+            return jsonResult(Array.isArray(path) ? values : values[path]);
           }
-          if (path !== undefined) return jsonResult(readAtPath(doc, path));
           return jsonResult(outlineRichText(doc, ""));
         }
         const { docs, totalDocs, page, totalPages } = await req.payload.find({

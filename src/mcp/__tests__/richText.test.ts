@@ -77,6 +77,32 @@ beforeAll(async () => {
             { name: "content", type: "richText", editor },
           ],
         },
+        {
+          slug: "landings",
+          access: open,
+          versions: { drafts: true },
+          fields: [
+            { name: "title", type: "text" },
+            {
+              type: "tabs",
+              tabs: [
+                {
+                  name: "aside",
+                  localized: true,
+                  fields: [
+                    { name: "heading", type: "richText", editor },
+                    { name: "links", type: "array", fields: [{ name: "url", type: "text" }] },
+                    {
+                      name: "box",
+                      type: "group",
+                      fields: [{ name: "body", type: "richText", editor }],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
       ],
       globals: [
         { slug: "footer", access: open, fields: [{ name: "content", type: "richText", editor }] },
@@ -118,6 +144,21 @@ async function createPost(linkTo: string | number) {
     locale: "de",
   });
   return post.id;
+}
+
+/**
+ * A landing page whose aside has a heading in "en" only. Payload reads a
+ * localized named tab back without its key in a locale that has no value for
+ * it, while another locale has one.
+ */
+async function createLanding() {
+  const landing = await payload.create({
+    collection: "landings",
+    data: { title: "Contact", aside: { heading: richText(buildParagraph("Contact us")) } } as never,
+    draft: true,
+    locale: "en",
+  });
+  return landing.id;
 }
 
 async function tool(
@@ -203,6 +244,49 @@ describe("find", () => {
     );
 
     expect(outline).toEqual(["content.0 p: Einleitung"]);
+  });
+});
+
+describe("find on a path the stored document lacks", () => {
+  it("reads a field this locale has no value for as null", async () => {
+    const id = await createLanding();
+
+    const result = await find({
+      collection: "landings",
+      id,
+      path: ["aside.heading", "aside.links", "title"],
+      locale: "de",
+    });
+
+    expect(result).toEqual({ "aside.heading": null, "aside.links": null, title: "Contact" });
+  });
+
+  it("answers a row of a list this locale has no value for as a row past the end", async () => {
+    const id = await createLanding();
+
+    const empty = await find({
+      collection: "landings",
+      id,
+      path: "aside.links.0.url",
+      locale: "en",
+    });
+    const missing = await find({
+      collection: "landings",
+      id,
+      path: "aside.links.0.url",
+      locale: "de",
+    });
+
+    expect(missing).toEqual({ error: 'No "0" at aside.links: it has no items.' });
+    expect(missing).toEqual(empty);
+  });
+
+  it("names the fields the schema has where a path names one it doesn't, in a tab with no value", async () => {
+    const id = await createLanding();
+
+    const result = await find({ collection: "landings", id, path: "aside.headng", locale: "de" });
+
+    expect(result).toEqual({ error: 'No "headng" in aside. Its fields: heading, links, box.' });
   });
 });
 
@@ -608,5 +692,43 @@ describe("updateRichText", () => {
     const saved = await payload.findByID({ collection: "guides", id: guide.id, depth: 0 });
     expect(JSON.stringify(saved.sections)).toContain("Bring cash.");
     expect(saved.sections?.[0]?.heading).toBe("Packing");
+  });
+
+  it("starts rich text in a group inside a localized named tab this locale has no value for", async () => {
+    const id = await createLanding();
+
+    const result = await call({
+      collection: "landings",
+      id,
+      path: "aside.box.body.0",
+      operation: "insert",
+      value: { type: "p", text: "Kontakt" },
+      locale: "de",
+    });
+
+    expect(result).toMatchObject({ inserted: "aside.box.body.0 p: Kontakt" });
+    const read = async (locale: string) =>
+      JSON.stringify(
+        (await payload.findByID({ collection: "landings", id, draft: true, locale })).aside,
+      );
+    expect(await read("de")).toContain("Kontakt");
+    expect(await read("en")).toContain("Contact us");
+    expect(await read("en")).not.toContain("Kontakt");
+  });
+
+  it("names the fields the schema has where a path names one it doesn't", async () => {
+    const id = await createLanding();
+
+    const result = await call({
+      collection: "landings",
+      id,
+      path: "asid.heading.0",
+      operation: "insert",
+      value: { type: "p", text: "Kontakt" },
+      locale: "de",
+      draft: false,
+    });
+
+    expect(result).toEqual({ error: 'No "asid" in the document. Its fields: title, aside.' });
   });
 });

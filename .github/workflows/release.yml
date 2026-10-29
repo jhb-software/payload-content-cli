@@ -27,7 +27,8 @@ jobs:
       id-token: write
     services:
       mongodb:
-        image: mongo:8
+        # MongoDB 8 refuses to start on Linux 6.19+ (SERVER-121912), which the runners now use.
+        image: mongo:7
         ports:
           - 27017:27017
     env:

@@ -87,9 +87,9 @@ jobs:
           /tmp/pack-smoke/node_modules/.bin/payload-content skill --output /tmp/pack-smoke/SKILL.md
           test -s /tmp/pack-smoke/SKILL.md
       - name: Start Payload dev server
-        run: pnpm example:dev &
+        run: pnpm example:dev > /tmp/payload-dev.log 2>&1 &
       - name: Wait for Payload to be ready
-        run: timeout 120 bash -c 'until curl -sf http://localhost:3939/api/access; do sleep 2; done'
+        run: timeout 120 bash -c 'until curl -sf http://localhost:3939/api/access; do sleep 2; done' || (cat /tmp/payload-dev.log; exit 1)
       - name: Seed test data
         run: pnpm example:seed
       - run: pnpm test

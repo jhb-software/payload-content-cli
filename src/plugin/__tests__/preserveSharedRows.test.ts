@@ -383,6 +383,33 @@ describe("the update tool", () => {
     expect(await titles(id, "en")).toEqual(["Food"]);
   });
 
+  it("writes rows to a global in one locale without copying the default locale's untranslated values", async () => {
+    const nav = (await payload.updateGlobal({
+      slug: "nav",
+      locale: "en",
+      data: {
+        extras: [{ item: { title: "Cuisine" } }],
+        perLocale: [{ title: "English only" }],
+      } as never,
+      context: { [ALLOW_SHARED_ROW_REPLACEMENT]: true },
+    })) as unknown as { extras: Row[] };
+
+    const result = await call(payload, update, {
+      collection: "globals/nav",
+      locale: "de",
+      data: { extras: [{ id: nav.extras[0].id, item: { title: "Kulinarik" } }] },
+    });
+
+    expect(result.error).toBeUndefined();
+    const de = await payload.findGlobal({
+      slug: "nav",
+      locale: "de",
+      fallbackLocale: false,
+      depth: 0,
+    });
+    expect((de as unknown as { perLocale?: Row[] }).perLocale ?? []).toEqual([]);
+  });
+
   it("adds a row inside a block from rows sent as ids alone, keeping every translation", async () => {
     const created = await payload.create({
       collection: "hotels",

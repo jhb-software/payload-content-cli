@@ -52,7 +52,11 @@ beforeAll(async () => {
         slug: "footer",
         access: open,
         versions: { drafts: true },
-        fields: [{ name: "note", type: "text" }],
+        fields: [
+          { name: "note", type: "text" },
+          { name: "title", type: "text", localized: true },
+          { name: "tagline", type: "text", localized: true },
+        ],
       },
     ],
   });
@@ -177,6 +181,25 @@ describe("update", () => {
 
     expect(result).toEqual({ status: "draft" });
     expect((await payload.findGlobal({ slug: "footer", draft: true })).note).toBe("Hi");
+  });
+
+  it("leaves a global's fields this locale hasn't translated empty, instead of copying the default locale's", async () => {
+    await payload.updateGlobal({
+      slug: "footer",
+      locale: "en",
+      data: { title: "Hello", tagline: "Welcome" } as never,
+    });
+
+    await tool("update", { collection: "globals/footer", locale: "de", data: { title: "Hallo" } });
+
+    const de = await payload.findGlobal({
+      slug: "footer",
+      locale: "de",
+      fallbackLocale: false,
+      draft: true,
+    });
+    expect(de).toMatchObject({ title: "Hallo" });
+    expect(de.tagline ?? null).toBeNull();
   });
 
   it("asks for an id or a where clause", async () => {

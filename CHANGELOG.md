@@ -9,6 +9,7 @@
 - feat: `errorResult(message, details?)` in `./mcp` answers `{ error, details }`.
 - feat: the MCP `getEntitySchema` marks arrays and blocks whose rows every locale shares `(shared rows)` (`FieldSchema.sharedRows`), and a localized named tab `(localized)`.
 - fix: `preserveSharedRowsPlugin` also guards lists inside a block that nests itself.
+- fix: writing a global in one locale no longer copies the default locale's values into its untranslated fields, from the MCP `update` and `updateRichText`, nor through `preserveSharedRowsPlugin` (CLI and REST writes with rows).
 - fix: a block row sent with its id but without `blockType`, which Payload takes from the stored row, is no longer skipped: `preserveSharedRowsPlugin` and the MCP `update` check the rows inside it, and `update` converts its rich text.
 
 ## 0.6.0-beta.1

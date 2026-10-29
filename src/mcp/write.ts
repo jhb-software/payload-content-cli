@@ -298,6 +298,9 @@ export function updateTool(options: McpContentToolsOptions = {}): McpTool {
           data,
           draft,
           locale,
+          // Payload reads a global's stored values with fallback, and would write
+          // the fallback back into this locale's untranslated fields.
+          fallbackLocale: false as const,
           depth: 0,
           select: {},
           overrideAccess: false,

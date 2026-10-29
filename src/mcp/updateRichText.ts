@@ -263,7 +263,17 @@ export function updateRichTextTool(options: McpContentToolsOptions = {}): McpToo
         const data = hasDrafts(config)
           ? { [field]: changed[field], _status: draft ? "draft" : "published" }
           : { [field]: changed[field] };
-        const write = { data, depth: 0, draft, locale, overrideAccess: false, req } as const;
+        // Payload reads a global's stored values with fallback, and would write
+        // the fallback back into this locale's untranslated fields.
+        const write = {
+          data,
+          depth: 0,
+          draft,
+          locale,
+          fallbackLocale: false,
+          overrideAccess: false,
+          req,
+        } as const;
         if (target.kind === "global") {
           await req.payload.updateGlobal({ slug: target.slug, select: {}, ...write });
         } else {

@@ -110,7 +110,14 @@ beforeAll(async () => {
         },
       ],
       globals: [
-        { slug: "footer", access: open, fields: [{ name: "content", type: "richText", editor }] },
+        {
+          slug: "footer",
+          access: open,
+          fields: [
+            { name: "content", type: "richText", editor },
+            { name: "tagline", type: "text", localized: true },
+          ],
+        },
       ],
     }),
   });
@@ -618,6 +625,26 @@ describe("updateRichText", () => {
 
     const footer = await payload.findGlobal({ slug: "footer", depth: 0 });
     expect(JSON.stringify(footer.content)).toContain('"text":"New"');
+  });
+
+  it("edits a global in a locale without copying the default locale into its untranslated fields", async () => {
+    await payload.updateGlobal({
+      slug: "footer",
+      locale: "en",
+      data: { content: richText(buildParagraph("Old")), tagline: "Welcome" } as never,
+    });
+
+    await call({
+      collection: "globals/footer",
+      locale: "de",
+      path: "content.0",
+      operation: "set",
+      value: { type: "p", text: "Neu" },
+    });
+
+    const de = await payload.findGlobal({ slug: "footer", locale: "de", fallbackLocale: false });
+    expect(JSON.stringify(de.content)).toContain('"text":"Neu"');
+    expect(de.tagline ?? null).toBeNull();
   });
 
   it("writes the locale the resolveLocale hook picks", async () => {

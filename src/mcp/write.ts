@@ -6,7 +6,7 @@ import { jsonObject, pickLocale, toObject, type McpContentToolsOptions } from ".
 import { errorResult, jsonResult, type McpTool } from "./result.js";
 import { hydrateRichText, objectsIn, richTextFieldsIn } from "./richTextData.js";
 import { findAddedProblem } from "./richTextChecks.js";
-import { findLeftOutRows, findRowFields } from "./rows.js";
+import { findLeftOutRows, findRowFields, restoreBlockTypes } from "./rows.js";
 import { errorMessage, hasDrafts, openTarget, type EntityConfig, type Target } from "./target.js";
 
 const collectionArg = z
@@ -284,6 +284,7 @@ export function updateTool(options: McpContentToolsOptions = {}): McpTool {
             richTextFieldsIn(config.fields, sent, blocks).length > 0)
             ? await readStored(req, target, id, locale, sent)
             : undefined;
+        if (stored) restoreBlockTypes(config.fields, sent, stored, blocks);
         const refusal = parsed.replaceRows
           ? undefined
           : rowsRefusal(req, config, sent, stored, bulk);

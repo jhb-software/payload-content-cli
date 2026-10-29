@@ -37,36 +37,42 @@ export function rowFields(
   return block?.fields ?? [];
 }
 
-/** `stored` undefined: a bulk update, where every rows field counts. */
-function walk(
+type Rows = Extract<Field, { type: "array" | "blocks" }>;
+
+/**
+ * Calls `visit` for each array or blocks field `data` sets, with the rows
+ * `stored` holds for it, then goes on into the rows matched by id. `stored`
+ * undefined: a bulk update, where there's nothing to match and no going on.
+ */
+function eachRows(
   fields: Field[],
   data: Data,
   stored: Data | undefined,
   path: string,
   configBlocks: Block[],
-  out: LeftOutRows[],
+  visit: (field: Rows, rows: unknown[], storedRows: unknown[] | undefined, path: string) => void,
 ): void {
+  const into = (fields: Field[], data: Data, stored: Data | undefined, path: string) =>
+    eachRows(fields, data, stored, path, configBlocks, visit);
   for (const field of fields) {
     if (field.type === "tabs") {
       for (const tab of field.tabs) {
         if (!tabHasName(tab)) {
-          walk(tab.fields, data, stored, path, configBlocks, out);
+          into(tab.fields, data, stored, path);
         } else if (isObject(data[tab.name])) {
           const inner = stored?.[tab.name];
-          walk(
+          into(
             tab.fields,
             data[tab.name] as Data,
             stored && (isObject(inner) ? inner : {}),
             `${path}${tab.name}.`,
-            configBlocks,
-            out,
           );
         }
       }
       continue;
     }
     if (!fieldAffectsData(field)) {
-      if ("fields" in field) walk(field.fields, data, stored, path, configBlocks, out);
+      if ("fields" in field) into(field.fields, data, stored, path);
       continue;
     }
     if (!(field.name in data)) continue;
@@ -74,41 +80,53 @@ function walk(
     const storedValue = stored?.[field.name];
 
     if (field.type === "group" && isObject(value)) {
-      walk(
+      into(
         field.fields,
         value,
         stored && (isObject(storedValue) ? storedValue : {}),
         `${path}${field.name}.`,
-        configBlocks,
-        out,
       );
       continue;
     }
     if ((field.type !== "array" && field.type !== "blocks") || !Array.isArray(value)) continue;
 
-    if (stored === undefined) {
-      out.push({ path: path + field.name, ids: [] });
-      continue;
-    }
-    const storedRows = Array.isArray(storedValue) ? storedValue : [];
-    const sent = new Set(value.map(rowId));
-    const ids = storedRows.map(rowId).filter((id) => id !== undefined && !sent.has(id));
-    if (ids.length) out.push({ path: path + field.name, ids: ids as (string | number)[] });
-
+    const storedRows = stored && (Array.isArray(storedValue) ? storedValue : []);
+    visit(field, value, storedRows, path + field.name);
+    if (!storedRows) continue;
     value.forEach((row, index) => {
       const id = rowId(row);
       const match = storedRows.find((storedRow) => id !== undefined && rowId(storedRow) === id);
       if (!isObject(row) || !isObject(match)) return;
-      walk(
+      into(
         rowFields(field, configBlocks, row.blockType),
         row,
         match,
         `${path}${field.name}.${index}.`,
-        configBlocks,
-        out,
       );
     });
   }
+}
+
+/**
+ * Gives each block row `data` sends with an id but no `blockType` the stored
+ * row's, in place, as Payload does when it writes: the checks that walk `data`
+ * by schema can then see the row's fields.
+ */
+export function restoreBlockTypes(
+  fields: Field[],
+  data: Data,
+  stored: Data,
+  configBlocks: Block[] = [],
+): void {
+  eachRows(fields, data, stored, "", configBlocks, (field, rows, storedRows) => {
+    if (field.type !== "blocks") return;
+    for (const row of rows) {
+      const id = rowId(row);
+      if (!isObject(row) || row.blockType || id === undefined) continue;
+      const match = storedRows!.find((storedRow) => rowId(storedRow) === id);
+      if (isObject(match)) row.blockType = match.blockType;
+    }
+  });
 }
 
 /** The array and blocks fields in `data` that leave out rows `stored` holds. */
@@ -120,7 +138,11 @@ export function findLeftOutRows(
 ): LeftOutRows[] {
   if (!stored) return [];
   const out: LeftOutRows[] = [];
-  walk(fields, data, stored, "", configBlocks, out);
+  eachRows(fields, data, stored, "", configBlocks, (_, rows, storedRows, path) => {
+    const sent = new Set(rows.map(rowId));
+    const ids = storedRows!.map(rowId).filter((id) => id !== undefined && !sent.has(id));
+    if (ids.length) out.push({ path, ids: ids as (string | number)[] });
+  });
   return out;
 }
 
@@ -129,7 +151,7 @@ export function findLeftOutRows(
  * matched document; rows can't carry ids that hold across documents.
  */
 export function findRowFields(fields: Field[], data: Data, configBlocks: Block[] = []): string[] {
-  const out: LeftOutRows[] = [];
-  walk(fields, data, undefined, "", configBlocks, out);
-  return out.map((rows) => rows.path);
+  const out: string[] = [];
+  eachRows(fields, data, undefined, "", configBlocks, (_, __, ___, path) => out.push(path));
+  return out;
 }

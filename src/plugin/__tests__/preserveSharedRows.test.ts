@@ -37,7 +37,19 @@ let payload: Payload;
 beforeAll(async () => {
   payload = await boot("shared-rows", {
     localization: { locales: ["en", "de"], defaultLocale: "en" },
-    blocks: [{ slug: "section", fields: [{ name: "title", type: "text", localized: true }] }],
+    blocks: [
+      {
+        slug: "section",
+        fields: [
+          { name: "title", type: "text", localized: true },
+          {
+            name: "points",
+            type: "array",
+            fields: [{ name: "text", type: "text", localized: true }],
+          },
+        ],
+      },
+    ],
     collections: [
       { slug: "hotels", access: open, fields },
       // Only the API's own code may touch these.
@@ -155,6 +167,19 @@ describe("preserveSharedRowsPlugin refuses", () => {
     await expect(
       updateEnglish(id, { sections: [{ blockType: "section", title: "Hello" }] }),
     ).rejects.toThrow(/sections/);
+  });
+
+  it("rewriting the rows inside a block sent without its blockType, which Payload accepts", async () => {
+    const created = await payload.create({
+      collection: "hotels",
+      locale: "en",
+      data: { sections: [{ blockType: "section", points: [{ text: "Pool" }] }] } as never,
+    });
+    const [section] = (created as unknown as { sections: (Row & { points: Row[] })[] }).sections;
+
+    await expect(
+      updateEnglish(created.id, { sections: [{ id: section.id, points: [{ text: "Spa" }] }] }),
+    ).rejects.toThrow(section.points[0].id);
   });
 
   it("rows whose id is null", async () => {

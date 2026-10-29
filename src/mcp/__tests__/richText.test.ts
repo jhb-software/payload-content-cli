@@ -75,6 +75,11 @@ beforeAll(async () => {
           fields: [
             { name: "title", type: "text", required: true },
             { name: "content", type: "richText", editor },
+            {
+              name: "sections",
+              type: "blocks",
+              blocks: [{ slug: "text", fields: [{ name: "body", type: "richText", editor }] }],
+            },
           ],
         },
         {
@@ -343,6 +348,31 @@ describe("create and update with rich text", () => {
     expect(stored.content).toMatchObject({
       root: { type: "root", children: [{ type: "heading", tag: "h2" }, { type: "paragraph" }] },
     });
+  });
+
+  it("update takes rich text inside a block row sent without its blockType", async () => {
+    const created = await tool("create", {
+      collection: "articles",
+      data: {
+        title: "Visa",
+        sections: [{ blockType: "text", body: [{ type: "p", text: "Old" }] }],
+      },
+    });
+    const id = created.id as number;
+    const [section] = (await payload.findByID({ collection: "articles", id, draft: true }))
+      .sections as { id: string }[];
+
+    const result = await tool("update", {
+      collection: "articles",
+      id,
+      data: { sections: [{ id: section.id, body: [{ type: "p", text: "New" }] }] },
+    });
+
+    expect(result).toEqual({ id, status: "draft" });
+    const stored = await payload.findByID({ collection: "articles", id, draft: true });
+    expect(stored.sections).toMatchObject([
+      { blockType: "text", body: { root: { children: [{ type: "paragraph" }] } } },
+    ]);
   });
 
   it("create takes rich text as {root:{children}} with shorthand nodes", async () => {

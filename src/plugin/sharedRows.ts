@@ -202,7 +202,8 @@ function walk(
       const id = rowId(row);
       const match = id === undefined ? undefined : existingRows.find((r) => rowId(r) === id);
       walk(
-        rowFields(field, configBlocks, row.blockType),
+        // Payload takes a block row's type from the stored row when it's left out.
+        rowFields(field, configBlocks, row.blockType || match?.blockType),
         row,
         match,
         `${childPath}[${id ?? index}]`,

@@ -341,6 +341,20 @@ describe("update with rows", () => {
     expect((await storedTrip(id)).sections[0].items).toHaveLength(2);
   });
 
+  it("refuses leaving out rows inside a block sent without its blockType, which Payload accepts", async () => {
+    const { id, sections } = await trip();
+    const [section] = sections;
+
+    const result = await tool("update", {
+      collection: "trips",
+      id,
+      data: { sections: [{ id: section.id, items: [section.items![0]] }] },
+    });
+
+    expect(result.error).toContain(section.items![1].id);
+    expect((await storedTrip(id)).sections[0].items).toHaveLength(2);
+  });
+
   it("takes every row back, edited, reordered and with a new one", async () => {
     const { id, facts } = await trip();
 

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.0-beta.2
 
 - fix: `--locale` reads without fallback, so writing back no longer stores the default locale's text as a translation. Untranslated required fields now fail on `push`; re-pull older locale files.
 - fix: unknown locales (`--locale`, MCP `locale`) are refused instead of falling back to the default locale.

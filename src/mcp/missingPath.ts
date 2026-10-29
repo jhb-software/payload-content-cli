@@ -14,6 +14,9 @@ import { isRecord } from "./richTextChecks.js";
  */
 export type MissingPath = { empty: true } | { empty: false; message: string };
 
+/** Enough to spot the field meant, without listing a whole wide schema. */
+const LISTED_FIELDS = 30;
+
 export function explainMissingPath(
   doc: unknown,
   path: string,
@@ -32,9 +35,13 @@ export function explainMissingPath(
       if (next !== undefined) return undefined;
       const at = segments.slice(0, i).join(".") || "the document";
       const names = schema.filter((f) => !f.system).map((f) => f.name);
+      const more =
+        names.length > LISTED_FIELDS
+          ? ` and ${names.length - LISTED_FIELDS} more (see getEntitySchema)`
+          : "";
       return {
         empty: false,
-        message: `No "${segments[i]}" in ${at}. Its fields: ${names.join(", ")}.`,
+        message: `No "${segments[i]}" in ${at}. Its fields: ${names.slice(0, LISTED_FIELDS).join(", ")}${more}.`,
       };
     }
     const last = i === segments.length - 1;

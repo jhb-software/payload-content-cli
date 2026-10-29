@@ -361,6 +361,7 @@ describe("update with rows", () => {
     });
 
     expect(result.error).toContain(section.items![1].id);
+    expect(result.error).toContain("To change a nested row, send each enclosing row as its id");
     expect((await storedTrip(id)).sections[0].items).toHaveLength(2);
   });
 

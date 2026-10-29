@@ -41,6 +41,11 @@ beforeAll(async () => {
       localization: { locales: ["en", "de"], defaultLocale: "en" },
       collections: [
         {
+          slug: "settings",
+          access: open,
+          fields: Array.from({ length: 35 }, (_, i) => ({ name: `f${i}`, type: "text" as const })),
+        },
+        {
           slug: "pages",
           access: open,
           fields: [
@@ -299,6 +304,17 @@ describe("find on a path the stored document lacks", () => {
     const result = await find({ collection: "landings", id, path: "aside.headng", locale: "de" });
 
     expect(result).toEqual({ error: 'No "headng" in aside. Its fields: heading, links, box.' });
+  });
+
+  it("names only the first 30 fields of a level that has more", async () => {
+    const { id } = await payload.create({ collection: "settings", data: {} });
+
+    const result = await find({ collection: "settings", id, path: "nope" });
+
+    const first30 = Array.from({ length: 30 }, (_, i) => `f${i}`).join(", ");
+    expect(result).toEqual({
+      error: `No "nope" in the document. Its fields: ${first30} and 5 more (see getEntitySchema).`,
+    });
   });
 });
 

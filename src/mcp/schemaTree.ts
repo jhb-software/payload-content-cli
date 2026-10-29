@@ -13,7 +13,6 @@ export const SCHEMA_TREE_LEGEND = [
   "  (a | b)         allowed values; on blocks, the blockType slugs",
   "  → a | b         target collections of a relationship or upload",
   "  (localized)     differs per locale",
-  "  (shared rows)   the same rows in every locale, only their localized fields differ: keep each row's id",
   "  (virtual)       read-only, never write it",
   "  read-only: a, b fields find returns but nothing writes, named on the last line",
   "  [when …]        applies only while the rule on sibling fields holds",
@@ -59,7 +58,9 @@ function renderFields(
       continue;
     }
     lines.push(
-      indent + fieldLine(field) + (markShared && field.sharedRows ? " (shared rows)" : ""),
+      indent +
+        fieldLine(field) +
+        (markShared && field.sharedRows ? " (rows shared by all locales)" : ""),
     );
     if (field.lexicalFeatures) {
       const linkFields: string[] = [];

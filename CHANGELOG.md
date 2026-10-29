@@ -5,9 +5,9 @@
 - fix: `--locale` reads without fallback, so writing back no longer stores the default locale's text as a translation. Untranslated required fields now fail on `push`; re-pull older locale files.
 - fix: unknown locales (`--locale`, MCP `locale`) are refused instead of falling back to the default locale.
 - feat: `getBlockSchema` suggests the slug meant for an unknown one (`CodeBlock` → `code`).
-- fix: the MCP `find` reads a field a locale has no value for as `null`, `updateRichText` starts rich text inside one, and a path naming a field that doesn't exist lists the fields that do.
+- fix: the MCP `find` reads a field a locale has no value for as `null`, `updateRichText` starts rich text inside one, and a path naming a field that doesn't exist lists the fields that do (up to 30).
 - feat: `errorResult(message, details?)` in `./mcp` answers `{ error, details }`.
-- feat: the MCP `getEntitySchema` marks arrays and blocks whose rows every locale shares `(shared rows)` (`FieldSchema.sharedRows`), and a localized named tab `(localized)`.
+- feat: the MCP `getEntitySchema` marks arrays and blocks whose rows every locale shares `(rows shared by all locales)` (`FieldSchema.sharedRows`), and a localized named tab `(localized)`.
 - fix: `preserveSharedRowsPlugin` also guards lists inside a block that nests itself.
 - fix: writing a global in one locale no longer copies the default locale's values into its untranslated fields, from the MCP `update` and `updateRichText`, nor through `preserveSharedRowsPlugin` (CLI and REST writes with rows).
 - fix: a block row sent with its id but without `blockType`, which Payload takes from the stored row, is no longer skipped: `preserveSharedRowsPlugin` and the MCP `update` check the rows inside it, and `update` converts its rich text.

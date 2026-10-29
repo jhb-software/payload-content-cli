@@ -183,12 +183,12 @@ pages (collection)
   title*: text (localized)
   theme: select (light | dark) = "light"
   author: relationship → authors
-  layout[]: blocks (hero | cta) (shared rows)
+  layout[]: blocks (hero | cta) (rows shared by all locales)
   body: richText
     ✎ block nodes: paragraph, heading (h2, h3), block (alert)
 ```
 
-Payload's bookkeeping (`id`, timestamps, `_status`) is left out. Fields your app maintains itself, marked both hidden and read-only, are left out of the tree too, but named on a closing `read-only:` line, since `find` returns them. Fields you add to the link feature are listed under the `✎ inline nodes: link` line. Arrays and blocks marked `(shared rows)` have localized fields in rows every locale shares (the field itself, and every field around it, isn't localized): a write keeps each row's id, so the other locales keep their translations. Block trees don't mark them, since a block may sit inside a localized field.
+Payload's bookkeeping (`id`, timestamps, `_status`) is left out. Fields your app maintains itself, marked both hidden and read-only, are left out of the tree too, but named on a closing `read-only:` line, since `find` returns them. Fields you add to the link feature are listed under the `✎ inline nodes: link` line. Arrays and blocks marked `(rows shared by all locales)` have localized fields in rows every locale shares (the field itself, and every field around it, isn't localized): a write keeps each row's id, so the other locales keep their translations. Block trees don't mark them, since a block may sit inside a localized field.
 
 `find` reads the latest draft unless `draft: false`, so an agent sees its own unpublished edits. It returns what a locale stores, without fallback, so an untranslated field reads as empty rather than as another language. Rich text comes back as an outline, one line per node starting with its path (`"content.1 block alert: See [safety]"`), the same outline `lexical read` prints: link text in brackets, bold as `**…**`, italic as `*…*`, up to 120 characters. For one document, `path` reads a single value (a list of paths reads several, keyed by path), a node as JSON without Lexical's defaults, and `text` lists where the text occurs in its rich text, marking matches already inside a link. `where` and `select` may be objects or JSON strings (some MCP clients send nested objects as strings), `limit` is capped at 100, and `depth` defaults to 0.
 

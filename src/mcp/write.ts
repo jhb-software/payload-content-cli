@@ -46,7 +46,7 @@ const updateParameters = {
     .optional()
     .describe("Instead of id: update every document this Payload query matches."),
   data: jsonObject.describe(
-    "Only the fields to change. For an array or blocks field, send every row you keep, with its id; a row without one is new. A stored row sent as just its id stays as stored, and may leave out blockType. To change a nested row, send each enclosing row as its id plus the field that holds the change. Rich text: a list of nodes, as for create.",
+    "Only the fields to change. An array or blocks field takes every row you keep, each with its id (an id alone keeps a row as stored, at any depth); a row without one is new. Rich text: a list of nodes, as for create.",
   ),
   locale: localeArg,
   draft: z
@@ -162,7 +162,7 @@ function rowsRefusal(
   const leftOut = findLeftOutRows(config.fields, data, stored, blocks);
   if (leftOut.length === 0) return undefined;
   const list = leftOut.map((rows) => `${rows.path} (${rows.ids.join(", ")})`).join("; ");
-  return `Refused: this would delete the stored rows it leaves out: ${list}. An array or blocks field takes its complete list of rows: send every row you keep, with its id. To delete these rows, pass replaceRows: true.`;
+  return `Refused: this would delete the stored rows it leaves out: ${list}. An array or blocks field takes its complete list of rows: send every row you keep, with its id; an id alone keeps a row. To change a nested row, send each enclosing row as its id plus the field that holds the change. To delete these rows, pass replaceRows: true.`;
 }
 
 /**
@@ -258,7 +258,7 @@ export function updateTool(options: McpContentToolsOptions = {}): McpTool {
   return {
     name: "update",
     description:
-      "Change fields of a document by id, of every document where matches, or of a global. Only the fields in data change; an array or blocks field takes its full list of rows. Saves to the draft unless draft:false.",
+      "Change fields of a document by id, of every document where matches, or of a global. Only the fields in data change. Saves to the draft unless draft:false.",
     annotations: { title: "Update content", ...writeAnnotations },
     parameters: updateParameters,
     handler: async (args, req) => {

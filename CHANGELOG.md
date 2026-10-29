@@ -7,6 +7,7 @@
 - feat: `getBlockSchema` suggests the slug meant for an unknown one (`CodeBlock` → `code`).
 - fix: the MCP `find` reads a field a locale has no value for as `null`, `updateRichText` starts rich text inside one, and a path naming a field that doesn't exist lists the fields that do.
 - feat: `errorResult(message, details?)` in `./mcp` answers `{ error, details }`.
+- fix: `preserveSharedRowsPlugin` also guards lists inside a block that nests itself.
 
 ## 0.6.0-beta.1
 

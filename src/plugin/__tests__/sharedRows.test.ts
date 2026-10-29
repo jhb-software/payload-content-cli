@@ -32,3 +32,30 @@ describe("blocks that nest themselves", () => {
     expect(findDroppedSharedRows(fields, idLess, stored, [nestingBlock(false)])).toEqual([]);
   });
 });
+
+describe("a list inside a block that nests itself", () => {
+  it("is shared when the block it holds has localized fields further down", () => {
+    const menu: Block = {
+      slug: "menu",
+      fields: [
+        {
+          name: "items",
+          type: "array",
+          fields: [{ name: "submenu", type: "blocks", blockReferences: ["menu"], blocks: [] }],
+        },
+        { name: "title", type: "text", localized: true },
+      ],
+    };
+    const menus: Field[] = [
+      { name: "menus", type: "blocks", blockReferences: ["menu"], blocks: [] },
+    ];
+    const storedMenus = {
+      menus: [{ id: "m", blockType: "menu", items: [{ id: "i", submenu: [] }] }],
+    };
+    const idLessItems = { menus: [{ id: "m", blockType: "menu", items: [{ submenu: [] }] }] };
+
+    expect(findDroppedSharedRows(menus, idLessItems, storedMenus, [menu])).toEqual([
+      { path: "menus[m].items", existingIds: ["i"] },
+    ]);
+  });
+});

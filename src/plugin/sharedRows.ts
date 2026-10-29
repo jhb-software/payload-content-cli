@@ -56,30 +56,38 @@ function rowFields(
 const localizedBelow = new WeakMap<Field[], boolean>();
 
 function hasLocalizedDescendant(fields: Field[], configBlocks: Block[]): boolean {
+  return localizedWithin(fields, configBlocks, new Set());
+}
+
+/**
+ * `seen` breaks the cycle of a block that nests itself: a list already being
+ * checked counts as false, which can make a list checked meanwhile read false
+ * too, so only a true answer is memoised here.
+ */
+function localizedWithin(fields: Field[], configBlocks: Block[], seen: Set<Field[]>): boolean {
+  if (seen.has(fields)) return false;
   const cached = localizedBelow.get(fields);
   if (cached !== undefined) return cached;
-  // Seeded before recursing so a self-referencing block terminates.
-  localizedBelow.set(fields, false);
+  seen.add(fields);
+  const within = (below: Field[]) => localizedWithin(below, configBlocks, seen);
   const result = fields.some((field) => {
     if (fieldAffectsData(field) && field.localized) return true;
     switch (field.type) {
       case "tabs":
-        return field.tabs.some((tab) => hasLocalizedDescendant(tab.fields, configBlocks));
+        return field.tabs.some((tab) => within(tab.fields));
       case "array":
-        return hasLocalizedDescendant(field.fields, configBlocks);
+        return within(field.fields);
       case "blocks":
-        return blocksOf(field, configBlocks).some((block) =>
-          hasLocalizedDescendant(block.fields, configBlocks),
-        );
+        return blocksOf(field, configBlocks).some((block) => within(block.fields));
       case "group":
       case "row":
       case "collapsible":
-        return hasLocalizedDescendant(field.fields, configBlocks);
+        return within(field.fields);
       default:
         return false;
     }
   });
-  localizedBelow.set(fields, result);
+  if (result) localizedBelow.set(fields, true);
   return result;
 }
 

@@ -21,6 +21,8 @@ const editor = lexicalEditor({
 let payload: Payload;
 
 beforeAll(async () => {
+  // Payload 4's default: a field inside a localized one keeps `localized`.
+  process.env.PAYLOAD_DO_NOT_SANITIZE_LOCALIZED_PROPERTY = "true";
   payload = await boot("mcp-schema", {
     localization: { locales: ["en", "de"], defaultLocale: "en" },
     blocks: [
@@ -31,7 +33,7 @@ beforeAll(async () => {
           { name: "cards", type: "blocks", blockReferences: ["cta"], blocks: [] },
         ],
       },
-      { slug: "cta", fields: [{ name: "label", type: "text" }] },
+      { slug: "cta", fields: [{ name: "label", type: "text", localized: true }] },
     ],
     collections: [
       {
@@ -61,6 +63,33 @@ beforeAll(async () => {
             name: "links",
             type: "array",
             fields: [{ name: "url", type: "text" }],
+          },
+          {
+            name: "faq",
+            type: "array",
+            fields: [{ name: "q", type: "text", localized: true }],
+          },
+          {
+            name: "gallery",
+            type: "array",
+            localized: true,
+            fields: [{ name: "caption", type: "text", localized: true }],
+          },
+          {
+            type: "tabs",
+            tabs: [
+              {
+                name: "seo",
+                localized: true,
+                fields: [
+                  {
+                    name: "keywords",
+                    type: "array",
+                    fields: [{ name: "k", type: "text", localized: true }],
+                  },
+                ],
+              },
+            ],
           },
         ],
       },
@@ -104,6 +133,7 @@ beforeAll(async () => {
     ],
     globals: [{ slug: "footer", access: open, fields: [{ name: "note", type: "text" }] }],
   });
+  delete process.env.PAYLOAD_DO_NOT_SANITIZE_LOCALIZED_PROPERTY;
 });
 
 describe("listEntities", () => {
@@ -120,7 +150,7 @@ describe("listEntities", () => {
 });
 
 describe("getEntitySchema", () => {
-  it("answers one line per field: required, lists, options, targets, defaults, locales, conditions", async () => {
+  it("answers one line per field: required, lists, options, targets, defaults, locales, shared rows, conditions", async () => {
     const tree = await call(payload, getEntitySchema, { collection: "pages" });
 
     expect(tree).toBe(
@@ -130,7 +160,7 @@ describe("getEntitySchema", () => {
         '  theme: select (light | dark) = "light"',
         '  accent: text [when {"field":"theme","equals":"dark"}]',
         "  author: relationship → authors",
-        "  layout[]: blocks (hero | cta)",
+        "  layout[]: blocks (hero | cta) (shared rows)",
         "  body: richText",
         "    ✎ text formats: bold, code, italic, strikethrough, subscript, superscript, underline",
         "    ✎ block nodes: paragraph, heading (h1, h2, h3, h4, h5, h6), quote, list (bullet, check, number), horizontalrule, upload, relationship, block (alert)",
@@ -138,6 +168,13 @@ describe("getEntitySchema", () => {
         "    ✎ layout: align, indent",
         "  links[]: array",
         "    url: text",
+        "  faq[]: array (shared rows)",
+        "    q: text (localized)",
+        "  gallery[]: array (localized)",
+        "    caption: text (localized)",
+        "  seo: tab (localized)",
+        "    keywords[]: array",
+        "      k: text (localized)",
       ].join("\n"),
     );
   });

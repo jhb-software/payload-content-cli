@@ -81,7 +81,7 @@ const { fields, jsonSchema } = await getEntitySchema({
 
 The lower-level pure transforms — `toFieldSchemas` (config → agent-friendly `FieldSchema[]`, taking the same `{ blocks }` projection option), `extractLexicalSummary` (a single richText field config → its `LexicalFeatureSummary`, for consumers with their own field walker) and `entityToJsonSchema` (→ draft-07 validation doc) — are exported too, along with the `FieldSchema`, `JsonSchema`, and `LexicalFeatureSummary` types.
 
-Each `FieldSchema` carries `system: true` for fields Payload injects rather than the author declaring them (`createdAt`, `updatedAt`, `_status`, `blockName`, and generated array/block row `id`s — but not a collection's custom ID field), `hasCondition: true` when the field is gated by an `admin.condition` — its own or one on a row, collapsible, unnamed group or tab it sits in — and `filterOptions` when a static filter constrains which related documents may be assigned. `system` marks bookkeeping, not a write ban: `_status` is the publish control and `createdAt` is accepted on create.
+Each `FieldSchema` carries `system: true` for fields Payload injects rather than the author declaring them (`createdAt`, `updatedAt`, `_status`, `blockName`, and generated array/block row `id`s — but not a collection's custom ID field), `hasCondition: true` when the field is gated by an `admin.condition` — its own or one on a row, collapsible, unnamed group or tab it sits in — `filterOptions` when a static filter constrains which related documents may be assigned, and `sharedRows: true` on an array or blocks field whose rows hold localized fields while neither it nor a field around it is localized. `system` marks bookkeeping, not a write ban: `_status` is the publish control and `createdAt` is accepted on create.
 
 A condition is a function, so the schema can't show the rule on its own. To publish it, declare the rule as data beside the function in `admin.custom.condition`, in any shape your agents understand (an object or a plain sentence). The field's `conditions` then lists every rule that gates it, outermost first; all must hold. It is omitted when any gating condition declares no rule, so a partial list never reads as the whole rule:
 
@@ -183,12 +183,12 @@ pages (collection)
   title*: text (localized)
   theme: select (light | dark) = "light"
   author: relationship → authors
-  layout[]: blocks (hero | cta)
+  layout[]: blocks (hero | cta) (shared rows)
   body: richText
     ✎ block nodes: paragraph, heading (h2, h3), block (alert)
 ```
 
-Payload's bookkeeping (`id`, timestamps, `_status`) is left out. Fields your app maintains itself, marked both hidden and read-only, are left out of the tree too, but named on a closing `read-only:` line, since `find` returns them. Fields you add to the link feature are listed under the `✎ inline nodes: link` line.
+Payload's bookkeeping (`id`, timestamps, `_status`) is left out. Fields your app maintains itself, marked both hidden and read-only, are left out of the tree too, but named on a closing `read-only:` line, since `find` returns them. Fields you add to the link feature are listed under the `✎ inline nodes: link` line. Arrays and blocks marked `(shared rows)` have localized fields in rows every locale shares (the field itself, and every field around it, isn't localized): a write keeps each row's id, so the other locales keep their translations. Block trees don't mark them, since a block may sit inside a localized field.
 
 `find` reads the latest draft unless `draft: false`, so an agent sees its own unpublished edits. It returns what a locale stores, without fallback, so an untranslated field reads as empty rather than as another language. Rich text comes back as an outline, one line per node starting with its path (`"content.1 block alert: See [safety]"`), the same outline `lexical read` prints: link text in brackets, bold as `**…**`, italic as `*…*`, up to 120 characters. For one document, `path` reads a single value (a list of paths reads several, keyed by path), a node as JSON without Lexical's defaults, and `text` lists where the text occurs in its rich text, marking matches already inside a link. `where` and `select` may be objects or JSON strings (some MCP clients send nested objects as strings), `limit` is capped at 100, and `depth` defaults to 0.
 

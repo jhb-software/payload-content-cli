@@ -15,7 +15,11 @@ beforeAll(async () => {
         fields: [
           // Payload drops `localized` without localization.
           { name: "title", type: "text", localized: true },
-          { name: "facts", type: "array", fields: [{ name: "label", type: "text" }] },
+          {
+            name: "facts",
+            type: "array",
+            fields: [{ name: "label", type: "text", localized: true }],
+          },
         ],
       },
     ],
@@ -80,5 +84,13 @@ describe("an app without localization", () => {
     );
 
     expect(result).toMatchObject({ title: "Safari" });
+  });
+
+  it("marks no rows as shared across locales", async () => {
+    const tree = await tool("getEntitySchema", { collection: "trips" });
+
+    expect(tree).toBe(
+      ["trips (collection)", "  title: text", "  facts[]: array", "    label: text"].join("\n"),
+    );
   });
 });

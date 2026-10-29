@@ -13,6 +13,7 @@ export const SCHEMA_TREE_LEGEND = [
   "  (a | b)         allowed values; on blocks, the blockType slugs",
   "  → a | b         target collections of a relationship or upload",
   "  (localized)     differs per locale",
+  "  (shared rows)   the same rows in every locale, only their localized fields differ: keep each row's id",
   "  (virtual)       read-only, never write it",
   "  read-only: a, b fields find returns but nothing writes, named on the last line",
   "  [when …]        applies only while the rule on sibling fields holds",
@@ -29,11 +30,14 @@ const BOOKKEEPING = new Set(["id", "createdAt", "updatedAt", "_status", "blockNa
 /** The fields every link has; the tree lists only those an app adds. */
 const BUILT_IN_LINK_FIELDS = new Set(["text", "linkType", "url", "doc", "newTab"]);
 
-/** Expects blocks as slugs (`blocks: "reference"`), as the schema tools request them. */
+/**
+ * Expects blocks as slugs (`blocks: "reference"`), as the schema tools request
+ * them.
+ */
 export function renderSchemaTree(slug: string, kind: SchemaKind, fields: FieldSchema[]): string {
   const lines = [`${slug} (${kind})`];
   const maintained: string[] = [];
-  renderFields(fields, 1, "", lines, maintained);
+  renderFields(fields, 1, "", lines, maintained, kind !== "block");
   // Fields the app maintains itself: never written, but find returns them.
   if (maintained.length) lines.push(`  read-only: ${maintained.join(", ")}`);
   return lines.join("\n");
@@ -45,6 +49,8 @@ function renderFields(
   path: string,
   lines: string[],
   maintained: string[],
+  /** Mark `sharedRows`: false in a block, which may sit inside a localized field. */
+  markShared: boolean,
 ): void {
   const indent = "  ".repeat(level);
   for (const field of fields) {
@@ -52,20 +58,22 @@ function renderFields(
       if (!BOOKKEEPING.has(field.name)) maintained.push(path + field.name);
       continue;
     }
-    lines.push(indent + fieldLine(field));
+    lines.push(
+      indent + fieldLine(field) + (markShared && field.sharedRows ? " (shared rows)" : ""),
+    );
     if (field.lexicalFeatures) {
       const linkFields: string[] = [];
       const custom = field.lexicalFeatures.inlineNodes?.link?.fields?.filter(
         (linkField) => !BUILT_IN_LINK_FIELDS.has(linkField.name),
       );
-      if (custom) renderFields(custom, level + 3, "", linkFields, maintained);
+      if (custom) renderFields(custom, level + 3, "", linkFields, maintained, false);
       for (const line of lexicalLines(field.lexicalFeatures)) {
         lines.push(`${indent}  ✎ ${line}`);
         if (line.startsWith("inline nodes:")) lines.push(...linkFields);
       }
     }
     if (field.fields)
-      renderFields(field.fields, level + 1, `${path}${field.name}.`, lines, maintained);
+      renderFields(field.fields, level + 1, `${path}${field.name}.`, lines, maintained, markShared);
   }
 }
 

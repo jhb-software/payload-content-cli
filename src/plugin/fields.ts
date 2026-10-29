@@ -18,6 +18,7 @@
 
 import { extractLexicalSummary } from "./lexical.js";
 import type { LexicalFeatureSummary } from "./lexical.js";
+import { hasLocalizedDescendant } from "./sharedRows.js";
 
 export interface FieldSchema {
   name: string;
@@ -37,6 +38,13 @@ export interface FieldSchema {
   blockSlugs?: string[];
   options?: { label: string; value: string }[];
   defaultValue?: unknown;
+  /**
+   * An `array` or `blocks` field whose rows every locale shares, telling them
+   * apart by `id`, while their localized fields differ: neither it nor a field
+   * around it is localized. In a block projected on its own, as if nothing
+   * around the block were localized.
+   */
+  sharedRows?: boolean;
   /**
    * Field Payload injects into the config rather than the author declaring it:
    * `createdAt`, `updatedAt`, `_status`, `blockName`, and generated array/block
@@ -133,6 +141,16 @@ export function toFieldSchemas(
   blocksBySlug: Record<string, any> = {},
   options: ProjectionOptions = {},
 ): FieldSchema[] {
+  return project(fields, blocksBySlug, options, false);
+}
+
+/** `inLocalized`: a field around these is localized, so their rows are per locale. */
+function project(
+  fields: any[],
+  blocksBySlug: Record<string, any>,
+  options: ProjectionOptions,
+  inLocalized: boolean,
+): FieldSchema[] {
   const result: FieldSchema[] = [];
 
   for (const field of fields) {
@@ -148,12 +166,15 @@ export function toFieldSchemas(
           const node: FieldSchema = {
             name: tab.name,
             type: "tab",
-            fields: toFieldSchemas(tab.fields || [], blocksBySlug, options),
+            ...(tab.localized ? { localized: true } : {}),
+            fields: project(tab.fields || [], blocksBySlug, options, inLocalized || tab.localized),
           };
           tabbed.push(...gate([node], tab.admin));
         } else {
           // Unnamed tab — hoist fields to parent level
-          tabbed.push(...gate(toFieldSchemas(tab.fields || [], blocksBySlug, options), tab.admin));
+          tabbed.push(
+            ...gate(project(tab.fields || [], blocksBySlug, options, inLocalized), tab.admin),
+          );
         }
       }
       result.push(...gate(tabbed, field.admin));
@@ -167,7 +188,7 @@ export function toFieldSchemas(
       !field.name &&
       Array.isArray(field.fields)
     ) {
-      result.push(...gate(toFieldSchemas(field.fields, blocksBySlug, options), field.admin));
+      result.push(...gate(project(field.fields, blocksBySlug, options, inLocalized), field.admin));
       continue;
     }
 
@@ -185,6 +206,14 @@ export function toFieldSchemas(
     // join data back would be invalid).
     if (field.virtual || field.type === "join") schema.virtual = true;
     if (field.hasMany) schema.hasMany = true;
+    if (
+      (field.type === "array" || field.type === "blocks") &&
+      !inLocalized &&
+      !field.localized &&
+      hasLocalizedDescendant([field], Object.values(blocksBySlug))
+    ) {
+      schema.sharedRows = true;
+    }
     if (field.relationTo) schema.relationTo = field.relationTo;
     if (isSystemField(field)) schema.system = true;
     gate([schema], field.admin);
@@ -204,7 +233,7 @@ export function toFieldSchemas(
     }
 
     if (field.fields && Array.isArray(field.fields)) {
-      schema.fields = toFieldSchemas(field.fields, blocksBySlug, options);
+      schema.fields = project(field.fields, blocksBySlug, options, inLocalized || field.localized);
     }
 
     // Resolve inline blocks + blockReferences (slugs pointing to config.blocks)
@@ -231,7 +260,12 @@ export function toFieldSchemas(
       } else {
         schema.blocks = allBlocks.map((block: any) => ({
           slug: block.slug,
-          fields: toFieldSchemas(block.fields || [], blocksBySlug, options),
+          fields: project(
+            block.fields || [],
+            blocksBySlug,
+            options,
+            inLocalized || field.localized,
+          ),
         }));
       }
     }

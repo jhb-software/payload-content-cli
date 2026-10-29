@@ -55,7 +55,7 @@ function rowFields(
 // definitions are shared across many fields, and may nest themselves.
 const localizedBelow = new WeakMap<Field[], boolean>();
 
-function hasLocalizedDescendant(fields: Field[], configBlocks: Block[]): boolean {
+export function hasLocalizedDescendant(fields: Field[], configBlocks: Block[]): boolean {
   return localizedWithin(fields, configBlocks, new Set());
 }
 
@@ -65,7 +65,8 @@ function hasLocalizedDescendant(fields: Field[], configBlocks: Block[]): boolean
  * too, so only a true answer is memoised here.
  */
 function localizedWithin(fields: Field[], configBlocks: Block[], seen: Set<Field[]>): boolean {
-  if (seen.has(fields)) return false;
+  // `toFieldSchemas` takes unsanitized configs, where a block may lack `fields`.
+  if (!Array.isArray(fields) || seen.has(fields)) return false;
   const cached = localizedBelow.get(fields);
   if (cached !== undefined) return cached;
   seen.add(fields);

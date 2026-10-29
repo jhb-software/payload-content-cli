@@ -38,6 +38,7 @@ export function textResult(text: string): McpToolResult {
   return { content: [{ type: "text", text }] };
 }
 
-export function errorResult(message: string): McpToolResult {
-  return jsonResult({ error: message });
+/** `details`: what the model may need besides the message, e.g. what to try instead. */
+export function errorResult(message: string, details?: string): McpToolResult {
+  return jsonResult(details === undefined ? { error: message } : { error: message, details });
 }

@@ -226,7 +226,7 @@ An unknown collection, global or locale is answered with the ones the agent may 
  }, payloadToolHandler(tool.handler)), payload, useVerboseLogs);
 ```
 
-Your own tools can answer and address entities the same way. `/mcp` exports `jsonResult`, `textResult` and `errorResult` (the `{ error }` shape the content tools use), `parseTarget(collection)`, which turns `"globals/<slug>"` into `{ kind: "global", slug }`, and `openTarget(req, options, collection, id?)`, which also answers an unknown slug with the valid ones and runs `checkId`:
+Your own tools can answer and address entities the same way. `/mcp` exports `jsonResult`, `textResult` and `errorResult(message, details?)` (the `{ error }` shape the content tools use, plus `details` when given), `parseTarget(collection)`, which turns `"globals/<slug>"` into `{ kind: "global", slug }`, and `openTarget(req, options, collection, id?)`, which also answers an unknown slug with the valid ones and runs `checkId`:
 
 ```ts
 import { errorResult, jsonResult, openTarget, type McpTool } from "@jhb.software/payload-content-cli/mcp";

@@ -76,7 +76,7 @@ Prefer `lexical` subcommands (`read`, `set`, `insert`, `delete`) over rewriting 
 
 ### Step 7: Handle locales
 
-Pull with `--locale <codes...>` to get one file per locale (`<doc>_<locale>.json`), edit each file, and push them together.
+Pull with `--locale <codes...>` to get one file per locale (`<doc>_<locale>.json`), edit each file, and push them together. A locale file holds only that locale's values: a field it hasn't translated is empty, not the default locale's text. Translate it before pushing, as a required one fails the push.
 
 To carry rich-text changes from one locale's file to another's:
 
@@ -111,8 +111,8 @@ payload-content update posts <id> --data '{"title":"New Title"}' --select '{"id"
 payload-content pull --collections posts
 # ... edit files ...
 payload-content status          # see what changed
-payload-content push --dry-run  # preview
-payload-content push            # commit
+payload-content push --draft --dry-run  # preview
+payload-content push --draft            # save as drafts
 ```
 
 ### Upload media

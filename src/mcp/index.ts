@@ -16,3 +16,5 @@ export type { McpTool, McpToolResult } from "./result.js";
 export { errorResult, jsonResult, textResult } from "./result.js";
 export { openTarget, parseTarget } from "./target.js";
 export type { Target } from "./target.js";
+export { renderSchemaTree, SCHEMA_TREE_LEGEND } from "./schemaTree.js";
+export type { SchemaKind } from "./schemaTree.js";

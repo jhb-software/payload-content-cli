@@ -14,7 +14,7 @@ export const SCHEMA_TREE_LEGEND = [
   "  → a | b         target collections of a relationship or upload",
   "  (localized)     differs per locale",
   "  (virtual)       read-only, never write it",
-  "  read-only: a, b fields find returns but nothing writes, named on the last line",
+  "  read-only: a, b fields reads return but nothing writes, named on the last line",
   "  [when a = x, b ≠ y] applies only while every rule holds; also in (x | y), is set, is not set",
   "                  rules read sibling fields (a.b inside sibling group a, ^a the enclosing block's a); a quoted value is text",
   "  [required when …] required only while the rule holds, written like [when …]",
@@ -31,10 +31,7 @@ const BOOKKEEPING = new Set(["id", "createdAt", "updatedAt", "_status", "blockNa
 /** The fields every link has; the tree lists only those an app adds. */
 const BUILT_IN_LINK_FIELDS = new Set(["text", "linkType", "url", "doc", "newTab"]);
 
-/**
- * Expects blocks as slugs (`blocks: "reference"`), as the schema tools request
- * them.
- */
+/** A blocks field shows its slugs, whichever way the fields were projected. */
 export function renderSchemaTree(slug: string, kind: SchemaKind, fields: FieldSchema[]): string {
   const lines = [`${slug} (${kind})`];
   const maintained: string[] = [];
@@ -83,7 +80,10 @@ function renderFields(
 function fieldLine(field: FieldSchema): string {
   const list = field.hasMany || field.type === "array" || field.type === "blocks";
   let line = `${field.name}${field.required ? "*" : ""}${list ? "[]" : ""}: ${field.type}`;
-  const values = field.blockSlugs ?? field.options?.map((option) => option.value);
+  const values =
+    field.blockSlugs ??
+    field.blocks?.map((block) => block.slug) ??
+    field.options?.map((option) => option.value);
   if (values?.length) line += ` (${values.join(" | ")})`;
   if (field.relationTo) line += ` → ${[field.relationTo].flat().join(" | ")}`;
   if (field.filterOptions !== undefined) line += ` filter: ${JSON.stringify(field.filterOptions)}`;

@@ -1,7 +1,8 @@
 import { BlocksFeature, LinkFeature, lexicalEditor } from "@payloadcms/richtext-lexical";
 import type { Payload } from "payload";
 import { beforeAll, describe, expect, it } from "vitest";
-import { createMcpContentTools } from "../index.js";
+import { getEntitySchema as readEntitySchema } from "../../plugin/index.js";
+import { createMcpContentTools, renderSchemaTree } from "../index.js";
 import { boot, call, open, toolNamed } from "./payload.js";
 
 const tools = createMcpContentTools();
@@ -355,6 +356,21 @@ describe("getBlockSchema", () => {
 
     expect(result.error).toMatch(/Valid slugs: alert, cta, hero\./);
     expect(result.error).toMatch(/blockSlugs/);
+  });
+});
+
+describe("an app's own schema output", () => {
+  it("names a blocks field's slugs when the schema was read with its blocks inlined", async () => {
+    const { fields } = await readEntitySchema({
+      req: { payload } as never,
+      type: "collection",
+      slug: "pages",
+      blocks: "inline",
+    });
+
+    expect(renderSchemaTree("pages", "collection", fields)).toContain(
+      "  layout[]: blocks (hero | cta) (rows shared by all locales)\n",
+    );
   });
 });
 

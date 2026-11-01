@@ -18,6 +18,49 @@ const editor = lexicalEditor({
   ],
 });
 
+const publishedRules = {
+  equals: { field: "layout.type", equals: "grid" },
+  emptyValue: { field: "kind", equals: "" },
+  oneOf: { field: "kind", equals: ["a", "b"] },
+  oneOfOne: { field: "kind", equals: ["a"] },
+  notEquals: { field: "count", notEquals: 0 },
+  isSet: { field: "kind", isSet: true },
+  isNotSet: { field: "kind", isSet: false },
+  blockScope: { field: "display", scope: "block", equals: "cards" },
+  all: {
+    all: [
+      { field: "a", equals: true },
+      { field: "b", notEquals: "x" },
+    ],
+  },
+  any: {
+    any: [
+      {
+        all: [
+          { field: "a", equals: 1 },
+          { field: "b", equals: 2 },
+        ],
+      },
+      { field: "c", isSet: true },
+    ],
+  },
+  hidden: { hidden: true },
+  sentence: "the page is a landing page",
+  otherShape: { op: "gt", path: "count", value: 1 },
+  otherOperator: { field: "count", gt: 1 },
+  otherNested: { all: [{ field: "a", equals: 1 }, { op: "gt" }] },
+  otherScope: { field: "a", scope: "document", equals: "x" },
+  otherValue: { field: "a", equals: null },
+  emptyList: { field: "a", equals: [] },
+  noRules: { all: [] },
+  notHidden: { hidden: false },
+  emptySentence: "",
+  valueLikeTwoClauses: { field: "a", equals: "x, b = y" },
+  valueLikeAList: { field: "a", equals: ["x | y", "z"] },
+  numberAsText: { field: "a", equals: "1" },
+  booleanAsText: { field: "a", notEquals: "true" },
+};
+
 let payload: Payload;
 
 beforeAll(async () => {
@@ -128,6 +171,15 @@ beforeAll(async () => {
           },
         ],
       },
+      {
+        slug: "rules",
+        access: open,
+        fields: Object.entries(publishedRules).map(([name, condition]) => ({
+          name,
+          type: "text" as const,
+          admin: { condition: () => true, custom: { condition } },
+        })),
+      },
       { slug: "authors", access: open, fields: [{ name: "name", type: "text" }] },
       { slug: "secrets", access: { read: () => false }, fields: [{ name: "x", type: "text" }] },
     ],
@@ -141,7 +193,7 @@ describe("listEntities", () => {
     const result = await call(payload, listEntities, {}, { id: 1, collection: "users" });
 
     expect(result).toEqual({
-      collections: ["pages", "products", "authors", "users"],
+      collections: ["pages", "products", "rules", "authors", "users"],
       globals: ["globals/footer"],
       locales: ["en", "de"],
       defaultLocale: "en",
@@ -158,7 +210,7 @@ describe("getEntitySchema", () => {
         "pages (collection)",
         "  title*: text (localized)",
         '  theme: select (light | dark) = "light"',
-        '  accent: text [when {"field":"theme","equals":"dark"}]',
+        "  accent: text [when theme = dark]",
         "  author: relationship → authors",
         "  layout[]: blocks (hero | cta) (rows shared by all locales)",
         "  body: richText",
@@ -175,6 +227,41 @@ describe("getEntitySchema", () => {
         "  seo: tab (localized)",
         "    keywords[]: array",
         "      k: text (localized)",
+      ].join("\n"),
+    );
+  });
+
+  it("spells out the rules a field is gated by, and quotes a shape it doesn't know", async () => {
+    const tree = await call(payload, getEntitySchema, { collection: "rules" });
+
+    expect(tree).toBe(
+      [
+        "rules (collection)",
+        "  equals: text [when layout.type = grid]",
+        '  emptyValue: text [when kind = ""]',
+        "  oneOf: text [when kind in (a | b)]",
+        "  oneOfOne: text [when kind = a]",
+        "  notEquals: text [when count ≠ 0]",
+        "  isSet: text [when kind is set]",
+        "  isNotSet: text [when kind is not set]",
+        "  blockScope: text [when ^display = cards]",
+        "  all: text [when a = true, b ≠ x]",
+        "  any: text [when ((a = 1, b = 2) or c is set)]",
+        "  hidden: text [when never]",
+        "  sentence: text [when the page is a landing page]",
+        '  otherShape: text [when {"op":"gt","path":"count","value":1}]',
+        '  otherOperator: text [when {"field":"count","gt":1}]',
+        '  otherNested: text [when a = 1, {"op":"gt"}]',
+        '  otherScope: text [when {"field":"a","scope":"document","equals":"x"}]',
+        '  otherValue: text [when {"field":"a","equals":null}]',
+        '  emptyList: text [when {"field":"a","equals":[]}]',
+        '  noRules: text [when {"all":[]}]',
+        '  notHidden: text [when {"hidden":false}]',
+        '  emptySentence: text [when ""]',
+        '  valueLikeTwoClauses: text [when a = "x, b = y"]',
+        '  valueLikeAList: text [when a in ("x | y" | z)]',
+        '  numberAsText: text [when a = "1"]',
+        '  booleanAsText: text [when a ≠ "true"]',
       ].join("\n"),
     );
   });

@@ -97,6 +97,22 @@ A condition is a function, so the schema can't show the rule on its own. To publ
 // → { name: "icon", type: "text", hasCondition: true, conditions: [{ field: "style", equals: "secondary" }] }
 ```
 
+The MCP schema tools spell out rules in this vocabulary, which costs an agent about half the characters of the JSON. A sentence is shown as written, any other shape as JSON:
+
+| Rule                                                | In the tree                 |
+| --------------------------------------------------- | --------------------------- |
+| `{ field: "a", equals: "x" }`                       | `[when a = x]`              |
+| `{ field: "a", equals: ["x", "y"] }`                | `[when a in (x \| y)]`      |
+| `{ field: "a", notEquals: "x" }`                    | `[when a ≠ x]`              |
+| `{ field: "a", isSet: true }`                       | `[when a is set]`           |
+| `{ field: "a", isSet: false }`                      | `[when a is not set]`       |
+| `{ field: "a", scope: "block", equals: "x" }`       | `[when ^a = x]`             |
+| `{ all: [rule, rule] }`                             | `[when rule, rule]`         |
+| `{ any: [rule, rule] }`                             | `[when (rule or rule)]`     |
+| `{ hidden: true }`                                  | `[when never]`              |
+
+`a.b` reads into a sibling group, `^a` the enclosing block's field. Text that isn't a plain word is quoted (`[when a = "1"]`), so it can't read as a number or as more clauses.
+
 ### Edit richtext from your own code
 
 > Experimental: may change in any minor release.
@@ -182,6 +198,7 @@ The schema tools answer in a tree rather than JSON, which costs an agent about h
 pages (collection)
   title*: text (localized)
   theme: select (light | dark) = "light"
+  accent: text [when theme = dark]
   author: relationship → authors
   layout[]: blocks (hero | cta) (rows shared by all locales)
   body: richText

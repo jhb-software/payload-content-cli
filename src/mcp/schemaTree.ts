@@ -15,7 +15,8 @@ export const SCHEMA_TREE_LEGEND = [
   "  (localized)     differs per locale",
   "  (virtual)       read-only, never write it",
   "  read-only: a, b fields find returns but nothing writes, named on the last line",
-  "  [when …]        applies only while the rule on sibling fields holds",
+  "  [when a = x, b ≠ y] applies only while every rule holds; also in (x | y), is set, is not set",
+  "                  rules read sibling fields (a.b inside sibling group a, ^a the enclosing block's a); a quoted value is text",
   "  filter: {…}     only related documents matching this query",
   "  = value         default",
   "  ✎ …             rich text: the nodes the editor accepts",
@@ -89,11 +90,66 @@ function fieldLine(field: FieldSchema): string {
   if (field.virtual) line += " (virtual)";
   if (field.hasCondition) {
     line += field.conditions
-      ? ` [when ${field.conditions.map((rule) => JSON.stringify(rule)).join(", ")}]`
+      ? ` [when ${field.conditions.flatMap(describeRule).join(", ")}]`
       : " [when a sibling condition holds]";
   }
   if (field.defaultValue !== undefined) line += ` = ${JSON.stringify(field.defaultValue)}`;
   return line;
+}
+
+/**
+ * A published rule (`admin.custom.condition`) as the clauses that must all hold:
+ * a sentence as written, the documented vocabulary spelled out, any other shape
+ * as JSON, so an app's own rule is never lost.
+ */
+function describeRule(rule: unknown): string[] {
+  if (typeof rule === "string" && rule) return [rule];
+  if (typeof rule === "object" && rule !== null) {
+    const record = rule as Record<string, unknown>;
+    const { all, any, hidden } = record;
+    const keys = Object.keys(record).length;
+    if (keys === 1 && hidden === true) return ["never"];
+    if (keys === 1 && Array.isArray(all) && all.length) return all.flatMap(describeRule);
+    if (keys === 1 && Array.isArray(any) && any.length) {
+      const alternatives = any.map((alternative) => {
+        const clauses = describeRule(alternative);
+        return clauses.length > 1 ? `(${clauses.join(", ")})` : clauses.join("");
+      });
+      return [`(${alternatives.join(" or ")})`];
+    }
+    const clause = describeLeaf(record);
+    if (clause) return [clause];
+  }
+  return [JSON.stringify(rule)];
+}
+
+function describeLeaf({ field, scope, ...test }: Record<string, unknown>): string | undefined {
+  if (typeof field !== "string" || (scope !== undefined && scope !== "block")) return undefined;
+  const [operator, ...others] = Object.entries(test);
+  if (!operator || others.length) return undefined;
+  const name = scope === "block" ? `^${field}` : field;
+  const [key, value] = operator;
+  if (key === "isSet" && typeof value === "boolean") {
+    return `${name} ${value ? "is set" : "is not set"}`;
+  }
+  if (key === "notEquals" && isRuleValue(value)) return `${name} ≠ ${ruleValue(value)}`;
+  if (key !== "equals") return undefined;
+  const values = [value].flat();
+  if (!values.length || !values.every(isRuleValue)) return undefined;
+  const shown = values.map(ruleValue);
+  return shown.length === 1 ? `${name} = ${shown[0]}` : `${name} in (${shown.join(" | ")})`;
+}
+
+type RuleValue = string | number | boolean;
+
+function isRuleValue(value: unknown): value is RuleValue {
+  return ["string", "number", "boolean"].includes(typeof value);
+}
+
+/** A plain word as it is; other text quoted, so it can't read as a number or more clauses. */
+function ruleValue(value: RuleValue): string {
+  const plain = typeof value === "string" && /^[A-Za-z_][\w./-]*$/.test(value);
+  return plain && value !== "true" && value !== "false" ? value : JSON.stringify(value);
 }
 
 function targets(options: { enabledCollections?: string[]; disabledCollections?: string[] }) {

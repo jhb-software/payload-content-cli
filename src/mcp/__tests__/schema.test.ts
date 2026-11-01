@@ -154,6 +154,17 @@ beforeAll(async () => {
               ],
             }),
           },
+          {
+            name: "pickupAddress",
+            type: "text",
+            admin: {
+              condition: () => true,
+              custom: {
+                condition: { field: "shipping", isSet: true },
+                requiredWhen: { field: "shipping", equals: "pickup" },
+              },
+            },
+          },
           // Maintained by the app: hidden and read-only, yet find returns them.
           { name: "price", type: "number", admin: { hidden: true, readOnly: true } },
           {
@@ -263,6 +274,14 @@ describe("getEntitySchema", () => {
         '  numberAsText: text [when a = "1"]',
         '  booleanAsText: text [when a ≠ "true"]',
       ].join("\n"),
+    );
+  });
+
+  it("marks a field required only while a rule holds", async () => {
+    const tree = await call(payload, getEntitySchema, { collection: "products" });
+
+    expect(tree).toContain(
+      "  pickupAddress: text [when shipping is set] [required when shipping = pickup]\n",
     );
   });
 

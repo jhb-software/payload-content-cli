@@ -545,6 +545,21 @@ describe("toFieldSchemas", () => {
     expect(field).toEqual({ name: "note", type: "text" });
   });
 
+  it("publishes the rule a field is required under, also on a field hoisted out of a row", () => {
+    const rule = { field: "remote", notEquals: true };
+    const fields = toFieldSchemas([
+      { name: "plain", type: "text", admin: { custom: { theme: "x" } } },
+      {
+        type: "row",
+        fields: [{ name: "city", type: "text", admin: { custom: { requiredWhen: rule } } }],
+      },
+    ]);
+    expect(fields).toEqual([
+      { name: "plain", type: "text" },
+      { name: "city", type: "text", requiredWhen: rule },
+    ]);
+  });
+
   it("includes static filterOptions but skips function forms", () => {
     const fields = [
       {

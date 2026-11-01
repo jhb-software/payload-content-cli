@@ -67,6 +67,12 @@ export interface FieldSchema {
    * gating condition declares its rule, so a partial list never reads as whole.
    */
   conditions?: unknown[];
+  /**
+   * The rule under which the field is required, for one enforced by a `validate`
+   * function, which leaves `required` off. Declared as data beside the function
+   * in `admin.custom.requiredWhen`, in the same shape as a condition's rule.
+   */
+  requiredWhen?: unknown;
   /** Static `filterOptions` query constraining which related docs can be assigned. */
   filterOptions?: unknown;
   lexicalFeatures?: LexicalFeatureSummary;
@@ -217,6 +223,9 @@ function project(
     if (field.relationTo) schema.relationTo = field.relationTo;
     if (isSystemField(field)) schema.system = true;
     gate([schema], field.admin);
+    if (field.admin?.custom?.requiredWhen !== undefined) {
+      schema.requiredWhen = field.admin.custom.requiredWhen;
+    }
     // filterOptions constrains which related docs may be assigned (e.g. a favicon
     // that accepts only `image/svg+xml` media). Skip function forms — like function
     // defaults below, they need runtime context (siblingData, user) we can't supply.

@@ -113,6 +113,8 @@ The MCP schema tools spell out rules in this vocabulary, which costs an agent ab
 
 `a.b` reads into a sibling group, `^a` the enclosing block's field. Text that isn't a plain word is quoted (`[when a = "1"]`), so it can't read as a number or as more clauses.
 
+A field required only under some condition is enforced by a `validate` function, which the schema can't read either. Declare its rule beside that function in `admin.custom.requiredWhen`, in the same shapes. The field's `requiredWhen` then carries it, and the MCP schema tools mark it `[required when a = x]`.
+
 ### Edit richtext from your own code
 
 > Experimental: may change in any minor release.

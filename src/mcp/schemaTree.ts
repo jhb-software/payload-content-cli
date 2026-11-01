@@ -17,6 +17,7 @@ export const SCHEMA_TREE_LEGEND = [
   "  read-only: a, b fields find returns but nothing writes, named on the last line",
   "  [when a = x, b ≠ y] applies only while every rule holds; also in (x | y), is set, is not set",
   "                  rules read sibling fields (a.b inside sibling group a, ^a the enclosing block's a); a quoted value is text",
+  "  [required when …] required only while the rule holds, written like [when …]",
   "  filter: {…}     only related documents matching this query",
   "  = value         default",
   "  ✎ …             rich text: the nodes the editor accepts",
@@ -93,12 +94,15 @@ function fieldLine(field: FieldSchema): string {
       ? ` [when ${field.conditions.flatMap(describeRule).join(", ")}]`
       : " [when a sibling condition holds]";
   }
+  if (field.requiredWhen !== undefined) {
+    line += ` [required when ${describeRule(field.requiredWhen).join(", ")}]`;
+  }
   if (field.defaultValue !== undefined) line += ` = ${JSON.stringify(field.defaultValue)}`;
   return line;
 }
 
 /**
- * A published rule (`admin.custom.condition`) as the clauses that must all hold:
+ * A published rule (`admin.custom.condition` or `requiredWhen`) as the clauses that must all hold:
  * a sentence as written, the documented vocabulary spelled out, any other shape
  * as JSON, so an app's own rule is never lost.
  */

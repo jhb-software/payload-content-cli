@@ -7,11 +7,9 @@ description: Run the bundled bump-dependencies.sh to bump the workspace dependen
 
 Goal: bump the dependencies via the bundled script, then for every non-patch jump confirm the CLI, plugin, MCP tools and Lexical toolkit still work against the new version — read the upstream changelog, grep `src/` and `example/src/` for affected APIs, and apply fixes. Finish with a clean `pnpm audit`.
 
-The repo is one pnpm workspace (`.` + `example/`) with a single root `pnpm-lock.yaml` and a single `overrides:` block in `pnpm-workspace.yaml`.
-
 ## Audit-only runs
 
-If the user only asks to audit / check for vulnerabilities (e.g. a weekly scheduled run), skip the bump steps and go straight to [Audit for vulnerabilities and fix them](#audit-for-vulnerabilities-and-fix-them). Still require a clean tree first.
+If the user only asks to audit / check for vulnerabilities, skip the bump steps and go straight to [Audit for vulnerabilities and fix them](#audit-for-vulnerabilities-and-fix-them). Still require a clean tree first.
 
 ## Steps
 

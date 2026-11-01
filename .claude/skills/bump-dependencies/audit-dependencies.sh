@@ -1,9 +1,8 @@
 #!/bin/bash
 # audit-dependencies.sh — `pnpm audit` for the workspace (root package + example/).
 #
-# The repo has a single pnpm-lock.yaml at the root, so one `pnpm audit` covers
-# every workspace package. This wraps it in a compact table (one row per
-# advisory, most severe first) and a severity-gated exit code.
+# Prints a compact table (one row per advisory, most severe first) and exits
+# with a severity-gated code.
 #
 # Usage (from the repo root):
 #   ./.claude/skills/bump-dependencies/audit-dependencies.sh [severity]

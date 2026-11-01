@@ -23,9 +23,9 @@ If the user only asks to audit / check for vulnerabilities (e.g. a weekly schedu
    ./.claude/skills/bump-dependencies/bump-dependencies.sh
    ```
 
-   It runs `pnpm -r up --latest`, reinstalls, regenerates the example's Payload types/importmap, runs `typecheck`, `lint`, `test`, and smoke-tests the example dev server. Don't reimplement any of this. If the script reports `FAILED`, stop and surface the error verbatim. Note: tests need MongoDB/the example env the same way CI does; if a step fails only because a local service is missing, say so rather than treating it as a regression.
+   It runs `pnpm -r up --latest`, reinstalls, regenerates the example's Payload types/importmap, runs `typecheck`, `lint`, `test`, and smoke-tests the example dev server. Don't reimplement any of this. If the script reports `FAILED`, stop and surface the error verbatim. `pnpm test` runs integration suites against the example app and needs MongoDB (`DATABASE_URL`), a running `pnpm example:dev`, and `pnpm example:seed` (see the `test` job in `.github/workflows/ci.yml`). If a step fails only because one of these is missing, report that instead of treating it as a regression.
 
-3. **List non-patch bumps.** From the resulting diff, extract every dependency whose new version is a minor or major jump. Patch bumps (`1.2.3 → 1.2.4`) are skipped. Treat `0.x` specially: any change to the `0.<minor>` segment is breaking by semver convention (`^0.5.2 → ^0.6.0` counts — relevant for `oxfmt`).
+3. **List non-patch bumps.** From the resulting diff, extract every dependency whose new version is a minor or major jump. Patch bumps (`1.2.3 → 1.2.4`) are skipped. Treat `0.x` specially: any change to the `0.<minor>` segment is breaking by semver convention (`^0.5.2 → ^0.6.0` counts).
 
    ```sh
    git diff --no-color -- package.json example/package.json
@@ -78,7 +78,7 @@ The script bumps `package.json` and `pnpm-lock.yaml` but never touches `override
    pnpm -r list <dep>
    ```
 
-   A `^`-floor (`mongoose: '^8.24.1'`) only sets a minimum. A selector override (`"esbuild@0.27": "^0.28.1"`) only remaps that line — check it still matches anything.
+   A `^`-floor (`pkg: '^1.2.3'`) only sets a minimum. A selector override (`"pkg@1": "^1.4.0"`) only remaps that major line; check it still matches a resolved version.
 
 2. **Keep a single Payload/Next/React.** `next`, `payload` and `@payloadcms/*` are exact-pinned in `example/package.json` and the root devDependencies. They must stay in lock-step (same `payload` version in root and example) or the example admin can crash with duplicate-context errors. Confirm one version each:
 
@@ -105,9 +105,9 @@ The script bumps `package.json` and `pnpm-lock.yaml` but never touches `override
 
 2. **Prefer the root-cause fix — update the owning dependency before reaching for an override.** Run `pnpm why <pkg>` (add `-r` to include the example) to find which direct dependency pulls the vulnerable version. If a newer release of that owner requires the patched range, bump it — that clears the advisory and leaves no override behind. Reach for an override only after confirming the owner can't move (already latest, or its range still spans the vulnerable version).
 
-3. **Otherwise, add an override floor**: `pkg: '^<patched>'` in `pnpm-workspace.yaml` `overrides:`. Use a selector (`"pkg@4": "^4.3.9"`) when only one major line is affected and other majors are pulled legitimately. Watch for a floor that _caps below_ the patched version (e.g. `esbuild: '^0.27.0'` excludes a `0.28.1` fix).
+3. **Otherwise, add an override floor**: `pkg: '^<patched>'` in `pnpm-workspace.yaml` `overrides:`. Use a selector (`"pkg@4": "^4.3.9"`) when only one major line is affected and other majors are pulled legitimately. Watch for a floor that _caps below_ the patched version: in `0.x`, `pkg: '^0.27.0'` excludes a `0.28.1` fix.
 
-4. **When the override won't move a locked transitive, pin it as a direct devDependency.** pnpm won't re-resolve an already-locked transitive to satisfy a changed override (`install`, `install --force`, `dedupe`, `update <pkg>` all leave it). Add the package as a root `devDependency` at the patched range — this is why `vite` sits next to `vitest` in `package.json`.
+4. **When the override won't move a locked transitive, pin it as a direct devDependency.** pnpm won't re-resolve an already-locked transitive to satisfy a changed override (`install`, `install --force`, `dedupe`, `update <pkg>` all leave it). Add the package as a root `devDependency` at the patched range; a direct dependency always resolves to its declared range, and the transitive consumer dedupes onto it.
 
 5. **Reinstall, re-audit to zero, then verify the toolchain.** Re-run the audit _and_ `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`. Forced build-tool versions (`esbuild`, `vite`) are where things break. Don't claim the advisories are cleared until the audit is empty and the checks are green.
 

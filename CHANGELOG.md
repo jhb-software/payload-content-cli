@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.0-beta.3
 
 - feat: the MCP schema trees spell out published conditions (`[when layout.type = grid]`) instead of their JSON; other shapes stay JSON, a sentence shows as written.
 - feat: a field declaring `admin.custom.requiredWhen` carries the rule as `FieldSchema.requiredWhen`, marked `[required when …]` in the MCP schema trees.

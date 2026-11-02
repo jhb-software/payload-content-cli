@@ -19,6 +19,11 @@ Reproduced over REST with `0.6.0-beta.3` plus the access fix:
 
 All three need update access that is wider than read access, which is unusual. No app is known to depend on it, though afx hasn't been checked.
 
+Two more, found by reading the code and not reproduced:
+
+- **Bulk read before the update access check:** a bulk `PATCH` with shared rows makes the guard read every matching document the caller can read, even if they may not update. It exposes nothing new, since `GET ?pagination=false` already reads them without a cap, so it was left in place.
+- **Another document's row ids in a bulk update:** Payload removes row ids that don't belong to each matched document (`copyDataWithFreshRowIDs`), but the guard only checks that an id is present. A bulk write using document A's row ids also replaces the rows of any other document it matches, and those translations are lost.
+
 ## Idea
 
 Keep a copy of the incoming rows in `beforeOperation`, without reading anything, and compare them in a document-level hook that receives Payload's `originalDoc`, after Payload has checked access. That removes the guard's own read and its access question.
@@ -27,6 +32,8 @@ Keep a copy of the incoming rows in `beforeOperation`, without reading anything,
 
 - Bulk updates would stop being all-or-nothing: Payload writes document by document, so earlier documents could already be saved when a later one is refused. Is that acceptable, or does it need a transaction?
 - Does `originalDoc` hold what the guard needs for drafts, and for the request's locale and fallback locale?
+- Payload catches per-document errors in a bulk update and returns them in `errors`, so a refusal there no longer fails the request. How should it reach the caller?
+- Which hook sees the data after `copyDataWithFreshRowIDs`? The comparison has to account for the ids it removes, or the row id bypass stays open.
 - Should a refusal to an update-only caller name row ids? They can't send a valid write without them, and Payload's update response already returned the document in testing.
 
 Don't reopen the alternative of reading with access off after checking update access by hand. It repeats Payload's access logic, and a `where` filter would skip field-level checks, which brings filter probing back.

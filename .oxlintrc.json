@@ -1,0 +1,13 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "jsPlugins": ["./lint/payload.mjs"],
+  "rules": {
+    "payload/explicit-override-access": "error"
+  },
+  "overrides": [
+    {
+      "files": ["src/**/__tests__/**"],
+      "rules": { "payload/explicit-override-access": "off" }
+    }
+  ]
+}

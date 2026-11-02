@@ -134,6 +134,7 @@ const collectionHook: CollectionBeforeOperationHook = async ({ args, operation, 
     // A Local API call resets the shared req's fallbackLocale unless given it;
     // a global update reads its stored values with it after this hook.
     fallbackLocale: req.fallbackLocale,
+    // oxlint-disable-next-line payload/explicit-override-access -- reads as the write it guards
     overrideAccess: callerOverridesAccess(args),
     req,
   } as const;
@@ -161,6 +162,7 @@ const globalHook: GlobalBeforeOperationHook = async ({ args, operation, global }
     draft: Boolean((args as { draft?: boolean }).draft),
     locale: req.locale,
     fallbackLocale: req.fallbackLocale,
+    // oxlint-disable-next-line payload/explicit-override-access -- reads as the write it guards
     overrideAccess: callerOverridesAccess(args),
     req,
   });

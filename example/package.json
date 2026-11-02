@@ -16,25 +16,25 @@
   },
   "dependencies": {
     "@jhb.software/payload-pages-plugin": "^0.8.0",
-    "@payloadcms/db-mongodb": "3.90.2",
-    "@payloadcms/next": "3.90.2",
-    "@payloadcms/richtext-lexical": "3.90.2",
-    "@payloadcms/ui": "3.90.2",
+    "@payloadcms/db-mongodb": "3.92.1",
+    "@payloadcms/next": "3.92.1",
+    "@payloadcms/richtext-lexical": "3.92.1",
+    "@payloadcms/ui": "3.92.1",
     "cross-env": "^10.1.0",
-    "dotenv": "17.4.2",
+    "dotenv": "18.0.9",
     "graphql": "^16.14.0",
-    "next": "16.3.6",
-    "payload": "3.90.2",
+    "next": "16.4.3",
+    "payload": "3.92.1",
     "react": "19.2.6",
     "react-dom": "19.2.6",
-    "sharp": "0.35.4"
+    "sharp": "0.35.5"
   },
   "devDependencies": {
-    "@types/node": "25.8.0",
+    "@types/node": "26.6.6",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "tsx": "4.23.15",
-    "typescript": "6.0.3"
+    "typescript": "7.0.2"
   },
   "engines": {
     "node": ">=22.12.0"

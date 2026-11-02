@@ -20,9 +20,9 @@ import type {
 } from "payload";
 import { ValidationError } from "payload";
 import {
-  containsObjectArray,
   findDroppedSharedRows,
   hasSharedRows,
+  writesSharedRows,
   type SharedRowViolation,
 } from "./sharedRows.js";
 
@@ -89,14 +89,19 @@ type Data = Record<string, unknown>;
 const isRecord = (doc: unknown): doc is Data => typeof doc === "object" && doc !== null;
 
 /** Whether a write is worth reading the stored document for. */
-const shouldCheck = (data: unknown, req: PayloadRequest): data is Data =>
+const shouldCheck = (fields: Field[], data: unknown, req: PayloadRequest): data is Data =>
   Boolean(req.payload.config.localization) &&
   req.context?.[ALLOW_SHARED_ROW_REPLACEMENT] !== true &&
-  containsObjectArray(data);
+  isRecord(data) &&
+  writesSharedRows(fields, data, req.payload.config.blocks as Block[] | undefined);
 
-/** Whether the write itself skips access control; the Local API's default is to. */
+/**
+ * Whether the write itself skips access control. The Local API resolves its
+ * default to `true` before this hook; Payload's REST routes leave it unset, and
+ * the operation then checks access.
+ */
 const callerOverridesAccess = (args: unknown): boolean =>
-  (args as { overrideAccess?: boolean }).overrideAccess !== false;
+  (args as { overrideAccess?: boolean }).overrideAccess === true;
 
 function check(
   fields: Field[],
@@ -121,15 +126,18 @@ function check(
 // reading the stored document here, so only writes carrying rows are checked.
 // That read runs before Payload's access check, so it uses the caller's access:
 // a refusal names row ids, and must not for a document the caller can't read.
+// A denied read fails the write, so it can't replace rows unchecked. What the
+// caller's read returns without an error can still hide rows: see USAGE.md.
 const collectionHook: CollectionBeforeOperationHook = async ({ args, operation, collection }) => {
   if (operation !== "update") return args;
   const { req, data } = args as { req: PayloadRequest; data?: unknown };
-  if (!shouldCheck(data, req)) return args;
+  if (!shouldCheck(collection.fields, data, req)) return args;
 
   const read = {
     collection: collection.slug,
     depth: 0,
     draft: Boolean((args as { draft?: boolean }).draft),
+    trash: (args as { trash?: boolean }).trash,
     locale: req.locale,
     // A Local API call resets the shared req's fallbackLocale unless given it;
     // a global update reads its stored values with it after this hook.
@@ -140,7 +148,7 @@ const collectionHook: CollectionBeforeOperationHook = async ({ args, operation, 
   } as const;
   const { id, where } = args as { id?: number | string; where?: Where };
   if (id !== undefined) {
-    const existing = await req.payload.findByID({ ...read, id, disableErrors: true });
+    const existing = await req.payload.findByID({ ...read, id });
     check(collection.fields, data, existing, req, collection.slug, id);
   } else if (where !== undefined) {
     // Every matching document, reading only the fields the write touches.
@@ -154,7 +162,7 @@ const collectionHook: CollectionBeforeOperationHook = async ({ args, operation, 
 const globalHook: GlobalBeforeOperationHook = async ({ args, operation, global }) => {
   if (operation !== "update") return args;
   const { req, data } = args as { req: PayloadRequest; data?: unknown };
-  if (!shouldCheck(data, req)) return args;
+  if (!shouldCheck(global.fields, data, req)) return args;
 
   const existing = await req.payload.findGlobal({
     slug: global.slug,

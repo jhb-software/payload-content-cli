@@ -4,7 +4,7 @@
  * against real Payload to prove the guard keeps those translations.
  */
 
-import type { Field, Payload } from "payload";
+import { handleEndpoints, type Field, type Payload } from "payload";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createMcpContentTools } from "../../mcp/index.js";
 import { boot, call, open, toolNamed } from "../../mcp/__tests__/payload.js";
@@ -32,10 +32,13 @@ const fields: Field[] = [
   },
 ];
 
+const onlyPublic = () => ({ public: { equals: true } });
+
 let payload: Payload;
 
 beforeAll(async () => {
-  payload = await boot("shared-rows", {
+  // The default key: Payload's REST handler looks the instance up under it.
+  payload = await boot("default", {
     localization: { locales: ["en", "de"], defaultLocale: "en" },
     blocks: [
       {
@@ -58,6 +61,24 @@ beforeAll(async () => {
         access: { read: () => false, create: () => false, update: () => false },
         fields,
       },
+      // A caller may write these without being able to read them.
+      {
+        slug: "drops",
+        access: { read: () => false, create: () => true, update: () => true },
+        fields: [...fields, { name: "meta", type: "json" }],
+      },
+      { slug: "bins", access: open, trash: true, fields },
+      // Reads reach only public documents; writes reach every memo but no notice.
+      {
+        slug: "memos",
+        access: { read: onlyPublic, create: () => true, update: () => true },
+        fields: [...fields, { name: "public", type: "checkbox" }],
+      },
+      {
+        slug: "notices",
+        access: { read: onlyPublic, create: () => true, update: () => false },
+        fields: [...fields, { name: "public", type: "checkbox" }],
+      },
       // Sorted so the bulk test controls which document comes last.
       {
         slug: "rooms",
@@ -69,6 +90,8 @@ beforeAll(async () => {
     globals: [
       { slug: "nav", access: open, fields },
       { slug: "status", access: open, fields: [linksOnly] },
+      { slug: "safe", access: { read: () => false, update: () => false }, fields },
+      { slug: "box", access: { read: () => false, update: () => true }, fields },
     ],
     plugins: [
       preserveSharedRowsPlugin(),
@@ -341,6 +364,206 @@ describe("preserveSharedRowsPlugin allows", () => {
 });
 
 describe("access", () => {
+  /** An anonymous write through Payload's own REST routes, which pass no `overrideAccess`. */
+  async function anonymousWrite(
+    method: "PATCH" | "POST",
+    path: string,
+    query = "",
+    data: unknown = { extras: [{ item: { title: "Probe" } }] },
+  ) {
+    const response = await handleEndpoints({
+      config: payload.config,
+      path,
+      request: new Request(`http://localhost${path}${query}`, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      }),
+    });
+    return { status: response?.status, body: (await response?.text()) ?? "" };
+  }
+
+  async function vaultWithARow() {
+    const vault = await payload.create({
+      collection: "vaults",
+      locale: "en",
+      data: { extras: [{ item: { title: "Secret" } }] } as never,
+    });
+    return { id: vault.id, rowId: (vault as unknown as { extras: Row[] }).extras[0].id };
+  }
+
+  it("names no stored row id to a REST caller who may not read a document", async () => {
+    const { id, rowId } = await vaultWithARow();
+
+    for (const [path, query] of [
+      [`/api/vaults/${id}`, ""],
+      ["/api/vaults", "?where[id][exists]=true"],
+    ]) {
+      const answer = await anonymousWrite("PATCH", path, query);
+      expect(answer.status).toBe(403);
+      expect(answer.body).not.toContain(rowId);
+    }
+  });
+
+  it("names no stored row id to a REST caller who may not read a global", async () => {
+    const safe = await payload.updateGlobal({
+      slug: "safe",
+      locale: "en",
+      data: { extras: [{ item: { title: "Secret" } }] } as never,
+    });
+    const [row] = (safe as unknown as { extras: Row[] }).extras;
+
+    const answer = await anonymousWrite("POST", "/api/globals/safe");
+
+    expect(answer.status).toBe(403);
+    expect(answer.body).not.toContain(row.id);
+  });
+
+  it("doesn't tell a REST caller whether an unreadable document matches their filter", async () => {
+    await vaultWithARow();
+    const answerTo = (title: string) =>
+      anonymousWrite("PATCH", "/api/vaults", `?where[extras.item.title][equals]=${title}`);
+
+    expect(await answerTo("Secret")).toEqual(await answerTo("Nothing"));
+  });
+
+  /** A document holding one row, titled in English and German. */
+  async function translated(collection: "drops" | "memos" | "notices", isPublic?: boolean) {
+    const created = await payload.create({
+      collection,
+      locale: "en",
+      data: { public: isPublic, extras: [{ item: { title: "Original" } }] } as never,
+    });
+    const [row] = (created as unknown as { extras: Row[] }).extras;
+    await payload.update({
+      collection,
+      id: created.id,
+      locale: "de",
+      data: { extras: [{ id: row.id, item: { title: "Original DE" } }] } as never,
+    });
+    return { id: created.id, rowId: row.id };
+  }
+
+  async function storedRows(collection: "drops" | "memos", id: number | string) {
+    const doc = await payload.findByID({ collection, id, locale: "de" });
+    return (doc as unknown as { extras: Row[] }).extras.map((row) => [row.id, row.item?.title]);
+  }
+
+  it("refuses a write it can't check when the caller may update but not read, keeping the translations", async () => {
+    const { id, rowId } = await translated("drops");
+
+    for (const [path, query] of [
+      [`/api/drops/${id}`, ""],
+      ["/api/drops", `?where[id][equals]=${id}`],
+    ]) {
+      const answer = await anonymousWrite("PATCH", path, query);
+      expect(answer.status).toBe(403);
+      expect(answer.body).not.toContain(rowId);
+    }
+    expect(await storedRows("drops", id)).toEqual([[rowId, "Original DE"]]);
+  });
+
+  it("lets a caller who may update but not read write what can't drop shared rows", async () => {
+    const { id, rowId } = await translated("drops");
+
+    for (const data of [{ links: [{ url: "https://example.com" }] }, { meta: [{ any: "json" }] }]) {
+      const answer = await anonymousWrite("PATCH", `/api/drops/${id}`, "", data);
+      expect(answer.status).toBe(200);
+    }
+    expect(await storedRows("drops", id)).toEqual([[rowId, "Original DE"]]);
+  });
+
+  it("refuses the same uncheckable write through the Local API when it runs as the caller", async () => {
+    const { id, rowId } = await translated("drops");
+
+    const error = await payload
+      .update({
+        collection: "drops",
+        id,
+        locale: "en",
+        overrideAccess: false,
+        data: { extras: [{ item: { title: "Probe" } }] } as never,
+      })
+      .catch((err: Error) => err);
+
+    expect((error as { status?: number }).status).toBe(403);
+    expect(await storedRows("drops", id)).toEqual([[rowId, "Original DE"]]);
+  });
+
+  it("checks a trashed document when the write targets the trash", async () => {
+    const created = await payload.create({
+      collection: "bins",
+      locale: "en",
+      data: { extras: [{ item: { title: "Original" } }] } as never,
+    });
+    const [row] = (created as unknown as { extras: Row[] }).extras;
+    await payload.update({
+      collection: "bins",
+      id: created.id,
+      data: { deletedAt: new Date().toISOString() } as never,
+      trash: true,
+    });
+
+    const replacing = await anonymousWrite("PATCH", `/api/bins/${created.id}`, "?trash=true");
+    const bulk = await anonymousWrite(
+      "PATCH",
+      "/api/bins",
+      `?trash=true&where[id][equals]=${created.id}`,
+    );
+    const keeping = await anonymousWrite("PATCH", `/api/bins/${created.id}`, "?trash=true", {
+      extras: [{ id: row.id, item: { title: "Edited" } }],
+    });
+
+    expect(replacing.status).toBe(400);
+    expect(replacing.body).toContain(row.id);
+    expect(bulk.status).toBe(400);
+    expect(keeping.status).toBe(200);
+  });
+
+  it("refuses a write it can't check to a global the caller may update but not read", async () => {
+    const box = await payload.updateGlobal({
+      slug: "box",
+      locale: "en",
+      data: { extras: [{ item: { title: "Original" } }] } as never,
+    });
+    const [row] = (box as unknown as { extras: Row[] }).extras;
+
+    const answer = await anonymousWrite("POST", "/api/globals/box");
+
+    expect(answer.status).toBe(403);
+    expect(answer.body).not.toContain(row.id);
+    const stored = await payload.findGlobal({ slug: "box", locale: "en" });
+    expect((stored as unknown as { extras: Row[] }).extras[0].id).toBe(row.id);
+  });
+
+  it("refuses a write by id to a document outside what the caller may read, keeping the translations", async () => {
+    const { id, rowId } = await translated("memos", false);
+
+    const answer = await anonymousWrite("PATCH", `/api/memos/${id}`);
+
+    expect(answer.status).toBe(404);
+    expect(answer.body).not.toContain(rowId);
+    expect(await storedRows("memos", id)).toEqual([[rowId, "Original DE"]]);
+  });
+
+  it("doesn't reveal whether a document outside what the caller may read matches their filter", async () => {
+    await translated("notices", false);
+    const answerTo = (title: string) =>
+      anonymousWrite("PATCH", "/api/notices", `?where[extras.item.title][equals]=${title}`);
+
+    expect(await answerTo("Original")).toEqual(await answerTo("Nothing"));
+  });
+
+  it("still refuses a REST write that would drop rows the caller may read", async () => {
+    const { id, extras } = await hotel();
+
+    const answer = await anonymousWrite("PATCH", `/api/hotels/${id}`);
+
+    expect(answer.status).toBe(400);
+    expect(answer.body).toContain(extras[0]);
+    expect(await titles(id, "de")).toEqual(["Kulinarik", "Aktivitäten"]);
+  });
+
   it("gives a caller who may not update the document Payload's refusal, not the stored row ids", async () => {
     const vault = await payload.create({
       collection: "vaults",

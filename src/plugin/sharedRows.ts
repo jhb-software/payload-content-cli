@@ -235,10 +235,38 @@ export function findDroppedSharedRows(
   return out;
 }
 
-/** Whether `data` holds any array of objects, i.e. whether a check is worth a read. */
-export function containsObjectArray(data: unknown): boolean {
-  if (Array.isArray(data))
-    return data.some((entry) => isObject(entry) || containsObjectArray(entry));
-  if (isObject(data)) return Object.values(data).some(containsObjectArray);
-  return false;
+/**
+ * Whether `data` sends rows to a shared array or blocks field, i.e. whether a
+ * check is worth a read. Nothing else in `data` can drop translations, however
+ * much it looks like rows: JSON, rich text and relationships hold arrays too.
+ */
+export function writesSharedRows(fields: Field[], data: Data, configBlocks: Block[] = []): boolean {
+  const within = (below: Field[], value: unknown) =>
+    isObject(value) && writesSharedRows(below, value, configBlocks);
+  return fields.some((field) => {
+    if (fieldAffectsData(field) && field.localized) return false;
+    switch (field.type) {
+      case "array":
+      case "blocks": {
+        const rows = data[field.name];
+        return (
+          hasLocalizedDescendant([field], configBlocks) &&
+          Array.isArray(rows) &&
+          rows.some(isObject)
+        );
+      }
+      case "tabs":
+        return field.tabs.some((tab) => {
+          if (!tabHasName(tab)) return within(tab.fields, data);
+          return !tab.localized && within(tab.fields, data[tab.name]);
+        });
+      case "group":
+        return within(field.fields, fieldAffectsData(field) ? data[field.name] : data);
+      case "row":
+      case "collapsible":
+        return within(field.fields, data);
+      default:
+        return false;
+    }
+  });
 }

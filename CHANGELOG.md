@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- fix: `preserveSharedRowsPlugin` respects the caller's read access, so anonymous REST and GraphQL callers can't get row ids or probe documents with `where` filters. Callers who can update but not read can no longer write shared fields.
+
 ## 0.6.0-beta.3
 
 - feat: the MCP schema trees spell out published conditions (`[when layout.type = grid]`) instead of their JSON; other shapes stay JSON, a sentence shows as written.

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.0-beta.4
 
 - fix: `preserveSharedRowsPlugin` respects the caller's read access, so anonymous REST and GraphQL callers can't get row ids or probe documents with `where` filters. Callers who can update but not read can no longer write shared fields.
 - fix: require zod 4.6.7 or later, which fixes a memory exhaustion advisory.

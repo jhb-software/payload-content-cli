@@ -89,22 +89,22 @@
   "devDependencies": {
     "@commitlint/cli": "^21.2.4",
     "@commitlint/config-conventional": "^21.2.4",
-    "@payloadcms/db-sqlite": "3.92.1",
-    "@payloadcms/richtext-lexical": "3.92.1",
+    "@payloadcms/db-sqlite": "3.93.0",
+    "@payloadcms/richtext-lexical": "3.93.0",
     "@tsconfig/node22": "^22.0.6",
     "@types/node": "^26.6.6",
     "graphql": "^16.14.2",
     "husky": "^9.1.7",
     "lint-staged": "^17.6.0",
-    "oxfmt": "^0.75.0",
-    "oxlint": "^1.90.0",
-    "payload": "3.92.1",
+    "oxfmt": "^0.76.0",
+    "oxlint": "^1.91.0",
+    "payload": "3.93.0",
     "react": "19.2.6",
     "react-dom": "19.2.6",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
-    "vite": "^8.3.5",
-    "vitest": "5.0.5"
+    "vite": "^8.3.6",
+    "vitest": "5.1.0"
   },
   "lint-staged": {
     "src/**/*.ts": [

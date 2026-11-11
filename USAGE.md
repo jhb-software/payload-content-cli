@@ -219,7 +219,26 @@ To keep answers lean, `create`, `update` and `updateRichText` write with `select
 
 #### Edit rich text by path
 
-`updateRichText` packages [`editAtPath`](#edit-richtext-from-your-own-code) and `linkRichText` as a tool, on the paths `find` shows. It takes `collection`, `id`, `path`, `operation` (`set`, `insert`, `delete`, `link`), `value`, `text` (for `link`), `locale`, `draft` and `overwriteDraft`. `link` wraps the first unlinked match of `text` at or below `path` in an internal link to `value` (`{ relationTo, value }`) and answers with the link's path and its node's outline line. Edits go to the draft by default. `draft: false` publishes, and is refused when it would discard newer draft changes unless `overwriteDraft: true`. Since draft writes skip Payload's validation, the blocks and the link or upload targets an edit adds are checked first: each block must be one its rich-text field allows, also when an edit keeps a block's id but changes its type. A locale is read without fallback; rich text nobody has written yet in it, at any depth (an array row, a block), is started empty, so `insert` at `content.0` or `sections.0.body.0` begins it.
+`updateRichText` packages [`editAtPath`](#edit-richtext-from-your-own-code) and `linkRichText` as a tool, on the paths `find` shows. It takes `collection`, `id`, `edits`, `locale`, `draft` and `overwriteDraft`. Each edit in `edits` has a `path`, an `operation` (`set`, `insert`, `delete`, `link`), and a `value` and `text` (for `link`) where the operation needs them. `link` wraps the first unlinked match of `text` at or below `path` in an internal link to `value` (`{ relationTo, value }`) and answers with the link's path and its node's outline line.
+
+```json
+{
+  "collection": "pages",
+  "id": "123",
+  "edits": [
+    { "path": "content.1.children.0.text", "operation": "set", "value": "New wording." },
+    { "path": "content.3", "operation": "link", "text": "Serengeti", "value": { "relationTo": "pages", "value": "456" } },
+    { "path": "content.4", "operation": "delete" },
+    { "path": "content.6", "operation": "insert", "value": { "type": "p", "text": "Book early." } }
+  ]
+}
+```
+
+A call saves once, so it adds one version however many edits it holds, across any number of fields. If an edit fails, nothing is saved. The error names the edit, or for a block or link target that fails the final check, the value. Every path refers to the document as `find` showed it, so `content.6` above still means the node that was `content.6` before `content.4` was deleted. The answer is `{ results, shifted? }`: one result per edit, in the order sent, and `shifted: true` when indexes may have moved (any link counts). Paths in results are as read, not where nodes ended up, and a link's `outline` shows its node at that point in the batch, so read again after `shifted` before further edits.
+
+Edits that can't both hold are refused: a `set` or `delete` of a node along with an edit inside it, two inserts at one index (send one with a list of nodes), two links at one text node (use the node holding it), and a link whose search covers another edit, another link at a different depth included (narrow it to a node the other edit doesn't touch). An insert and a `set` or `delete` at one index work: the insert goes before the node that was there. Links in one node run in the order sent, so repeated text is linked in that order.
+
+Edits go to the draft by default. `draft: false` publishes, and is refused when it would discard newer draft changes unless `overwriteDraft: true`. Since draft writes skip Payload's validation, the blocks and the link or upload targets an edit adds are checked first: each block must be one its rich-text field allows, also when an edit keeps a block's id but changes its type. A locale is read without fallback; rich text nobody has written yet in it, at any depth (an array row, a block), is started empty, so `insert` at `content.0` or `sections.0.body.0` begins it.
 
 #### Options
 

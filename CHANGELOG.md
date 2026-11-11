@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- feat!: the MCP `updateRichText` takes `edits`, a list of edits saved together as one version or not at all, in place of `path`, `operation`, `value` and `text`. Paths refer to the document as `find` showed it. It answers `{ results, shifted? }`.
+
 ## 0.6.0-beta.4
 
 - fix: `preserveSharedRowsPlugin` respects the caller's read access, so anonymous REST and GraphQL callers can't get row ids or probe documents with `where` filters. Callers who can update but not read can no longer write shared fields.

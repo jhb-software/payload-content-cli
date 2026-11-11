@@ -51,18 +51,22 @@ export async function pickLocale(
  */
 export const jsonObject = z.union([z.record(z.unknown()), z.string()]);
 
+/** A JSON string argument, parsed. */
+export function parseJsonArg(value: string, name: string): unknown {
+  try {
+    return JSON.parse(value);
+  } catch {
+    throw new Error(`${name} is not valid JSON.`);
+  }
+}
+
 export function toObject(
   value: Record<string, unknown> | string | undefined,
   name: string,
 ): Record<string, unknown> | undefined {
   if (typeof value !== "string") return value;
   if (!value.trim()) return undefined;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(value);
-  } catch {
-    throw new Error(`${name} is not valid JSON.`);
-  }
+  const parsed = parseJsonArg(value, name);
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     throw new Error(`${name} must be a JSON object.`);
   }

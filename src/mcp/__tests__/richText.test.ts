@@ -188,8 +188,16 @@ async function tool(
   return JSON.parse(response.content[0].text) as unknown;
 }
 
-const call = (args: Record<string, unknown>, options?: McpContentToolsOptions) =>
+const batch = (args: Record<string, unknown>, options?: McpContentToolsOptions) =>
   tool("updateRichText", args, options);
+
+/** One edit, answering with its result (or the error). */
+async function call(args: Record<string, unknown>, options?: McpContentToolsOptions) {
+  const { path, operation, value, text, ...rest } = args;
+  const answer = await batch({ ...rest, edits: [{ path, operation, value, text }] }, options);
+  return answer.error ? answer : answer.results[0];
+}
+
 const find = (args: Record<string, unknown>, options?: McpContentToolsOptions) =>
   tool("find", args, options);
 
@@ -580,7 +588,7 @@ describe("updateRichText", () => {
 
     expect(
       await call({ ...publish, path: "content.0", value: { type: "h2", text: "Live" } }),
-    ).toMatchObject({ count: 3 });
+    ).toEqual({ inserted: "content.0 h2: Live" });
     expect(await readPost(id, false)).toContain('"text":"Live"');
 
     await call({
@@ -693,7 +701,7 @@ describe("updateRichText", () => {
       locale: "de",
     });
 
-    expect(result).toMatchObject({ count: 1 });
+    expect(result).toEqual({ inserted: "content.0 p: Deutsch" });
     expect(await readPost(id, true, "de")).toContain("Deutsch");
     expect(await readPost(id, true, "de")).not.toContain("English");
     expect(await readPost(id, true, "en")).toContain("English");
@@ -716,7 +724,9 @@ describe("updateRichText", () => {
 
     const result = await call({ collection: "posts", id, path: "content.5", operation: "delete" });
 
-    expect(result).toEqual({ error: 'No "5" at content: it has 2 nodes (0–1).' });
+    expect(result).toEqual({
+      error: 'Edit 1 of 1 (content.5): No "5" at content: it has 2 nodes (0–1). Nothing was saved.',
+    });
   });
 
   it("refuses changing a kept block into one the field doesn't allow", async () => {
@@ -761,7 +771,7 @@ describe("updateRichText", () => {
       value: { type: "p", text: "Bring cash." },
     });
 
-    expect(result).toMatchObject({ inserted: "sections.0.body.0 p: Bring cash.", count: 1 });
+    expect(result).toEqual({ inserted: "sections.0.body.0 p: Bring cash." });
     const saved = await payload.findByID({ collection: "guides", id: guide.id, depth: 0 });
     expect(JSON.stringify(saved.sections)).toContain("Bring cash.");
     expect(saved.sections?.[0]?.heading).toBe("Packing");
@@ -802,6 +812,557 @@ describe("updateRichText", () => {
       draft: false,
     });
 
-    expect(result).toEqual({ error: 'No "asid" in the document. Its fields: title, aside.' });
+    expect(result).toEqual({
+      error:
+        'Edit 1 of 1 (asid.heading.0): No "asid" in the document. Its fields: title, aside. Nothing was saved.',
+    });
+  });
+});
+
+describe("updateRichText with several edits", () => {
+  /** A draft post of paragraphs, read back through find's outline. */
+  async function createParagraphs(...texts: string[]) {
+    const post = await payload.create({
+      collection: "posts",
+      data: { content: richText(...texts.map((t) => buildParagraph(t))) } as never,
+      draft: true,
+      locale: "en",
+    });
+    return post.id;
+  }
+
+  const outline = async (id: string | number) => (await find({ collection: "posts", id })).content;
+
+  const versionCount = async (collection: "posts" | "articles", id: string | number) =>
+    (await payload.findVersions({ collection, where: { parent: { equals: id } } })).totalDocs;
+
+  it("saves a batch of edits as one version, with every path as find showed it", async () => {
+    const masaiMara = await payload.create({ collection: "pages", data: { title: "Masai Mara" } });
+    const serengeti = await payload.create({ collection: "pages", data: { title: "Serengeti" } });
+    const id = await createParagraphs(
+      "Heading",
+      "Kenya is great.",
+      "Migration",
+      "The herds reach the Masai Mara in July. Read our Serengeti guide.",
+      "Outdated fees.",
+      "Second to last.",
+      "Contact us.",
+    );
+    const versionsBefore = await versionCount("posts", id);
+
+    const answer = await batch({
+      collection: "posts",
+      id,
+      edits: [
+        { path: "content.1.children.0.text", operation: "set", value: "Kenya is year-round." },
+        {
+          path: "content.3",
+          operation: "link",
+          text: "Masai Mara",
+          value: { relationTo: "pages", value: masaiMara.id },
+        },
+        {
+          path: "content.3",
+          operation: "link",
+          text: "Serengeti",
+          value: { relationTo: "pages", value: serengeti.id },
+        },
+        { path: "content.4", operation: "delete" },
+        { path: "content.5.children.0.text", operation: "set", value: "Still second to last." },
+        { path: "content.6", operation: "insert", value: { type: "p", text: "Book early." } },
+      ],
+    });
+
+    expect(await outline(id)).toEqual([
+      "content.0 p: Heading",
+      "content.1 p: Kenya is year-round.",
+      "content.2 p: Migration",
+      "content.3 p: The herds reach the [Masai Mara] in July. Read our [Serengeti] guide.",
+      "content.4 p: Still second to last.",
+      "content.5 p: Book early.",
+      "content.6 p: Contact us.",
+    ]);
+    expect(await versionCount("posts", id)).toBe(versionsBefore + 1);
+    expect(answer).toEqual({
+      results: [
+        { set: "content.1.children.0.text" },
+        {
+          linked: "content.3.children.1",
+          outline:
+            "content.3 p: The herds reach the [Masai Mara] in July. Read our Serengeti guide.",
+        },
+        {
+          linked: "content.3.children.3",
+          outline:
+            "content.3 p: The herds reach the [Masai Mara] in July. Read our [Serengeti] guide.",
+        },
+        { deleted: "content.4 p: Outdated fees." },
+        { set: "content.5.children.0.text" },
+        { inserted: "content.6 p: Book early." },
+      ],
+      shifted: true,
+    });
+  });
+
+  it("saves nothing when one edit fails, and names that edit", async () => {
+    const id = await createParagraphs("One", "Two");
+    const versionsBefore = await versionCount("posts", id);
+
+    const answer = await batch({
+      collection: "posts",
+      id,
+      edits: [
+        { path: "content.0.children.0.text", operation: "set", value: "Changed" },
+        { path: "content.7", operation: "delete" },
+      ],
+    });
+
+    expect(answer).toEqual({
+      error: 'Edit 2 of 2 (content.7): No "7" at content: it has 2 nodes (0–1). Nothing was saved.',
+    });
+    expect(await outline(id)).toEqual(["content.0 p: One", "content.1 p: Two"]);
+    expect(await versionCount("posts", id)).toBe(versionsBefore);
+  });
+
+  it("saves nothing when a value the batch adds links to a missing document", async () => {
+    const id = await createParagraphs("One", "Two");
+
+    const answer = await batch({
+      collection: "posts",
+      id,
+      edits: [
+        { path: "content.0.children.0.text", operation: "set", value: "Changed" },
+        {
+          path: "content.1",
+          operation: "link",
+          text: "Two",
+          value: { relationTo: "pages", value: 999999 },
+        },
+      ],
+    });
+
+    expect(answer).toEqual({
+      error: expect.stringMatching(/doesn't exist\. Nothing was saved\.$/),
+    });
+    expect(await outline(id)).toEqual(["content.0 p: One", "content.1 p: Two"]);
+  });
+
+  it("orders indexes as numbers, so content.10 runs before content.2", async () => {
+    const id = await createParagraphs(...Array.from({ length: 11 }, (_, i) => `P${i}`));
+
+    await batch({
+      collection: "posts",
+      id,
+      edits: [
+        { path: "content.2", operation: "delete" },
+        { path: "content.10", operation: "delete" },
+      ],
+    });
+
+    expect(await outline(id)).toEqual(
+      ["P0", "P1", "P3", "P4", "P5", "P6", "P7", "P8", "P9"].map(
+        (text, i) => `content.${i} p: ${text}`,
+      ),
+    );
+  });
+
+  it("replaces a node and inserts before it at the same index", async () => {
+    const id = await createParagraphs("One", "Two");
+
+    await batch({
+      collection: "posts",
+      id,
+      edits: [
+        { path: "content.1", operation: "insert", value: { type: "p", text: "New" } },
+        { path: "content.1", operation: "set", value: { type: "p", text: "Replaced" } },
+      ],
+    });
+
+    expect(await outline(id)).toEqual([
+      "content.0 p: One",
+      "content.1 p: New",
+      "content.2 p: Replaced",
+    ]);
+  });
+
+  it("deletes a node and inserts in its place", async () => {
+    const id = await createParagraphs("One", "Two", "Three");
+
+    await batch({
+      collection: "posts",
+      id,
+      edits: [
+        { path: "content.1", operation: "insert", value: { type: "p", text: "New" } },
+        { path: "content.1", operation: "delete" },
+      ],
+    });
+
+    expect(await outline(id)).toEqual([
+      "content.0 p: One",
+      "content.1 p: New",
+      "content.2 p: Three",
+    ]);
+  });
+
+  it("edits inside a node and inserts before that node", async () => {
+    const id = await createParagraphs("One", "Two");
+
+    await batch({
+      collection: "posts",
+      id,
+      edits: [
+        { path: "content.1", operation: "insert", value: { type: "p", text: "New" } },
+        { path: "content.1.children.0.text", operation: "set", value: "Changed" },
+      ],
+    });
+
+    expect(await outline(id)).toEqual([
+      "content.0 p: One",
+      "content.1 p: New",
+      "content.2 p: Changed",
+    ]);
+  });
+
+  it("keeps paths as read inside rich text nested in a block", async () => {
+    const post = await payload.create({
+      collection: "posts",
+      data: {
+        content: richText(
+          buildParagraph("Intro"),
+          buildBlock({
+            id: "6ad6120ac7d850432e0bcd01",
+            blockType: "alert",
+            style: "warning",
+            body: richText(buildParagraph("One"), buildParagraph("Two"), buildParagraph("Three")),
+          }),
+        ),
+      } as never,
+      draft: true,
+      locale: "en",
+    });
+
+    await batch({
+      collection: "posts",
+      id: post.id,
+      edits: [
+        { path: "content.0", operation: "delete" },
+        { path: "content.1.fields.body.0", operation: "delete" },
+        { path: "content.1.fields.body.2.children.0.text", operation: "set", value: "Changed" },
+      ],
+    });
+
+    expect(await find({ collection: "posts", id: post.id, path: "content.0.fields.body" })).toEqual(
+      ["content.0.fields.body.0 p: Two", "content.0.fields.body.1 p: Changed"],
+    );
+  });
+
+  it("refuses edits to a node and to something inside it, saving nothing", async () => {
+    const id = await createParagraphs("One", "Two");
+
+    const answer = await batch({
+      collection: "posts",
+      id,
+      edits: [
+        { path: "content.0", operation: "delete" },
+        { path: "content.00.children.0.text", operation: "set", value: "Changed" },
+      ],
+    });
+
+    expect(answer).toEqual({
+      error: expect.stringMatching(/^Edits 1 and 2 overlap.*Nothing was saved\.$/),
+    });
+    expect(await outline(id)).toEqual(["content.0 p: One", "content.1 p: Two"]);
+  });
+
+  it("refuses two edits to one path written differently", async () => {
+    const id = await createParagraphs("One");
+
+    const answer = await batch({
+      collection: "posts",
+      id,
+      edits: [
+        { path: "content.0", operation: "set", value: { type: "p", text: "A" } },
+        { path: "content.00", operation: "set", value: { type: "p", text: "B" } },
+      ],
+    });
+
+    expect(answer).toEqual({ error: expect.stringContaining("Edits 1 and 2 overlap") });
+    expect(await outline(id)).toEqual(["content.0 p: One"]);
+  });
+
+  it("refuses an insert inside a node the batch deletes", async () => {
+    const id = await createParagraphs("One");
+
+    const answer = await batch({
+      collection: "posts",
+      id,
+      edits: [
+        { path: "content.0.children.0", operation: "insert", value: { type: "text", text: "A" } },
+        { path: "content.0", operation: "delete" },
+      ],
+    });
+
+    expect(answer).toEqual({ error: expect.stringContaining("Edits 1 and 2 overlap") });
+    expect(await outline(id)).toEqual(["content.0 p: One"]);
+  });
+
+  it("refuses two inserts at one index, pointing to insert's list form", async () => {
+    const id = await createParagraphs("One");
+
+    const answer = await batch({
+      collection: "posts",
+      id,
+      edits: [
+        { path: "content.0", operation: "insert", value: { type: "p", text: "A" } },
+        { path: "content.0", operation: "insert", value: { type: "p", text: "B" } },
+      ],
+    });
+
+    expect(answer).toEqual({ error: expect.stringMatching(/content\.0.*list of nodes/) });
+    expect(await outline(id)).toEqual(["content.0 p: One"]);
+  });
+
+  it("links repeated text in one node in the order sent", async () => {
+    const first = await payload.create({ collection: "pages", data: { title: "First" } });
+    const second = await payload.create({ collection: "pages", data: { title: "Second" } });
+    const id = await createParagraphs("camp one camp two");
+
+    await batch({
+      collection: "posts",
+      id,
+      edits: [
+        {
+          path: "content.0",
+          operation: "link",
+          text: "camp",
+          value: { relationTo: "pages", value: first.id },
+        },
+        {
+          path: "content.0",
+          operation: "link",
+          text: "camp",
+          value: { relationTo: "pages", value: second.id },
+        },
+      ],
+    });
+
+    expect(await outline(id)).toEqual(["content.0 p: [camp] one [camp] two"]);
+    expect(
+      await find({
+        collection: "posts",
+        id,
+        path: ["content.0.children.0.fields.doc.value", "content.0.children.2.fields.doc.value"],
+      }),
+    ).toEqual({
+      "content.0.children.0.fields.doc.value": first.id,
+      "content.0.children.2.fields.doc.value": second.id,
+    });
+  });
+
+  it("refuses two links at one text node, pointing to the node holding it", async () => {
+    const page = await payload.create({ collection: "pages", data: { title: "Page" } });
+    const id = await createParagraphs("Lodge and camp");
+    const value = { relationTo: "pages", value: page.id };
+
+    const answer = await batch({
+      collection: "posts",
+      id,
+      edits: [
+        { path: "content.0.children.0", operation: "link", text: "Lodge", value },
+        { path: "content.0.children.0", operation: "link", text: "camp", value },
+      ],
+    });
+
+    expect(answer).toEqual({ error: expect.stringMatching(/text node.*content\.0\b/) });
+    expect(await outline(id)).toEqual(["content.0 p: Lodge and camp"]);
+  });
+
+  it("refuses a link searching a whole field alongside another edit to that field", async () => {
+    const page = await payload.create({ collection: "pages", data: { title: "Page" } });
+    const id = await createParagraphs("Lodge", "Camp");
+
+    const answer = await batch({
+      collection: "posts",
+      id,
+      edits: [
+        { path: "content.1", operation: "insert", value: { type: "p", text: "Lodge" } },
+        {
+          path: "content",
+          operation: "link",
+          text: "Lodge",
+          value: { relationTo: "pages", value: page.id },
+        },
+      ],
+    });
+
+    expect(answer).toEqual({ error: expect.stringMatching(/Edits 1 and 2 overlap.*narrow/i) });
+    expect(await outline(id)).toEqual(["content.0 p: Lodge", "content.1 p: Camp"]);
+  });
+
+  it("refuses a link whose search covers another link, instead of swapping their targets", async () => {
+    const first = await payload.create({ collection: "pages", data: { title: "First" } });
+    const second = await payload.create({ collection: "pages", data: { title: "Second" } });
+    const id = await createParagraphs("camp one camp two");
+
+    const answer = await batch({
+      collection: "posts",
+      id,
+      edits: [
+        {
+          path: "content",
+          operation: "link",
+          text: "camp",
+          value: { relationTo: "pages", value: first.id },
+        },
+        {
+          path: "content.0",
+          operation: "link",
+          text: "camp",
+          value: { relationTo: "pages", value: second.id },
+        },
+      ],
+    });
+
+    expect(answer).toEqual({ error: expect.stringContaining("Edits 1 and 2 overlap") });
+    expect(await outline(id)).toEqual(["content.0 p: camp one camp two"]);
+  });
+
+  it("reads a path through root.children as the same path, keeping it as read", async () => {
+    const id = await createParagraphs("P0", "P1", "P2", "P3", "P4");
+
+    await batch({
+      collection: "posts",
+      id,
+      edits: [
+        { path: "content.1", operation: "delete" },
+        { path: "content.root.children.3", operation: "delete" },
+      ],
+    });
+
+    expect(await outline(id)).toEqual(["content.0 p: P0", "content.1 p: P2", "content.2 p: P4"]);
+  });
+
+  it("refuses overlapping edits when one path goes through root.children", async () => {
+    const id = await createParagraphs("One", "Two");
+
+    const answer = await batch({
+      collection: "posts",
+      id,
+      edits: [
+        { path: "content.0", operation: "delete" },
+        { path: "content.root.children.0.children.0.text", operation: "set", value: "Changed" },
+      ],
+    });
+
+    expect(answer).toEqual({ error: expect.stringContaining("Edits 1 and 2 overlap") });
+    expect(await outline(id)).toEqual(["content.0 p: One", "content.1 p: Two"]);
+  });
+
+  it("publishes several edits together with draft:false", async () => {
+    const post = await payload.create({
+      collection: "posts",
+      data: {
+        content: richText(buildParagraph("One"), buildParagraph("Two")),
+        _status: "published",
+      } as never,
+      locale: "en",
+    });
+
+    await batch({
+      collection: "posts",
+      id: post.id,
+      draft: false,
+      edits: [
+        { path: "content.0.children.0.text", operation: "set", value: "Live one" },
+        { path: "content.1.children.0.text", operation: "set", value: "Live two" },
+      ],
+    });
+
+    const live = await readPost(post.id, false);
+    expect(live).toContain("Live one");
+    expect(live).toContain("Live two");
+  });
+
+  it("edits several fields and saves one version, starting rich text nobody has written", async () => {
+    const article = await payload.create({
+      collection: "articles",
+      data: {
+        title: "Visa",
+        content: richText(buildParagraph("Old")),
+        sections: [{ blockType: "text" }],
+        _status: "draft",
+      } as never,
+      draft: true,
+    });
+    const versionsBefore = await versionCount("articles", article.id);
+
+    const answer = await batch({
+      collection: "articles",
+      id: article.id,
+      edits: [
+        { path: "content.0.children.0.text", operation: "set", value: "New" },
+        { path: "sections.0.body.0", operation: "insert", value: { type: "p", text: "Started" } },
+      ],
+    });
+
+    expect(answer).toEqual({
+      results: [{ set: "content.0.children.0.text" }, { inserted: "sections.0.body.0 p: Started" }],
+    });
+    const saved = await payload.findByID({ collection: "articles", id: article.id, draft: true });
+    expect(JSON.stringify(saved.content)).toContain('"text":"New"');
+    expect(JSON.stringify(saved.sections)).toContain("Started");
+    expect(saved.title).toBe("Visa");
+    expect(await versionCount("articles", article.id)).toBe(versionsBefore + 1);
+  });
+
+  it("says indexes moved after an insert, not after a set or an append", async () => {
+    const id = await createParagraphs("One", "Two");
+    const edit = (edits: unknown[]) => batch({ collection: "posts", id, edits });
+
+    const set = await edit([{ path: "content.0.children.0.text", operation: "set", value: "A" }]);
+    const appended = await edit([
+      { path: "content.2", operation: "insert", value: { type: "p", text: "End" } },
+    ]);
+    const inserted = await edit([
+      { path: "content.0", operation: "insert", value: { type: "p", text: "Start" } },
+    ]);
+
+    expect(set).not.toHaveProperty("shifted");
+    expect(appended).not.toHaveProperty("shifted");
+    expect(inserted).toMatchObject({ shifted: true });
+  });
+
+  it("refuses an empty list of edits instead of publishing", async () => {
+    const id = await createParagraphs("One");
+    const before = await payload.findByID({ collection: "posts", id, draft: true });
+
+    const answer = await batch({ collection: "posts", id, edits: [], draft: false });
+
+    expect(answer).toEqual({ error: expect.stringContaining("at least one edit") });
+    const after = await payload.findByID({ collection: "posts", id, draft: true });
+    expect(after._status).toBe(before._status);
+  });
+
+  it("takes edits sent as a JSON string, as some clients send them", async () => {
+    const id = await createParagraphs("One");
+
+    await batch({
+      collection: "posts",
+      id,
+      edits: JSON.stringify([
+        { path: "content.0.children.0.text", operation: "set", value: "Changed" },
+      ]),
+    });
+
+    expect(await outline(id)).toEqual(["content.0 p: Changed"]);
+  });
+
+  it("tells a caller using the old single-edit arguments to send edits", async () => {
+    const id = await createParagraphs("One");
+
+    const answer = await batch({ collection: "posts", id, path: "content.0", operation: "delete" });
+
+    expect(answer).toEqual({ error: expect.stringContaining("edits is required") });
+    expect(await outline(id)).toEqual(["content.0 p: One"]);
   });
 });

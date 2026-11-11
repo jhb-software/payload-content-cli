@@ -99,19 +99,22 @@ A condition is a function, so the schema can't show the rule on its own. To publ
 
 The MCP schema tools spell out rules in this vocabulary, which costs an agent about half the characters of the JSON. A sentence is shown as written, any other shape as JSON:
 
-| Rule                                                | In the tree                 |
-| --------------------------------------------------- | --------------------------- |
-| `{ field: "a", equals: "x" }`                       | `[when a = x]`              |
-| `{ field: "a", equals: ["x", "y"] }`                | `[when a in (x \| y)]`      |
-| `{ field: "a", notEquals: "x" }`                    | `[when a ≠ x]`              |
-| `{ field: "a", isSet: true }`                       | `[when a is set]`           |
-| `{ field: "a", isSet: false }`                      | `[when a is not set]`       |
-| `{ field: "a", scope: "block", equals: "x" }`       | `[when ^a = x]`             |
-| `{ all: [rule, rule] }`                             | `[when rule, rule]`         |
-| `{ any: [rule, rule] }`                             | `[when (rule or rule)]`     |
-| `{ hidden: true }`                                  | `[when never]`              |
+| Rule                                             | In the tree                    |
+| ------------------------------------------------ | ------------------------------ |
+| `{ field: "a", equals: "x" }`                    | `[when a = x]`                 |
+| `{ field: "a", equals: ["x", "y"] }`             | `[when a in (x \| y)]`         |
+| `{ field: "a", notEquals: "x" }`                 | `[when a ≠ x]`                 |
+| `{ field: "a", isSet: true }`                    | `[when a is set]`              |
+| `{ field: "a", isSet: false }`                   | `[when a is not set]`          |
+| `{ field: "a", scope: "block", equals: "x" }`    | `[when ^a = x]`                |
+| `{ field: "a", scope: "document", equals: "x" }` | `[when /a = x]`                |
+| `{ field: "a", includes: "x" }`                  | `[when a has x]`               |
+| `{ field: "a", includes: ["x", "y"] }`           | `[when a has any of (x \| y)]` |
+| `{ all: [rule, rule] }`                          | `[when rule, rule]`            |
+| `{ any: [rule, rule] }`                          | `[when (rule or rule)]`        |
+| `{ hidden: true }`                               | `[when never]`                 |
 
-`a.b` reads into a sibling group, `^a` the enclosing block's field. Text that isn't a plain word is quoted (`[when a = "1"]`), so it can't read as a number or as more clauses.
+`a.b` reads into a sibling group, `^a` the enclosing block's field, `/a` the document's top-level field. `includes` holds when the field is a list (a `hasMany` select, say) holding any of the values; through an array, `a.b has x` holds when some row's `b` has `x`. Text that isn't a plain word is quoted (`[when a = "1"]`), so it can't read as a number or as more clauses.
 
 A field required only under some condition is enforced by a `validate` function, which the schema can't read either. Declare its rule beside that function in `admin.custom.requiredWhen`, in the same shapes. The field's `requiredWhen` then carries it, and the MCP schema tools mark it `[required when a = x]`.
 

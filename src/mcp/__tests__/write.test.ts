@@ -232,6 +232,28 @@ describe("update", () => {
     expect((await read(id, true)).title).toBe("Hello");
   });
 
+  it("writes the locale the app's resolveLocale derives from where", async () => {
+    const id = await publishedPost("Hello", "where-locale");
+    const resolveLocale: McpContentToolsOptions["resolveLocale"] = (_, { where }) =>
+      (where?.slug as { equals?: string } | undefined)?.equals === "where-locale"
+        ? "de"
+        : undefined;
+
+    await tool(
+      "update",
+      {
+        collection: "posts",
+        where: '{"slug":{"equals":"where-locale"}}',
+        data: { title: "Hallo" },
+      },
+      { resolveLocale },
+    );
+
+    const german = await payload.findByID({ collection: "posts", id, draft: true, locale: "de" });
+    expect(german.title).toBe("Hallo");
+    expect((await read(id, true)).title).toBe("Hello");
+  });
+
   it("with a status per locale, publishes only the locale it writes", async () => {
     const { id } = await payload.create({
       collection: "notes",

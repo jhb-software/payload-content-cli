@@ -2,7 +2,9 @@
 
 ## Unreleased
 
-- feat!: the MCP `updateRichText` takes `edits`, a list of edits saved together as one version or not at all, in place of `path`, `operation`, `value` and `text`. Paths refer to the document as `find` showed it. It answers `{ results, shifted? }`.
+- feat: the MCP `updateRichText` takes `edits`, a list of edits saved together as one version or not at all. Paths refer to the document as `find` showed it. It answers `{ results, shifted? }`. A single `path`/`operation`/`value`/`text` still works and answers as before, for clients that cached the old schema.
+- feat: the MCP `resolveLocale` hook receives the parsed `where` of a `find` or `update` that names its documents by filter, so a multi-tenant app can pick the tenant's locale without an id.
+- feat: the MCP schema trees spell out rules with `scope: "document"` (`[when /a = x]`) and `includes` (`[when a has x]`, `[when a has any of (x | y)]`) instead of their JSON.
 
 ## 0.6.0-beta.4
 

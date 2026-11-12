@@ -75,7 +75,14 @@ export function findTool(options: McpContentToolsOptions = {}): McpTool {
         }
 
         const select = toObject(parsed.select, "select") as SelectType | undefined;
-        const locale = await pickLocale(options, req, { collection, id, locale: parsed.locale });
+        // Parsed first, so the hook never sees a malformed one.
+        const where = one ? undefined : (toObject(parsed.where, "where") as Where | undefined);
+        const locale = await pickLocale(options, req, {
+          collection,
+          id,
+          locale: parsed.locale,
+          where,
+        });
         if (locale === "all" && (path !== undefined || text !== undefined)) {
           return errorResult('path and text read one locale; pass one instead of "all".');
         }
@@ -144,7 +151,7 @@ export function findTool(options: McpContentToolsOptions = {}): McpTool {
         }
         const { docs, totalDocs, page, totalPages } = await req.payload.find({
           collection: target.slug,
-          where: toObject(parsed.where, "where") as Where | undefined,
+          where,
           sort: parsed.sort as Sort | undefined,
           limit: parsed.limit ?? 10,
           page: parsed.page ?? 1,

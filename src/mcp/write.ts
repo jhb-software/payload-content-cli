@@ -2,7 +2,13 @@ import type { PayloadRequest, SelectType, Where } from "payload";
 import { z } from "zod/v3";
 import { restoreOutlines } from "../lexical/view.js";
 import { ALLOW_SHARED_ROW_REPLACEMENT, isSharedRowRefusal } from "../plugin/preserveSharedRows.js";
-import { jsonObject, pickLocale, toObject, type McpContentToolsOptions } from "./options.js";
+import {
+  jsonObject,
+  pickLocale,
+  toObject,
+  type LocaleTarget,
+  type McpContentToolsOptions,
+} from "./options.js";
 import { errorResult, jsonResult, type McpTool } from "./result.js";
 import { hydrateRichText, objectsIn, richTextFieldsIn } from "./richTextData.js";
 import { findAddedProblem } from "./richTextChecks.js";
@@ -74,7 +80,7 @@ type Id = string | number;
 async function writeLocale(
   options: McpContentToolsOptions,
   req: PayloadRequest,
-  target: { collection: string; id?: Id; locale?: string },
+  target: LocaleTarget,
 ): Promise<string | undefined> {
   const locale = await pickLocale(options, req, target);
   if (locale === "all") throw new Error('Pick one locale to write; "all" can\'t be written.');
@@ -273,7 +279,12 @@ export function updateTool(options: McpContentToolsOptions = {}): McpTool {
 
         const draft = parsed.draft ?? true;
         const drafts = hasDrafts(config);
-        const locale = await writeLocale(options, req, { collection, id, locale: parsed.locale });
+        const locale = await writeLocale(options, req, {
+          collection,
+          id,
+          locale: parsed.locale,
+          where,
+        });
         const sent = requireData(parsed.data);
         const bulk = target.kind === "collection" && id === undefined;
         const blocks = req.payload.config.blocks ?? [];

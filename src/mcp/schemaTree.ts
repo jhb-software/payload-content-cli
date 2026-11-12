@@ -15,8 +15,8 @@ export const SCHEMA_TREE_LEGEND = [
   "  (localized)     differs per locale",
   "  (virtual)       read-only, never write it",
   "  read-only: a, b fields reads return but nothing writes, named on the last line",
-  "  [when a = x, b ≠ y] applies only while every rule holds; also in (x | y), is set, is not set",
-  "                  rules read sibling fields (a.b inside sibling group a, ^a the enclosing block's a); a quoted value is text",
+  "  [when a = x, b ≠ y] applies only while every rule holds; also in (x | y), is set, is not set, has x, has any of (x | y) (a list holds one)",
+  "                  rules read sibling fields (a.b inside sibling group a, ^a the enclosing block's a, /a the document's a); a quoted value is text",
   "  [required when …] required only while the rule holds, written like [when …]",
   "  filter: {…}     only related documents matching this query",
   "  = value         default",
@@ -128,21 +128,33 @@ function describeRule(rule: unknown): string[] {
 }
 
 function describeLeaf({ field, scope, ...test }: Record<string, unknown>): string | undefined {
-  if (typeof field !== "string" || (scope !== undefined && scope !== "block")) return undefined;
+  const prefix = scope === undefined ? "" : scopePrefixes.get(scope);
+  if (typeof field !== "string" || prefix === undefined) return undefined;
   const [operator, ...others] = Object.entries(test);
   if (!operator || others.length) return undefined;
-  const name = scope === "block" ? `^${field}` : field;
+  const name = `${prefix}${field}`;
   const [key, value] = operator;
   if (key === "isSet" && typeof value === "boolean") {
     return `${name} ${value ? "is set" : "is not set"}`;
   }
   if (key === "notEquals" && isRuleValue(value)) return `${name} ≠ ${ruleValue(value)}`;
-  if (key !== "equals") return undefined;
+  if (key !== "equals" && key !== "includes") return undefined;
   const values = [value].flat();
   if (!values.length || !values.every(isRuleValue)) return undefined;
   const shown = values.map(ruleValue);
+  if (key === "includes") {
+    return shown.length === 1
+      ? `${name} has ${shown[0]}`
+      : `${name} has any of (${shown.join(" | ")})`;
+  }
   return shown.length === 1 ? `${name} = ${shown[0]}` : `${name} in (${shown.join(" | ")})`;
 }
+
+/** Where a rule's `field` is read from: siblings (no scope), the enclosing block, the document root. */
+const scopePrefixes = new Map<unknown, string>([
+  ["block", "^"],
+  ["document", "/"],
+]);
 
 type RuleValue = string | number | boolean;
 

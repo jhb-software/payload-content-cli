@@ -167,6 +167,38 @@ describe("find", () => {
     expect(result.title).toBe("Hallo");
   });
 
+  it("reads the locale the app's resolveLocale derives from where, sent as a JSON string", async () => {
+    const post = await publishedPost("eta", "Hello");
+    await payload.update({
+      collection: "posts",
+      id: post.id,
+      data: { title: "Hallo" },
+      locale: "de",
+    });
+    const resolveLocale: McpContentToolsOptions["resolveLocale"] = (_, { where }) =>
+      (where?.slug as { equals?: string } | undefined)?.equals === "eta" ? "de" : undefined;
+
+    const result = await find(
+      { collection: "posts", where: '{"slug":{"equals":"eta"}}', select: { title: true } },
+      { resolveLocale },
+    );
+
+    expect(result.docs).toEqual([{ id: post.id, title: "Hallo" }]);
+  });
+
+  it("refuses a malformed where before the app's resolveLocale sees it", async () => {
+    const result = await find(
+      { collection: "posts", where: "{not json" },
+      {
+        resolveLocale: () => {
+          throw new Error("resolveLocale ran");
+        },
+      },
+    );
+
+    expect(result).toEqual({ error: "where is not valid JSON." });
+  });
+
   it("blames the app's resolveLocale, not the agent, for a locale it swapped in", async () => {
     const post = await publishedPost("zeta", "Hello");
 

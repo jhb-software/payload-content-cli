@@ -1,4 +1,4 @@
-import type { PayloadRequest } from "payload";
+import type { PayloadRequest, Where } from "payload";
 import { z } from "zod/v3";
 import { localeProblem } from "../locales.js";
 
@@ -12,13 +12,22 @@ export interface McpContentToolsOptions {
    */
   resolveLocale?: (
     req: PayloadRequest,
-    target: { collection: string; id?: string | number; locale?: string },
+    target: LocaleTarget,
   ) => string | undefined | Promise<string | undefined>;
   /** Refuse an id before it is looked up, by returning the message to show the agent. */
   checkId?: (
     req: PayloadRequest,
     target: { collection: string; id: string | number },
   ) => string | undefined | Promise<string | undefined>;
+}
+
+/** What a tool reads or writes, as `resolveLocale` sees it. */
+export interface LocaleTarget {
+  collection: string;
+  id?: string | number;
+  locale?: string;
+  /** The filter a find or update names its documents by, parsed; absent with `id`. */
+  where?: Where;
 }
 
 /**
@@ -28,7 +37,7 @@ export interface McpContentToolsOptions {
 export async function pickLocale(
   options: McpContentToolsOptions,
   req: PayloadRequest,
-  target: { collection: string; id?: string | number; locale?: string },
+  target: LocaleTarget,
 ): Promise<string | undefined> {
   const locale = options.resolveLocale ? await options.resolveLocale(req, target) : target.locale;
   if (!locale) return undefined;

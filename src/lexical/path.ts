@@ -37,7 +37,7 @@ interface Target {
   richText?: RichTextValue;
 }
 
-const INDEX = /^\d+$/;
+export const INDEX = /^\d+$/;
 const UNSAFE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {

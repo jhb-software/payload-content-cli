@@ -37,9 +37,19 @@ const parameters = {
   id: z.union([z.string(), z.number()]).optional().describe("Document ID. Omit for globals."),
   edits: z
     .union([z.array(editSchema), z.string()])
+    .optional()
     .describe(
       "All edits to this document, saved together. Every path is as find showed it: don't adjust indexes for other edits in the list. Edits to a node and to something inside it are refused, as are two inserts at one index (send one with a list of nodes), two links at one text node (use the node holding it) and a link whose search covers another edit.",
     ),
+  // One edit, as the tool took it before `edits`: clients that cached the old
+  // schema keep sending it, and the SDK drops arguments the schema doesn't name.
+  path: z.string().optional().describe("Deprecated: one edit's path. Use edits."),
+  operation: z
+    .enum(["set", "insert", "delete", "link"])
+    .optional()
+    .describe("Deprecated: one edit's operation. Use edits."),
+  value: z.unknown().optional().describe("Deprecated: one edit's value. Use edits."),
+  text: z.string().optional().describe("Deprecated: one edit's text. Use edits."),
   locale: z.string().optional().describe("Default: the default locale."),
   draft: z
     .boolean()
@@ -51,22 +61,42 @@ const parameters = {
     .describe("With draft:false, discard newer unpublished draft changes instead of refusing."),
 };
 
-const argsSchema = z.object(parameters).omit({ edits: true });
+const argsSchema = z
+  .object(parameters)
+  .omit({ edits: true, path: true, operation: true, value: true, text: true });
 
-/** The list of edits. Some MCP clients send a list as a JSON string. */
-function toEdits(value: unknown): z.infer<typeof editSchema>[] {
-  if (value === undefined) {
+type Edit = z.infer<typeof editSchema>;
+
+/**
+ * The list of edits, or the one edit of a caller using the deprecated
+ * `path`/`operation`/`value`/`text` (`single`). Some MCP clients send a list
+ * as a JSON string.
+ */
+function toEdits(args: Record<string, unknown>): { edits: Edit[]; single: boolean } {
+  const { edits, path, operation, value, text } = args;
+  if (edits !== undefined && path !== undefined) {
+    throw new Error("Pass either edits or path, not both: put every edit in edits.");
+  }
+  if (edits === undefined && path !== undefined) {
+    const parsed = editSchema.safeParse({ path, operation, value, text });
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      throw new Error(`${issue.path.join(".")}: ${issue.message}.`);
+    }
+    return { edits: [parsed.data], single: true };
+  }
+  if (edits === undefined) {
     throw new Error(
       'edits is required: a list of {"path","operation","value","text"}, all edits to this document.',
     );
   }
-  const list = typeof value === "string" ? parseJsonArg(value, "edits") : value;
+  const list = typeof edits === "string" ? parseJsonArg(edits, "edits") : edits;
   const parsed = z.array(editSchema).min(1, "needs at least one edit").safeParse(list);
   if (!parsed.success) {
-    const { path, message } = parsed.error.issues[0];
-    throw new Error(`edits${path.map((p) => `.${p}`).join("")}: ${message}.`);
+    const { path: at, message } = parsed.error.issues[0];
+    throw new Error(`edits${at.map((p) => `.${p}`).join("")}: ${message}.`);
   }
-  return parsed.data;
+  return { edits: parsed.data, single: false };
 }
 
 const EMPTY_ROOT = {
@@ -152,15 +182,20 @@ function toTime(value: unknown): number | undefined {
 }
 
 /**
- * One edit applied to a copy of the document. Its counts and notes on moved
- * nodes would describe a moment halfway through the batch, so they become
- * `shifted`. A link usually splits a text node, moving what follows it, so any
- * link counts.
+ * One edit applied to a copy of the document. In a batch, its counts and notes
+ * on moved nodes would describe a moment halfway through, so `result` drops
+ * them for `shifted`; `single` keeps them, as the one-edit answer always had. A
+ * link usually splits a text node, moving what follows it, so any link counts.
  */
 function applyEdit(
   doc: Record<string, unknown>,
-  edit: z.infer<typeof editSchema>,
-): { doc: Record<string, unknown>; result: Record<string, unknown>; shifted: boolean } {
+  edit: Edit,
+): {
+  doc: Record<string, unknown>;
+  result: Record<string, unknown>;
+  single: Record<string, unknown>;
+  shifted: boolean;
+} {
   if (edit.operation === "link") {
     if (!edit.text) throw new Error("link needs text: the words to wrap.");
     const linkTarget = toObject(edit.value as never, "value");
@@ -177,15 +212,12 @@ function applyEdit(
       value,
       ...(linkTarget?.newTab === true ? { newTab: true } : {}),
     });
-    return {
-      doc: linked.doc,
-      result: { linked: linked.path, outline: linked.outline },
-      shifted: true,
-    };
+    const result = { linked: linked.path, outline: linked.outline };
+    return { doc: linked.doc, result, single: result, shifted: true };
   }
   const applied = editAtPath(doc, edit.path, edit.operation, edit.value);
   const { count: _count, note, ...result } = applied.result;
-  return { doc: applied.doc, result, shifted: note !== undefined };
+  return { doc: applied.doc, result, single: applied.result, shifted: note !== undefined };
 }
 
 /** What to tell the agent about an edit that failed, from the document as read. */
@@ -232,7 +264,7 @@ export function updateRichTextTool(options: McpContentToolsOptions = {}): McpToo
     parameters,
     handler: async (args, req) => {
       try {
-        const edits = toEdits((args as { edits?: unknown }).edits);
+        const { edits, single } = toEdits(args as Record<string, unknown>);
         const parsed = argsSchema.parse(args);
         const { collection, id, overwriteDraft } = parsed;
         const draft = parsed.draft ?? true;
@@ -294,6 +326,7 @@ export function updateRichTextTool(options: McpContentToolsOptions = {}): McpToo
           return errorResult(`${errorMessage(err)} Nothing was saved.`);
         }
         const results: Record<string, unknown>[] = [];
+        let singleResult: Record<string, unknown> | undefined;
         let changed = doc;
         let shifted = false;
         for (const index of order) {
@@ -302,9 +335,11 @@ export function updateRichTextTool(options: McpContentToolsOptions = {}): McpToo
             const applied = applyEdit(changed, edit);
             changed = applied.doc;
             results[index] = applied.result;
+            singleResult = applied.single;
             shifted ||= applied.shifted;
           } catch (err) {
             const message = explainEditError(err, doc, edit.path, fields, draft);
+            if (single) return errorResult(message);
             return errorResult(
               `Edit ${index + 1} of ${edits.length} (${edit.path}): ${message} Nothing was saved.`,
             );
@@ -359,6 +394,7 @@ export function updateRichTextTool(options: McpContentToolsOptions = {}): McpToo
         } else {
           await req.payload.update({ collection: target.slug, id: id!, select: {}, ...write });
         }
+        if (single) return jsonResult(singleResult);
         return jsonResult({ results, ...(shifted ? { shifted: true } : {}) });
       } catch (err) {
         return errorResult(errorMessage(err));

@@ -7,6 +7,7 @@ import { sqliteAdapter } from "@payloadcms/db-sqlite";
 import { BlocksFeature, lexicalEditor } from "@payloadcms/richtext-lexical";
 import { buildConfig, createLocalReq, getPayload, type Payload } from "payload";
 import { beforeAll, describe, expect, it } from "vitest";
+import { z } from "zod/v3";
 import { buildBlock, buildInternalLink, buildParagraph, buildText } from "../../lexical/nodes.js";
 import { createMcpContentTools, type McpContentToolsOptions } from "../index.js";
 import { toolNamed } from "./payload.js";
@@ -184,7 +185,12 @@ async function tool(
   options?: McpContentToolsOptions,
 ): Promise<any> {
   const req = await createLocalReq({}, payload);
-  const response = await toolNamed(createMcpContentTools(options), name).handler(args, req);
+  const mcpTool = toolNamed(createMcpContentTools(options), name);
+  // As the MCP SDK does before the handler: refuse what the advertised schema
+  // doesn't allow, and drop the keys it doesn't name.
+  const checked = z.object(mcpTool.parameters).safeParse(args);
+  if (!checked.success) return { error: `Input validation error: ${checked.error.message}` };
+  const response = await mcpTool.handler(checked.data, req);
   return JSON.parse(response.content[0].text) as unknown;
 }
 
@@ -1357,12 +1363,31 @@ describe("updateRichText with several edits", () => {
     expect(await outline(id)).toEqual(["content.0 p: Changed"]);
   });
 
-  it("tells a caller using the old single-edit arguments to send edits", async () => {
-    const id = await createParagraphs("One");
+  it("still takes one edit as path and operation, answering as before, for clients that cached the old schema", async () => {
+    const id = await createParagraphs("One", "Two");
 
     const answer = await batch({ collection: "posts", id, path: "content.0", operation: "delete" });
 
-    expect(answer).toEqual({ error: expect.stringContaining("edits is required") });
+    expect(answer).toEqual({
+      deleted: "content.0 p: One",
+      count: 1,
+      note: "Nodes after content.0 moved up by one.",
+    });
+    expect(await outline(id)).toEqual(["content.0 p: Two"]);
+  });
+
+  it("refuses edits sent alongside a single path, saving nothing", async () => {
+    const id = await createParagraphs("One");
+
+    const answer = await batch({
+      collection: "posts",
+      id,
+      path: "content.0",
+      operation: "delete",
+      edits: [{ path: "content.0", operation: "set", value: { type: "p", text: "Changed" } }],
+    });
+
+    expect(answer.error).toMatch(/either edits or path/);
     expect(await outline(id)).toEqual(["content.0 p: One"]);
   });
 });

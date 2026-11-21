@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- feat: the MCP `update` adds `note: "No <collection> match; nothing changed."` when its `where` matches no document, so an agent doesn't read the empty `ids` as success.
+- feat: the MCP `update` adds a `note` when its `where` matches no document the caller may update (no published one, for a bulk publish), so an agent doesn't read the empty `ids` as success.
 
 ## 0.6.0-beta.5
 

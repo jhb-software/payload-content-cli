@@ -345,10 +345,14 @@ export function updateTool(options: McpContentToolsOptions = {}): McpTool {
           ids: docs.map((doc) => doc.id),
           ...status,
           ...(errors.length ? { errors } : {}),
-          // An empty list alone reads like a success.
+          // An empty list alone reads like a success. Payload also leaves out,
+          // silently, documents the caller may not update, and a bulk publish
+          // matches the published versions, not the drafts find shows.
           ...(docs.length || errors.length
             ? {}
-            : { note: `No ${target.slug} match; nothing changed.` }),
+            : {
+                note: `Nothing changed: where matches no ${drafts && !draft ? "published " : ""}document in ${target.slug} that you may update.`,
+              }),
         });
       } catch (err) {
         if (isSharedRowRefusal(err)) {

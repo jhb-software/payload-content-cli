@@ -1,7 +1,7 @@
 import { z } from "zod/v3";
 import { getBlockSchema, getEntitySchema, listReadableEntities } from "../plugin/index.js";
 import { errorResult, jsonResult, textResult, type McpTool } from "./result.js";
-import { renderSchemaTree, SCHEMA_TREE_LEGEND } from "./schemaTree.js";
+import { renderSchemaTree, SCHEMA_TREE_LEGEND, sliceFields } from "./schemaTree.js";
 import { GLOBAL_PREFIX, INTERNAL_COLLECTIONS, errorMessage, parseTarget } from "./target.js";
 
 const readOnly = {
@@ -38,24 +38,32 @@ const entityArgs = z.object({
   collection: z
     .string()
     .describe('Collection slug, or "globals/<slug>" for a global (e.g. "globals/footer").'),
+  path: z
+    .union([z.string().min(1), z.array(z.string().min(1)).min(1)])
+    .optional()
+    .describe(
+      'Only the fields at these dot paths, e.g. "meta" or ["meta", "seo.keywords"], with the lines above them. Blocks stop at the blocks field.',
+    ),
 });
 
 export function getEntitySchemaTool(): McpTool {
   return {
     name: "getEntitySchema",
-    description: `Get the fields of a collection or global as a tree. Read it before writing. Blocks are listed by slug; resolve them with the block schema tool.\n\n${SCHEMA_TREE_LEGEND}`,
+    description: `Get the fields of a collection or global as a tree. Read it before writing; pass path to read only the part you edit. Blocks are listed by slug; resolve them with the block schema tool.\n\n${SCHEMA_TREE_LEGEND}`,
     annotations: { title: "Get entity schema", ...readOnly },
     parameters: entityArgs.shape,
     handler: async (args, req) => {
       try {
-        const target = parseTarget(entityArgs.parse(args).collection);
+        const { collection, path } = entityArgs.parse(args);
+        const target = parseTarget(collection);
         const { slug, fields } = await getEntitySchema({
           req,
           type: target.kind,
           slug: target.slug,
           blocks: "reference",
         });
-        return textResult(renderSchemaTree(slug, target.kind, fields));
+        const shown = path === undefined ? fields : sliceFields(fields, [path].flat(), slug);
+        return textResult(renderSchemaTree(slug, target.kind, shown));
       } catch (err) {
         return errorResult(errorMessage(err));
       }

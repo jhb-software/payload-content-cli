@@ -323,6 +323,86 @@ describe("getEntitySchema", () => {
   });
 });
 
+describe("getEntitySchema with a path", () => {
+  it("answers only a group, with the read-only fields under it", async () => {
+    const tree = await call(payload, getEntitySchema, { collection: "products", path: "meta" });
+
+    expect(tree).toBe(
+      [
+        "products (collection)",
+        "  meta: group",
+        "    title: text",
+        "  read-only: meta.alternatePaths",
+      ].join("\n"),
+    );
+  });
+
+  it("keeps the lines above a nested field, so a localized tab still reads as localized", async () => {
+    const tree = await call(payload, getEntitySchema, {
+      collection: "pages",
+      path: "seo.keywords",
+    });
+
+    expect(tree).toBe(
+      [
+        "pages (collection)",
+        "  seo: tab (localized)",
+        "    keywords[]: array",
+        "      k: text (localized)",
+      ].join("\n"),
+    );
+  });
+
+  it("answers several paths as one tree, in schema order, keeping a field's condition", async () => {
+    const tree = await call(payload, getEntitySchema, {
+      collection: "pages",
+      path: ["faq", "accent"],
+    });
+
+    expect(tree).toBe(
+      [
+        "pages (collection)",
+        "  accent: text [when theme = dark]",
+        "  faq[]: array (rows shared by all locales)",
+        "    q: text (localized)",
+      ].join("\n"),
+    );
+  });
+
+  it("shows a blocks field's slugs and points into a block at the block schema", async () => {
+    const tree = await call(payload, getEntitySchema, { collection: "pages", path: "layout" });
+    const into = await call(payload, getEntitySchema, {
+      collection: "pages",
+      path: "layout.hero",
+    });
+
+    expect(tree).toBe(
+      ["pages (collection)", "  layout[]: blocks (hero | cta) (rows shared by all locales)"].join(
+        "\n",
+      ),
+    );
+    expect(into.error).toBe(
+      "layout is a blocks field; read the fields of its blocks (hero | cta) with getBlockSchema.",
+    );
+  });
+
+  it("refuses a path the schema doesn't have, naming the fields there are", async () => {
+    const top = await call(payload, getEntitySchema, { collection: "products", path: "pric" });
+    const nested = await call(payload, getEntitySchema, {
+      collection: "products",
+      path: "meta.titel",
+    });
+    const pastLeaf = await call(payload, getEntitySchema, {
+      collection: "pages",
+      path: "title.en",
+    });
+
+    expect(top.error).toBe('No "pric" in products. Its fields: body, pickupAddress, meta.');
+    expect(nested.error).toBe('No "titel" in products.meta. Its fields: title.');
+    expect(pastLeaf.error).toBe("title is a text field; it has no fields below it.");
+  });
+});
+
 describe("getBlockSchema", () => {
   it("resolves several blocks in one call, keeping their nested blocks as slugs", async () => {
     const tree = await call(payload, getBlockSchema, { slugs: ["hero", "alert"] });

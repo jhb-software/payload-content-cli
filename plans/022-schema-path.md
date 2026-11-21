@@ -1,7 +1,7 @@
 ---
 title: "path on getEntitySchema"
 type: feat
-status: in-progress
+status: done
 ---
 
 # `path` on `getEntitySchema`
@@ -14,9 +14,9 @@ Schema trees get big. On a real multi-tenant site, `products` is ~5 KB and `head
 
 - No `path`: the full tree, byte for byte as today.
 - Segments are field names through groups, named tabs and arrays. Blocks stay references: `path: "layout"` shows the slugs, and `getBlockSchema` is the way into a block's fields. No block-slug segments.
-- One section per path, headed `products.billing (group)`, sections joined by a blank line.
-- `[when …]` rules keep their sibling-relative form (`/a` and `^a` stay correct inside a slice).
-- The `read-only:` line lists only read-only fields under the path, relative to it.
+- The answer is the usual tree pruned to the paths: the lines on the way down stay, since what they carry (localized, a `[when …]` rule) applies below them. Several paths merge into one tree, in schema order.
+- `[when …]` rules keep their sibling-relative form.
+- The `read-only:` line lists only read-only fields under the paths, with full paths as today.
 - An unknown path is refused with the field names that exist at that level, worded like `find`'s missing-path message (`src/mcp/missingPath.ts`).
 - The legend stays in the tool description.
 

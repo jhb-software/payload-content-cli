@@ -190,7 +190,7 @@ Every tool runs with the request's user and Payload's access control. Collection
 | Tool              | What it does                                                                          |
 | ----------------- | ------------------------------------------------------------------------------------- |
 | `listEntities`    | The readable collections and globals, and the locales.                                |
-| `getEntitySchema` | One entity's fields as a compact tree, one line per field. Blocks are listed by slug. |
+| `getEntitySchema` | One entity's fields as a compact tree, one line per field, or only the part at `path`. Blocks are listed by slug. |
 | `getBlockSchema`  | The fields of blocks by slug, in the same tree format.                                |
 | `find`            | One document by id, a page of a collection filtered by `where`, or a global; rich text as outlines, one value by `path`, or matches of `text`. |
 | `create`          | A document in a collection, as a draft by default. Answers with its id.               |
@@ -211,6 +211,8 @@ pages (collection)
 ```
 
 Payload's bookkeeping (`id`, timestamps, `_status`) is left out. Fields your app maintains itself, marked both hidden and read-only, are left out of the tree too, but named on a closing `read-only:` line, since `find` returns them. Fields you add to the link feature are listed under the `✎ inline nodes: link` line. Arrays and blocks marked `(rows shared by all locales)` have localized fields in rows every locale shares (the field itself, and every field around it, isn't localized): a write keeps each row's id, so the other locales keep their translations. Block trees don't mark them, since a block may sit inside a localized field.
+
+With `path` (a dot path or a list of them, such as `"meta"` or `["meta", "seo.keywords"]`), `getEntitySchema` answers the same tree pruned to those fields: the lines on the way down stay, since what they carry (localized, a condition) applies below them, and the `read-only:` line names only fields under the paths. A path stops at a blocks field, whose block fields `getBlockSchema` reads. A path the entity doesn't have is refused, naming the fields there are.
 
 For your own schema endpoint or CLI, `renderSchemaTree(slug, kind, fields)` renders the same tree from the `fields` of `getEntitySchema` or `getBlockSchema` (kind `"collection"`, `"global"` or `"block"`), and `SCHEMA_TREE_LEGEND` explains its markers, except those that explain themselves. A blocks field shows its slugs either way, also when its blocks were inlined.
 

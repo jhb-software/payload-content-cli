@@ -34,19 +34,25 @@ Don't remove a security floor just to tidy up. The lockfile keeps resolved versi
 
 ## 4. Clear advisories
 
+**This step must pass before you finish.** A run ends with zero _fixable_ advisories. While one remains, the run is unfinished: don't report success and don't open a PR. Only advisories with no patched release yet (`fix` = `NO`) may stay, and each one is listed in the report and PR with the reason.
+
 ```sh
 ./.claude/skills/bump-dependencies/audit-dependencies.sh
 ```
 
-For each advisory, in this order:
+- Exit `0`: no fixable advisory remains. Any rows still printed are `fix` = `NO`. Report them.
+- Exit `1`: fixable advisories remain. A `fix` = `?` row has no patched range in the advisory data. Treat it as fixable until its vulnerable range proves otherwise: an advisory that only names `=3.1.6` is cleared by moving to any other release.
+- Exit `2`: the audit couldn't run or its output couldn't be parsed. That means unknown, not clean. Rerun it, and report it as a blocker if it keeps failing.
+
+For each fixable advisory, in this order:
 
 1. **Update the owner.** `pnpm why <pkg> -r` shows who pulls it in. Bump the owner if a newer release requires the patched range.
 2. **Add an override floor:** `pkg: '^<patched>'`. Use a selector (`"pkg@4": "^4.3.9"`) when other major lines are legitimate. In `0.x`, `^0.27.0` excludes a `0.28.1` fix.
 3. **Add a root `devDependency`** at the patched range if the lockfile won't move the transitive version. pnpm doesn't re-resolve a locked transitive to satisfy a changed override.
 
-The goal is no advisories, or an explanation for each one left. Check that a patched version is actually published (`npm view <pkg> versions`) before chasing it.
+Check that a patched version is actually published (`npm view <pkg> versions`) before chasing it. Rerun the audit until it exits `0`.
 
-`pnpm audit` and Dependabot count differently, so a clean audit doesn't prove there are no open GitHub alerts.
+`pnpm audit` and Dependabot count differently, so a clean audit doesn't prove there are no open GitHub alerts. When you push, read the full `git push` output. If GitHub's banner ("GitHub found N vulnerabilities…") reports alerts that the audit doesn't, find out why before you report success.
 
 ## 5. Review the bumps
 
@@ -74,7 +80,7 @@ Pins held back: <dep, why>
   Impact: <"none" | file:line and what changed>
 
 Advisories: <before> → <after>, <n> reach installers
-Left open: <each advisory and why>
+Left open: <each fix = NO advisory and why, e.g. "4.3.1 is the newest release, the advisory names 4.3.2">
 Follow-ups: <anything you couldn't verify>
 ```
 

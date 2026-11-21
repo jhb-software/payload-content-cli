@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- feat: the MCP `getEntitySchema` takes `path`, a dot path or a list of them, and answers the tree pruned to those fields, so an agent editing one group or tab doesn't read the whole schema.
 - feat: the MCP `update` adds a `note` when its `where` matches no document the caller may update (no published one, for a bulk publish), so an agent doesn't read the empty `ids` as success.
 
 ## 0.6.0-beta.5

@@ -157,6 +157,39 @@ describe("update", () => {
     expect((await read(b, true)).title).toBe("Same");
   });
 
+  it("says so when a where clause matches nothing, rather than answering like a success", async () => {
+    const result = await tool("update", {
+      collection: "posts",
+      where: { slug: { equals: "no-such-slug" } },
+      data: { title: "Same" },
+    });
+
+    expect(result).toEqual({
+      ids: [],
+      status: "draft",
+      note: "Nothing changed: where matches no document in posts that you may update.",
+    });
+  });
+
+  // A bulk publish matches the live documents, while find reads the latest drafts.
+  it("says a bulk publish found no published document, when only a draft matches", async () => {
+    const id = await publishedPost("Live", "nothing-published");
+    await payload.update({ collection: "posts", id, data: { slug: "only-draft" }, draft: true });
+
+    const result = await tool("update", {
+      collection: "posts",
+      where: { slug: { equals: "only-draft" } },
+      data: { title: "Same" },
+      draft: false,
+    });
+
+    expect(result).toEqual({
+      ids: [],
+      status: "published",
+      note: "Nothing changed: where matches no published document in posts that you may update.",
+    });
+  });
+
   // Payload publishes a bulk update from the live documents, not their drafts.
   it("refuses a bulk publish that would discard newer drafts, unless overwriteDraft", async () => {
     const id = await publishedPost("Live", "bulk-guard");

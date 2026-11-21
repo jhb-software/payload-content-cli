@@ -382,7 +382,7 @@ describe("getEntitySchema with a path", () => {
       ),
     );
     expect(into.error).toBe(
-      "layout is a blocks field; read the fields of its blocks (hero | cta) with getBlockSchema.",
+      "pages.layout is a blocks field; read the fields of its blocks (hero | cta) with getBlockSchema.",
     );
   });
 
@@ -399,7 +399,27 @@ describe("getEntitySchema with a path", () => {
 
     expect(top.error).toBe('No "pric" in products. Its fields: body, pickupAddress, meta.');
     expect(nested.error).toBe('No "titel" in products.meta. Its fields: title.');
-    expect(pastLeaf.error).toBe("title is a text field; it has no fields below it.");
+    expect(pastLeaf.error).toBe("pages.title is a text field; it has no fields below it.");
+  });
+
+  it("refuses a bad path even beside one that names its ancestor, saying each problem once", async () => {
+    const beside = await call(payload, getEntitySchema, {
+      collection: "products",
+      path: ["meta", "meta.nope", "meta.title.x", "meta.title.x"],
+    });
+
+    expect(beside.error).toBe(
+      'No "nope" in products.meta. Its fields: title. products.meta.title is a text field; it has no fields below it.',
+    );
+  });
+
+  it("refuses Payload's bookkeeping fields like a name the schema doesn't have", async () => {
+    const result = await call(payload, getEntitySchema, {
+      collection: "products",
+      path: "createdAt",
+    });
+
+    expect(result.error).toBe('No "createdAt" in products. Its fields: body, pickupAddress, meta.');
   });
 });
 

@@ -41,37 +41,42 @@ const BUILT_IN_LINK_FIELDS = new Set(["text", "linkType", "url", "doc", "newTab"
 export function sliceFields(fields: FieldSchema[], paths: string[], at: string): FieldSchema[] {
   const below = new Map<string, string[]>();
   const whole = new Set<string>();
-  const problems: string[] = [];
+  // A set, so a path given twice is refused once.
+  const problems = new Set<string>();
   for (const path of paths) {
     const [name, ...rest] = path.split(".");
-    const field = fields.find((f) => f.name === name);
+    // Payload's bookkeeping isn't in the tree, so it can't be a path either.
+    const field = fields.find((f) => f.name === name && !(f.system && BOOKKEEPING.has(f.name)));
     if (!field) {
-      problems.push(noFieldMessage(name, at, fields));
+      problems.add(noFieldMessage(name, at, fields));
     } else if (!rest.length) {
       whole.add(name);
     } else if (field.type === "blocks") {
       const slugs = field.blockSlugs ?? field.blocks?.map((block) => block.slug) ?? [];
-      problems.push(
-        `${name} is a blocks field; read the fields of its blocks (${slugs.join(" | ")}) with getBlockSchema.`,
+      problems.add(
+        `${at}.${name} is a blocks field; read the fields of its blocks (${slugs.join(" | ")}) with getBlockSchema.`,
       );
     } else if (!field.fields) {
-      problems.push(`${name} is a ${field.type} field; it has no fields below it.`);
+      problems.add(`${at}.${name} is a ${field.type} field; it has no fields below it.`);
     } else {
       below.set(name, [...(below.get(name) ?? []), rest.join(".")]);
     }
   }
   const sliced = fields.flatMap((field): FieldSchema[] => {
-    if (whole.has(field.name)) return [field];
     const rest = below.get(field.name);
-    if (!rest) return [];
-    try {
-      return [{ ...field, fields: sliceFields(field.fields!, rest, `${at}.${field.name}`) }];
-    } catch (err) {
-      problems.push((err as Error).message);
-      return [];
+    let part: FieldSchema | undefined;
+    // Checked even when another path takes the whole field, so a bad one is never let through.
+    if (rest) {
+      try {
+        part = { ...field, fields: sliceFields(field.fields!, rest, `${at}.${field.name}`) };
+      } catch (err) {
+        problems.add((err as Error).message);
+      }
     }
+    if (whole.has(field.name)) return [field];
+    return part ? [part] : [];
   });
-  if (problems.length) throw new Error(problems.join(" "));
+  if (problems.size) throw new Error([...problems].join(" "));
   return sliced;
 }
 

@@ -345,6 +345,10 @@ export function updateTool(options: McpContentToolsOptions = {}): McpTool {
           ids: docs.map((doc) => doc.id),
           ...status,
           ...(errors.length ? { errors } : {}),
+          // An empty list alone reads like a success.
+          ...(docs.length || errors.length
+            ? {}
+            : { note: `No ${target.slug} match; nothing changed.` }),
         });
       } catch (err) {
         if (isSharedRowRefusal(err)) {

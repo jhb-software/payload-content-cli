@@ -157,6 +157,20 @@ describe("update", () => {
     expect((await read(b, true)).title).toBe("Same");
   });
 
+  it("says so when a where clause matches nothing, rather than answering like a success", async () => {
+    const result = await tool("update", {
+      collection: "posts",
+      where: { slug: { equals: "no-such-slug" } },
+      data: { title: "Same" },
+    });
+
+    expect(result).toEqual({
+      ids: [],
+      status: "draft",
+      note: "No posts match; nothing changed.",
+    });
+  });
+
   // Payload publishes a bulk update from the live documents, not their drafts.
   it("refuses a bulk publish that would discard newer drafts, unless overwriteDraft", async () => {
     const id = await publishedPost("Live", "bulk-guard");

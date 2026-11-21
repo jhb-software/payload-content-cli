@@ -17,7 +17,7 @@ Reproduced over REST with `0.6.0-beta.3` plus the access fix:
 
 - **Callers blocked from shared fields:** a caller who may update but not read can't write a shared field at all, through REST, GraphQL, the MCP `update` tool or a Local API call with `overrideAccess: false`. With `read: () => false` they get a 403. With a `Where` read rule that excludes the document they get a 404 by ID. Their other writes pass.
 
-All three need update access that is wider than read access, which is unusual. No app is known to depend on it, though afx hasn't been checked.
+All three need update access that is wider than read access, which is unusual. No app is known to depend on it, though not every app has been checked.
 
 Two more, found by reading the code and not reproduced:
 

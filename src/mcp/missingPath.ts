@@ -17,6 +17,16 @@ export type MissingPath = { empty: true } | { empty: false; message: string };
 /** Enough to spot the field meant, without listing a whole wide schema. */
 const LISTED_FIELDS = 30;
 
+/** A name `fields` doesn't have, with the names it does, so the field meant is easy to spot. */
+export function noFieldMessage(name: string, at: string, fields: FieldSchema[]): string {
+  const names = fields.filter((f) => !f.system).map((f) => f.name);
+  const more =
+    names.length > LISTED_FIELDS
+      ? ` and ${names.length - LISTED_FIELDS} more (see getEntitySchema)`
+      : "";
+  return `No "${name}" in ${at}. Its fields: ${names.slice(0, LISTED_FIELDS).join(", ")}${more}.`;
+}
+
 export function explainMissingPath(
   doc: unknown,
   path: string,
@@ -34,15 +44,7 @@ export function explainMissingPath(
       // A key the data has but the schema doesn't name (an `id`, a `blockType`).
       if (next !== undefined) return undefined;
       const at = segments.slice(0, i).join(".") || "the document";
-      const names = schema.filter((f) => !f.system).map((f) => f.name);
-      const more =
-        names.length > LISTED_FIELDS
-          ? ` and ${names.length - LISTED_FIELDS} more (see getEntitySchema)`
-          : "";
-      return {
-        empty: false,
-        message: `No "${segments[i]}" in ${at}. Its fields: ${names.slice(0, LISTED_FIELDS).join(", ")}${more}.`,
-      };
+      return { empty: false, message: noFieldMessage(segments[i], at, schema) };
     }
     const last = i === segments.length - 1;
     const rows = field.type === "array" || field.type === "blocks";

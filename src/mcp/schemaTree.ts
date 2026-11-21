@@ -5,6 +5,7 @@
  */
 
 import type { FieldSchema, LexicalFeatureSummary } from "../plugin/index.js";
+import { noFieldMessage } from "./missingPath.js";
 
 export const SCHEMA_TREE_LEGEND = [
   "One line per field, nested fields indented:",
@@ -30,6 +31,54 @@ const BOOKKEEPING = new Set(["id", "createdAt", "updatedAt", "_status", "blockNa
 
 /** The fields every link has; the tree lists only those an app adds. */
 const BUILT_IN_LINK_FIELDS = new Set(["text", "linkType", "url", "doc", "newTab"]);
+
+/**
+ * The fields on the way to each dot path, and everything below where a path
+ * ends: the tree pruned to the paths. The lines above a field stay, because
+ * what they carry (localized, a condition) applies to everything under them.
+ * Throws a message an agent can act on for a path the fields don't have.
+ */
+export function sliceFields(fields: FieldSchema[], paths: string[], at: string): FieldSchema[] {
+  const below = new Map<string, string[]>();
+  const whole = new Set<string>();
+  // A set, so a path given twice is refused once.
+  const problems = new Set<string>();
+  for (const path of paths) {
+    const [name, ...rest] = path.split(".");
+    // Payload's bookkeeping isn't in the tree, so it can't be a path either.
+    const field = fields.find((f) => f.name === name && !(f.system && BOOKKEEPING.has(f.name)));
+    if (!field) {
+      problems.add(noFieldMessage(name, at, fields));
+    } else if (!rest.length) {
+      whole.add(name);
+    } else if (field.type === "blocks") {
+      const slugs = field.blockSlugs ?? field.blocks?.map((block) => block.slug) ?? [];
+      problems.add(
+        `${at}.${name} is a blocks field; read the fields of its blocks (${slugs.join(" | ")}) with getBlockSchema.`,
+      );
+    } else if (!field.fields) {
+      problems.add(`${at}.${name} is a ${field.type} field; it has no fields below it.`);
+    } else {
+      below.set(name, [...(below.get(name) ?? []), rest.join(".")]);
+    }
+  }
+  const sliced = fields.flatMap((field): FieldSchema[] => {
+    const rest = below.get(field.name);
+    let part: FieldSchema | undefined;
+    // Checked even when another path takes the whole field, so a bad one is never let through.
+    if (rest) {
+      try {
+        part = { ...field, fields: sliceFields(field.fields!, rest, `${at}.${field.name}`) };
+      } catch (err) {
+        problems.add((err as Error).message);
+      }
+    }
+    if (whole.has(field.name)) return [field];
+    return part ? [part] : [];
+  });
+  if (problems.size) throw new Error([...problems].join(" "));
+  return sliced;
+}
 
 /** A blocks field shows its slugs, whichever way the fields were projected. */
 export function renderSchemaTree(slug: string, kind: SchemaKind, fields: FieldSchema[]): string {

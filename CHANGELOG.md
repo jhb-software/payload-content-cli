@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- feat: the MCP `getEntitySchema` takes `path`, a dot path or a list of them, and answers the tree pruned to those fields, so an agent editing one group or tab doesn't read the whole schema.
+
 ## 0.6.0-beta.5
 
 - feat: the MCP `updateRichText` takes `edits`, a list of edits saved together as one version or not at all. Paths refer to the document as `find` showed it. It answers `{ results, shifted? }`. A single `path`/`operation`/`value`/`text` still works and answers as before, for clients that cached the old schema.

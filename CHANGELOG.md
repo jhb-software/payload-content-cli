@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- fix: the MCP `getBlockSchema` error for an unknown slug says `Did you mean "hero"?` for a single slug, and points to where the schema tree lists a field's allowed blocks instead of JSON keys the agent never sees.
+
 ## 0.6.0-beta.6
 
 - feat: the MCP `getEntitySchema` takes `path`, a dot path or a list of them, and answers the tree pruned to those fields, so an agent editing one group or tab doesn't read the whole schema.

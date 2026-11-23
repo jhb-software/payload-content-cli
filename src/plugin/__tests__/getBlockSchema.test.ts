@@ -166,7 +166,7 @@ describe("getBlockSchema", () => {
       { slug: "cardBlock", fields: [] },
     ]);
     await expect(getBlockSchema({ req, slugs: ["CardBlock"] })).rejects.toThrow(
-      /"CardBlock" → "cardBlock"/,
+      /Did you mean "cardBlock"\?/,
     );
   });
 

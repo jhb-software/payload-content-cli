@@ -448,11 +448,11 @@ describe("getBlockSchema", () => {
   it("suggests the slug an agent meant by a block's config name", async () => {
     const result = await call(payload, getBlockSchema, { slugs: ["HeroBlock"] });
 
-    expect(result.error).toMatch(/"HeroBlock" → "hero"/);
-    expect(result.error).toMatch(/blockSlugs/);
+    expect(result.error).toMatch(/Did you mean "hero"\?/);
+    expect(result.error).toMatch(/after a blocks field/);
   });
 
-  it("still lists the valid slugs when only some names are close", async () => {
+  it("pairs each suggestion with its name when several are unknown", async () => {
     const result = await call(payload, getBlockSchema, { slugs: ["HeroBlock", "nope"] });
 
     expect(result.error).toMatch(/"HeroBlock" → "hero"/);
@@ -463,7 +463,8 @@ describe("getBlockSchema", () => {
     const result = await call(payload, getBlockSchema, { slugs: ["nope"] });
 
     expect(result.error).toMatch(/Valid slugs: alert, cta, hero\./);
-    expect(result.error).toMatch(/blockSlugs/);
+    expect(result.error).toMatch(/after a blocks field/);
+    expect(result.error).not.toMatch(/blockSlugs|lexicalFeatures/);
   });
 });
 

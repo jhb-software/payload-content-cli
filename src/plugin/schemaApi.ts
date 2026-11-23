@@ -211,7 +211,9 @@ function slugHint(unknown: string[], slugs: string[]): string {
   const hints: string[] = [];
   const meant = unknown.flatMap((name) => {
     const slug = close(name);
-    return slug ? [`"${name}" → "${slug}"`] : [];
+    if (!slug) return [];
+    // Pair each suggestion with its name only when there is more than one name to tell apart.
+    return [unknown.length > 1 ? `"${name}" → "${slug}"` : `"${slug}"`];
   });
   if (meant.length > 0) hints.push(`Did you mean ${meant.join(", ")}?`);
   if (meant.length < unknown.length) {
@@ -221,8 +223,8 @@ function slugHint(unknown: string[], slugs: string[]): string {
     hints.push(`Valid slugs: ${listed}${more}.`);
   }
   hints.push(
-    "A field allows only some: see a blocks field's blockSlugs, or" +
-      " lexicalFeatures.blockNodes.block.slugs (and inlineNodes.inlineBlock.slugs) in the entity schema.",
+    "A field allows only some: getEntitySchema lists them in parentheses after a blocks field," +
+      " and after block / inlineBlock in a richText field's ✎ lines.",
   );
   return hints.join(" ");
 }

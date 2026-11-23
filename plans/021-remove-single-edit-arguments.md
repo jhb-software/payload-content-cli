@@ -23,3 +23,7 @@ Once the apps using the tools have run the `edits` version for a few weeks, and 
 - Drop `path`, `operation`, `value`, `text` from `parameters` in `src/mcp/updateRichText.ts`, make `edits` required, and remove the `single` path from `toEdits`, `applyEdit` and the handler.
 - Replace the test "still takes one edit as path and operation…" with one asserting the old shape is refused with a message naming `edits`.
 - Remove the paragraph about deprecated arguments from USAGE.md; changelog line as `feat!`.
+
+## Not a regression: no `count` or `note` in batch results
+
+A batch's `insert`/`delete` results answer `{inserted}`/`{deleted}` without `count` and `note`, on purpose: mid-batch they'd describe a document halfway through the edits. `shifted: true` replaces them, and the agent reads again for the current state. Once the single-edit shape is gone, no answer carries `count`.
